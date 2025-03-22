@@ -13,6 +13,8 @@
      <header>
          <nav>
             <h1>POSO MANAGEMENT</h1>
+
+            
             
             @auth
                 <p>Hi there, {{Auth::user()->name}}.</p>
