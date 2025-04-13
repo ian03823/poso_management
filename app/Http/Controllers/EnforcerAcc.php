@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\Enforcer;
+use Illuminate\Support\Facades\Hash;
 
-class PosoManagementController extends Controller
+class EnforcerAcc extends Controller
 {
     /**
      * Display a listing of the resource.
@@ -12,7 +14,7 @@ class PosoManagementController extends Controller
     public function index()
     {
         //
-        return view("admin.index");
+        
     }
 
     /**
@@ -21,6 +23,7 @@ class PosoManagementController extends Controller
     public function create()
     {
         //
+        return view("enforcer.issueTicket");
     }
 
     /**
@@ -37,6 +40,8 @@ class PosoManagementController extends Controller
     public function show(string $id)
     {
         //
+        $poso = Enforcer::find($id);
+        return view("enforcer.issueTicket")->with('poso', $poso);
     }
 
     /**
