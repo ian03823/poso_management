@@ -1,10 +1,9 @@
 @extends('components.layout')
 
-@section('pageTitle', 'Homepage')
+@section('title', 'POSO Admin Management')
 
-@section('body')
-     This is confirmation if you are signed in.
+@section('content')
 
-
+    <h1>Can thought call i moth</h1>
 
 @endsection
