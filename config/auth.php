@@ -36,9 +36,18 @@ return [
     */
 
     'guards' => [
-        'web' => [
+        'admin' => [
             'driver' => 'session',
             'provider' => 'admins',
+        ],
+
+        'enforcer' => [
+            'driver' => 'session',
+            'provider' => 'enforcers',  // Enforcer guard using the 'enforcers' provider
+        ],
+        'violator' => [
+            'driver' => 'session',
+            'provider' => 'violators',
         ],
     ],
 
@@ -64,11 +73,14 @@ return [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', App\Models\Admin::class),
         ],
-
-        // 'users' => [
-        //     'driver' => 'database',
-        //     'table' => 'users',
-        // ],
+        'enforcers' => [
+            'driver' => 'eloquent',
+            'model' => env('AUTH_MODEL', App\Models\Enforcer::class),
+        ],
+        'violators' => [
+            'driver' => 'eloquent',
+            'model' => env('AUTH_MODEL', App\Models\Violator::class),
+        ],
     ],
 
     /*
@@ -94,6 +106,18 @@ return [
         'admins' => [
             'provider' => 'admins',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
+            'expire' => 60,
+            'throttle' => 60,
+        ],
+        'enforcers' => [
+            'provider' => 'enforcers',
+            'table' => 'password_reset_tokens',  // The table used for password resets
+            'expire' => 60,
+            'throttle' => 60,
+        ],
+        'violators' => [
+            'provider' => 'violators',
+            'table' => 'password_reset_tokens',  // The table used for password resets
             'expire' => 60,
             'throttle' => 60,
         ],
