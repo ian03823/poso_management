@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Facades\Auth;
 
 class ViolatorMiddleware
 {
@@ -15,6 +16,11 @@ class ViolatorMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        return $next($request);
+        if (Auth::guard('enforcer')->check()) {
+            // Redirect to the violator login page if not authenticated
+            return $next($request);
+        }
+        // Proceed with the request if authenticated
+        return redirect()->route('violator.showLogin')->with('error', 'Unauthorized Access.');
     }
 }
