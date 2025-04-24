@@ -11,20 +11,24 @@ class AddEnforcer extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         //
+        
         $enforcer = Enforcer::paginate(5);
         return view("admin.enforcer")->with("enforcer", $enforcer);
+
     }
 
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(Request $request)
     {
         //
-        return view("admin.addenforcer");
+        if ($request->ajax()) {
+            return view('admin.addenforcer');
+        }
     }
 
     /**
@@ -49,7 +53,15 @@ class AddEnforcer extends Controller
             'phone' => $request->phone,
             'password' => Hash::make($request->password)
         ]);
-        return redirect('/enforcer')->with('success','Enforcer Added Succesfully');
+        if ($request->ajax()) {
+            $enforcers = Enforcer::paginate(5);
+            return view('admin.partials.enforcer', compact('enforcers'))
+                   ->with('success','Enforcer added successfully');
+        }
+
+        // Full-page fallback
+        return redirect('/enforcer')
+                         ->with('success','Enforcer added successfully');
     }
 
     /**
@@ -59,7 +71,7 @@ class AddEnforcer extends Controller
     {
         //
         $enforcer = Enforcer::find($id);
-        return view('enforcerlist')->with('enforcer', $enforcer);
+        return view('admin.partials.enforcerTable')->with('enforcer', $enforcer);
     }
 
     /**
@@ -84,11 +96,11 @@ class AddEnforcer extends Controller
             'mname' => 'nullable|string|min:3|max:20',
             'lname' => 'required|string|min:3|max:20',
             'phone' => 'required|digits:11',
-            'password' => 'required|string|max:10',
         ]);
         $enforcer = Enforcer::findOrfail($id);
         $enforcer->update($request->all());
-        return redirect('/enforcer')->with('success','Enforcer Updated Succesfully');
+
+        return response()->json(['message' => 'success']);;
     }
 
     /**

@@ -16,7 +16,6 @@ return new class extends Migration
             $table->string('violation_code')->unique();
             $table->string('violation_name');
             $table->decimal('fine_amount', 8, 2);
-            $table->integer('penalty_points');
             $table->text('description')->nullable();
             $table->enum('category', [
                 'Moving Violations', 

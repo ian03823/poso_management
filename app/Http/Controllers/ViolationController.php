@@ -10,20 +10,56 @@ class ViolationController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         //
-        $violation = Violation::paginate(5);
-        return view("admin.violation.violationList")->with("violation", $violation);
+        $query = Violation::query();
+
+        // Map dropdown choice to column & direction
+        $sortOption = $request->get('sort_option', 'date_desc');
+    
+        switch($sortOption) {
+            case 'date_asc':
+                $column = 'updated_at';
+                $direction = 'asc';
+                break;
+    
+            case 'name_asc':
+                $column = 'violation_name';
+                $direction = 'asc';
+                break;
+    
+            case 'name_desc':
+                $column = 'violation_name';
+                $direction = 'desc';
+                break;
+    
+            case 'date_desc':
+            default:
+                $column = 'updated_at';
+                $direction = 'desc';
+                break;
+        }
+    
+        $violation = $query
+            ->orderBy($column, $direction)
+            ->paginate(5)
+            ->appends('sort_option', $sortOption);
+    
+        return view('admin.violation.violationList', compact('violation', 'sortOption'));
+
     }
 
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(Request $request)
     {
         //
-        return view("admin.violation.addViolation");
+        if ($request->ajax()) {
+            return view('admin.violation.addViolation');
+        }
+        return view('admin.violation.addViolation');
     }
 
     /**
@@ -36,7 +72,6 @@ class ViolationController extends Controller
             'violation_code' => 'required|string|unique:violations',
             'violation_name' => 'required|string|unique:violations',
             'fine_amount' => 'required|numeric|min:0',
-            'penalty_points' => 'required|integer|min:0',
             'description' => 'nullable|string',
             'category' => 'required|string',
         ]);
@@ -45,12 +80,17 @@ class ViolationController extends Controller
             'violation_code' => $request->violation_code,
             'violation_name' => $request->violation_name,
             'fine_amount' => $request->fine_amount,
-            'penalty_points' => $request->penalty_points,
             'description' => $request->description,
             'category' => $request->category, // Ensure category is saved
         ]);
     
-        return redirect('/violation')->with('success', 'Violation added successfully!');
+        if ($request->ajax()) {
+            $violation = Violation::paginate(5);
+            return view('admin.partials.addViolation', compact('violations'))
+                   ->with('success','Violation added successfully');
+        }
+        return redirect('/violation')
+        ->with('success','Violation added successfully');
     }
 
     /**
@@ -79,7 +119,6 @@ class ViolationController extends Controller
             'violation_code' => 'required|string|unique:violations,violation_code,'.$id,
             'violation_name' => 'required|string|unique:violations,violation_name,'.$id,
             'fine_amount' => 'required|numeric|min:0',
-            'penalty_points' => 'required|integer|min:0',
             'description' => 'nullable|string',
             'category' => 'required|string',
         ]);

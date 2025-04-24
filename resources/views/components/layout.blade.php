@@ -2,66 +2,192 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title')</title>
-    
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+    <!-- Bootstrap + Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://kit.fontawesome.com/7922e0fdab.js" crossorigin="anonymous"></script>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+    <style>
+        body{
+            margin: 0;
+            padding: 0;
+        }
+        .top-nav {
+            background-color: #1B5E20;
+            padding: 0.75rem 3rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+        }
+
+        .sidebar {
+            background-color: #fff;
+            width: 300px;
+            min-height: 100vh;
+            border-right: 1px solid #ddd;
+            padding: 1rem;
+        }
+
+        .sidebar img {
+            width: 120px;
+            display: block;
+            margin: 0 auto 1rem;
+        }
+
+        .sidebar .nav-link {
+            color: #222;
+            font-weight: 500;
+            margin: 0.3rem 0;   
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 0.75rem;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar .nav-link:hover {
+            background-color: #36e339;
+            border-radius: 8px;
+        }
+
+    </style>
 </head>
-<body class="d-flex flex-column vh-100">
-    <!-- Top Navigation Bar -->
-    <header class="top-nav">
-        <h1 class="h4 mb-0">POSO Admin Management</h1>
-        <button class="btn btn-light d-md-none" id="toggleSidebar">☰</button>
+<body>
+
+    <!-- Top Navigation -->
+    <header class="top-nav py-3">
+        <div class="fw-bold fs-5">POSO Admin Management</div>
         @auth('admin')
-        <div class="d-none d-md-flex align-items-center gap-3">
-                <a href="#" class="text-white text-decoration-none">Profile</a>
-                <form method="POST" action="{{ route('admin.logout') }}" class="d-inline">
-                    @csrf
-                    <button type="submit" class="btn btn-link text-white text-decoration-none">Log out</button>
-                </form>
+        <div class="text-muted-white fw-medium" id="currentDateTime">—</div>
+
+        <div class="d-flex gap-3 align-items-center">
+            <a href="#" class="text-white" style="text-decoration: none"><i class="fa-solid fa-id-badge"></i> &nbsp Profile</a>
+            <form id="logoutForm" method="POST" action="{{ route('admin.logout') }}">
+                @csrf
+                <button type="submit" id="logoutBtn"> <i class="fa-solid fa-right-from-bracket"></i> &nbspLog out</button>
+            </form>
         </div>
         @endauth
     </header>
 
-    <div class="d-flex flex-grow-1">
-        <!-- Side Navigation Bar -->
+    <div class="d-flex">
+        <!-- Sidebar -->
         @auth('admin')
-        <nav class="sidebar d-md-block d-none" id="sidebar">
-            <ul class="nav flex-column">
+        <nav class="sidebar d-none d-md-block">
+            <img src="{{ asset('images/icons/POSO-Logo.png') }}" alt="POSO Logo">
+            <ul class="nav flex-column ">
                 <li class="nav-item">
-                    <a href="{{route('admin.dashboard')}}" class="nav-link text-white">Dashboard</a>
+                    <a href="/admin" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
+                        <i class="bi bi-columns-gap me-3"></i>   
+                        <span class="">Dashboard</span>
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/enforcer" class="nav-link text-white">Enforcer</a>
+                    <a href="/ticket" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
+                        <i class="bi bi-receipt-cutoff me-3"></i>
+                        <span class="">Tickets</span>
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link text-white">Violator</a>
+                    <a href="/violation" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
+                        <i class="bi bi-list-check me-3"></i>   
+                        <span>Violation</span>
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link text-white">Issue a Ticket</a>
+                    <a href="/enforcer" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
+                        <i class="bi bi-person-badge me-3"></i>   
+                        <span>Enforcer</span>
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/violation" class="nav-link text-white">Violation List</a>
+                    <a href="#" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
+                        <i class="bi bi-person-vcard me-3"></i>   
+                        <span>Violator</span>
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link text-white">Issued Ticket</a>
+                    <a href="#" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
+                        <i class="bi bi-graph-up me-3"></i>  
+                        <span>Analytics</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
+                        <i class="bi bi-person-lines-fill me-3"></i>
+                         <span>Dispute</span>
+                    </a>
                 </li>
             </ul>
         </nav>
         @endauth
         <!-- Main Content -->
-        <main class="content p-3 w-100">
+        <main class="content" id="app-body">
             @yield('content')
-        </main> 
+        </main>
+
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        document.getElementById('toggleSidebar').addEventListener('click', function() {
-            document.getElementById('sidebar').classList.toggle('d-none');
+        document.addEventListener('DOMContentLoaded', () => {
+        const logoutBtn  = document.getElementById('logoutBtn');
+        const logoutForm = document.getElementById('logoutForm');
+
+        logoutBtn.addEventListener('click', function(e) {
+            e.preventDefault(); // stop the form from submitting immediately
+
+            Swal.fire({
+            title: 'Are you sure you want to logout?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, logout',
+            cancelButtonText: 'Stay logged in',
+            reverseButtons: true
+            }).then((result) => {
+            if (result.isConfirmed) {
+                logoutForm.submit();
+            }
+            });
         });
+        });
+        // Format options for day/month/year and 24h time
+        const fmtOpts = {
+        weekday: 'long',    // e.g. "Thursday"
+        year: 'numeric',    // e.g. "2025"
+        month: 'long',      // e.g. "April"
+        day: 'numeric',     // e.g. "24"
+        hour: '2-digit',    // e.g. "07"
+        minute: '2-digit',  // e.g. "05"
+        second: '2-digit',  // e.g. "09"
+        hour12: false       // 24-hour clock
+        };
+
+        function updateDateTime() {
+        const now = new Date();
+        // e.g. "Thursday, April 24, 2025 07:05:09"
+        const s = now.toLocaleString(undefined, fmtOpts);
+        document.getElementById('currentDateTime').textContent = s;
+        }
+
+        // Update every second
+        setInterval(updateDateTime, 1000);
+        // Initial call
+        updateDateTime();
     </script>
-    
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ asset('js/ajax.js') }}"></script>
+    <script src="{{ asset('js/sweetalerts.js') }}"></script>
+    <script src="{{ asset('js/update-modal.js') }}"></script>
+
+    @stack('scripts')
 </body>
 </html>

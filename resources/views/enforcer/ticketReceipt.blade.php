@@ -110,7 +110,7 @@
         commands += 'Violations:' + newLine;
         @if($selectedViolations->count() > 0)
           @foreach($selectedViolations as $v)
-            commands += '{{ $v->violation_name }} - Fine: ₱{{ number_format($v->fine_amount,2) }}, Penalty: {{ $v->penalty_points }}, Category: {{ $v->category }}' + newLine;
+            commands += '{{ $v->violation_name }} - Fine: Php{{ number_format($v->fine_amount,2) }}, Penalty: {{ $v->penalty_points }}, Category: {{ $v->category }}' + newLine;
           @endforeach
         @else
           commands += '{{ $ticket->violation_codes }}' + newLine;
@@ -119,6 +119,9 @@
         commands += 'Location: {{ $ticket->location }}' + newLine;
         commands += 'Confiscated: {{ $ticket->confiscated }}' + newLine;
         commands += newLine;
+        commands += 'Login Credentials:' + newLine;
+        commands += 'Username: {{ $credentials["username"] }}' + newLine;
+        commands += 'Password: {{ $credentials["password"] }}' + newLine;
         commands += newLine;
         
         // Feed and paper cut.

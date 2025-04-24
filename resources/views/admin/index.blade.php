@@ -4,6 +4,5 @@
 
 @section('content')
 
-    <h1>Can thought call i moth</h1>
 
 @endsection

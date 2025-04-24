@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use app\Models\Ticket;
-use app\Models\Vehicle;
+use App\Models\Ticket;
+use App\Models\Vehicle;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -12,7 +12,7 @@ use Illuminate\Notifications\Notifiable;
 class Violator extends Authenticatable
 {
     //
-    use Notifiable;
+    use Notifiable, HasFactory;
     protected $table = "violators";
 
     protected $fillable = [
@@ -26,5 +26,12 @@ class Violator extends Authenticatable
     protected $hidden = [
         'password',
     ];
-
+    public function vehicles()
+    {
+        return $this->hasMany(Vehicle::class);
+    }
+    public function tickets()  
+    { 
+        return $this->hasMany(Ticket::class);  
+    }
 }
