@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Enforcer;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\Response;
 
 class AddEnforcer extends Controller
 {
@@ -14,10 +15,36 @@ class AddEnforcer extends Controller
     public function index(Request $request)
     {
         //
-        
-        $enforcer = Enforcer::paginate(5);
-        return view("admin.enforcer")->with("enforcer", $enforcer);
+        // 1) Base query
+        $query = Enforcer::query();
 
+        // 2) Sorting
+        $sortOption = $request->get('sort_option','date_desc');
+        switch($sortOption) {
+            case 'date_asc':
+                $column='updated_at'; $direction='asc';  break;
+            case 'name_asc':
+                $column='fname';      $direction='asc';  break;
+            case 'name_desc':
+                $column='fname';      $direction='desc'; break;
+            case 'date_desc':
+            default:
+                $column='updated_at'; $direction='desc'; break;
+        }
+
+        // 3) Paginate with sort, keep sort_option in links
+        $enforcer = $query
+            ->orderBy($column,$direction)
+            ->paginate(5)
+            ->appends('sort_option',$sortOption);
+
+        // 4) AJAX? return only the partial table
+        if ($request->ajax()) {
+            return view('admin.enforcer', compact('enforcer','sortOption'));
+        }
+
+        // 5) Full‐page view
+        //return view('admin.enforcer', compact('enforcer','sortOption'));
     }
 
     /**
@@ -54,8 +81,8 @@ class AddEnforcer extends Controller
             'password' => Hash::make($request->password)
         ]);
         if ($request->ajax()) {
-            $enforcers = Enforcer::paginate(5);
-            return view('admin.partials.enforcer', compact('enforcers'))
+            $enforcer= Enforcer::paginate(5);
+            return view('admin.partials.enforcer', compact('enforcer'))
                    ->with('success','Enforcer added successfully');
         }
 
@@ -90,17 +117,23 @@ class AddEnforcer extends Controller
     public function update(Request $request, string $id)
     {
         //
-        $request->validate([
-            'badge_num' => 'required|string|max:7',
-            'fname' => 'required|string|min:2|max:20',
-            'mname' => 'nullable|string|min:3|max:20',
-            'lname' => 'required|string|min:3|max:20',
+        $e = Enforcer::findOrFail($id);
+
+        $data = $request->validate([
+            'badge_num' => 'required|string|min:2|max:3',
+            'fname' => 'required|min:3',
+            'mname' => 'nullable',
+            'lname' => 'required|min:3',
             'phone' => 'required|digits:11',
         ]);
-        $enforcer = Enforcer::findOrfail($id);
-        $enforcer->update($request->all());
 
-        return response()->json(['message' => 'success']);;
+        $e->update($data);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Enforcer Updated Successfully',
+            'enforcer'=> $e
+        ], 200);
     }
 
     /**
@@ -112,5 +145,27 @@ class AddEnforcer extends Controller
         $enforcer = Enforcer::findOrfail($id);
         $enforcer->delete();
         return redirect('/enforcer')->with('success','Client Deleted Succesfully');
+    }
+    public function partial(Request $request)
+    {
+        // 1) Build the query + sort just like index()
+        $query = Enforcer::query();
+        $sortOption = $request->get('sort_option','date_desc');
+        switch($sortOption) {
+            case 'date_asc':   $column='updated_at'; $dir='asc';  break;
+            case 'name_asc':   $column='fname';      $dir='asc';  break;
+            case 'name_desc':  $column='fname';      $dir='desc'; break;
+            case 'date_desc':
+            default:           $column='updated_at'; $dir='desc'; break;
+        }
+
+        // 2) Paginate + keep sort_option in links
+        $enforcers = $query
+        ->orderBy($column,$dir)
+        ->paginate(5)
+        ->appends('sort_option',$sortOption);
+
+        // 3) Return the table partial
+        return view('admin.partials.enforcerTable', compact('enforcers'));
     }
 }

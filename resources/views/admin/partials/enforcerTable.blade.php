@@ -1,5 +1,4 @@
-<div class="enforcer-content">
-
+<div class="enforcer-table-container">
 <table class="table table-bordered table-hover">
     <thead class="table-light">
       <tr>
@@ -21,7 +20,7 @@
           <td>{{ $e->phone }}</td>
           <td class="text-center">  
             <a href="#"
-               class="btn btn-primary edit-btn"
+               class="btn btn-warning btn-sm edit-btn"
                data-bs-toggle="modal"
                data-bs-target="#editModal"
                data-id="{{ $e->id }}"
@@ -48,8 +47,8 @@
       @endforelse
     </tbody>
   </table>
-  
-  <div class="mt-4">
-    {{ $enforcer->links() }}
-  </div>
+
+    <div class="mt-4">
+      {{ $enforcer->links() }}
+    </div>
 </div>

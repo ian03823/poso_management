@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AdminManagementController;
+use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AddEnforcer;
 use App\Http\Controllers\EnforcerAcc;
@@ -43,13 +43,19 @@ Route::middleware('enforcer')->group(function () {
 
 // Admin protected routes
 Route::middleware('admin')->group(function () {
-    Route::get('/admin', [AdminManagementController::class,'adminDash'])->name('admin.dashboard');
-    Route::resource('violation', ViolationController::class); 
-    Route::resource('enforcer', AddEnforcer::class);
-    Route::resource('ticket', AdminTicketController::class);
+    Route::get('/admin', [AdminDashboardController::class,'adminDash'])->name('admin.dashboard');
+    //Violation routes
+    Route::get('/violation/partial', [ViolationController::class,'partial'])->name('violation.partial');
+    Route::resource('violation', ViolationController::class)->only(['index','create','store','edit','update','destroy']); 
+    //Enforcer routes
     Route::get('/enforcer/partial', [AddEnforcer::class, 'partial'])->name('enforcer.partial');
+    Route::resource('enforcer', AddEnforcer::class);
     Route::get('enforcer/{enforcer}/json', [AddEnforcer::class, 'json'])
      ->name('enforcer.json');
+     
+    Route::resource('ticket', AdminTicketController::class);
+
+    
 
 });
 

@@ -1,9 +1,8 @@
-<div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-      <form id="editEnforcerForm" method="POST">
+      <form id="editEnforcerForm">
         @csrf
         @method('PUT')
-        <input type="hidden" name="_method" value="PUT">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="editModalLabel">Edit Enforcer</h5>

@@ -23,7 +23,7 @@ class EnforcerAuthController extends Controller
 
         if (Auth::guard('enforcer')->attempt($validated)) {
             $request->session()->regenerate();  // Regenerate session
-            return redirect()->route('enforcer.dashboard'); // Redirect to admin dashboard
+            return redirect('/enforcerTicket'); // Redirect to admin dashboard
         }
         throw ValidationException::withMessages([
             'credentials'=> 'Incorrect password or badge number.'

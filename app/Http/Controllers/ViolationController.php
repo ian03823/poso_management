@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Violation;
+use Illuminate\View\View;
 
 class ViolationController extends Controller
 {
@@ -13,41 +14,41 @@ class ViolationController extends Controller
     public function index(Request $request)
     {
         //
-        $query = Violation::query();
+        $categoryFilter = $request->get('category', 'all');
+        $search         = $request->get('search','');
 
-        // Map dropdown choice to column & direction
-        $sortOption = $request->get('sort_option', 'date_desc');
+        // 2) Base query
+        $query = Violation::query();
     
-        switch($sortOption) {
-            case 'date_asc':
-                $column = 'updated_at';
-                $direction = 'asc';
-                break;
-    
-            case 'name_asc':
-                $column = 'violation_name';
-                $direction = 'asc';
-                break;
-    
-            case 'name_desc':
-                $column = 'violation_name';
-                $direction = 'desc';
-                break;
-    
-            case 'date_desc':
-            default:
-                $column = 'updated_at';
-                $direction = 'desc';
-                break;
+        if ($categoryFilter !== 'all') {
+            $query->where('category', $categoryFilter);
+        }
+
+        if (!empty($search)) {
+            $query->where(function($q) use ($search) {
+                $q->where('violation_name','like',"%{$search}%")
+                  ->orWhere('violation_code','like',"%{$search}%");
+            });
         }
     
+        // 3) Paginate and carry category in links
         $violation = $query
-            ->orderBy($column, $direction)
+            ->orderBy('updated_at','desc')
             ->paginate(5)
-            ->appends('sort_option', $sortOption);
-    
-        return view('admin.violation.violationList', compact('violation', 'sortOption'));
+            ->appends([
+                'category' => $categoryFilter,
+                'search' => $search,
+            ]);
 
+        // 5) Full-page: we need the fixed list of categories
+        $categories = Violation::distinct('category')
+            ->orderBy('category')
+            ->pluck('category')
+            ->toArray();
+
+        return view('admin.violation.violationList', compact(
+            'violation','categoryFilter','categories','search'
+        ));
     }
 
     /**
@@ -138,5 +139,32 @@ class ViolationController extends Controller
         $violation = Violation::findOrfail($id);
         $violation->delete();
         return redirect('/violation')->with('success','Violation Deleted Succesfully');
+    }
+    public function partial(Request $request)
+    {
+        //
+        $categoryFilter = $request->get('category','all');
+        $search         = $request->get('search','');
+
+        $query = Violation::query();
+        if ($categoryFilter!=='all') {
+            $query->where('category',$categoryFilter);
+        }
+        if (!empty($search)) {
+            $query->where(function($q) use ($search) {
+                $q->where('violation_name','like',"%{$search}%")
+                  ->orWhere('violation_code','like',"%{$search}%");
+            });
+        }
+    
+        $violation = $query
+            ->orderBy('updated_at','desc')
+            ->paginate(5)
+            ->appends([
+                'category' => $categoryFilter,
+                'search' => $search,
+            ]);
+
+        return view('admin.partials.violationTable', compact('violation'));
     }
 }

@@ -1,12 +1,9 @@
 @extends('components.layout')
 @section('title', 'POSO Admin Management')
 @section('content')
+
 <div class="container mt-4">
     <h2 class="mb-3">All Issued Tickets</h2>
-  
-    @if($tickets->isEmpty())
-      <div class="alert alert-info">No tickets have been issued yet.</div>
-    @else
       <table class="table table-bordered table-hover">
         <thead class="table-light">
           <tr>
@@ -40,9 +37,11 @@
             </tr>
           @endforeach
         </tbody>
-      </table>
-  
+      </table>    
+      @if($tickets->isEmpty())
+            <div class="alert alert-info">No tickets have been issued yet.</div>
+          @endif
       {{ $tickets->links() }}
-    @endif
   </div>
+
 @endsection

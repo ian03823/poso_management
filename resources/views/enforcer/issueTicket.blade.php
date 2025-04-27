@@ -11,6 +11,7 @@
       height: auto !important;
     }
   </style>
+
   <div class="container py-4">
     {{-- Page Title --}}
     <h1 class="h4 text-center mb-4">Traffic Citation Ticket</h1>
@@ -21,12 +22,11 @@
 
         <form id="ticketForm" action="/enforcerCreate" method="POST">
           @csrf
-
           <div class="row g-3">
             {{-- Name --}}
             <div class="col-12 col-md-6 form-floating">
               <input type="text" class="form-control" id="name" name="name"
-                    placeholder="Full name" required>
+                    placeholder="Full name" value="{{ old('name') }}">
               <label for="name">To: Full name</label>
             </div>
 
@@ -40,7 +40,7 @@
             {{-- Mobile --}}
             <div class="col-12 col-md-6 form-floating">
               <input type="tel" class="form-control" id="phone" name="phone_number"
-                    placeholder="11 digit number" pattern="\d{11}" required>
+                    placeholder="11 digit number" pattern="\d{11}" {{ old('phone_number') }}>
               <label for="phone">Mobile No.</label>
             </div>
 
@@ -54,8 +54,14 @@
             {{-- License No. --}}
             <div class="col-6 col-md-3 form-floating">
               <input type="text" class="form-control" id="license_num" name="license_num"
-                    placeholder="License number" required>
+                    placeholder="License number" autocomplete="off" {{ old('license_num') }}>
               <label for="license_num">License No.</label>
+            </div>  
+            {{-- Plate No. --}}
+            <div class="col-6 col-md-3 form-floating">
+              <input type="text" class="form-control" id="plate_num" name="plate_num"
+                    placeholder="Plate number" autocomplete="off" {{ old('plate_num') }}>
+              <label for="plate_num">Plate No.</label>
             </div>
 
             {{-- Confiscated --}}
@@ -70,14 +76,7 @@
               </select>
               <label for="confiscated">Confiscated</label>
             </div>
-
-            {{-- Plate No. --}}
-            <div class="col-12 col-md-6 form-floating">
-              <input type="text" class="form-control" id="plate_num" name="plate_num"
-                    placeholder="Plate number" required>
-              <label for="plate_num">License Plate</label>
-            </div>
-
+          
             {{-- Vehicle Type --}}
             <div class="col-12 col-md-6 form-floating">
               <select class="form-select" id="vehicle_type" name="vehicle_type" required>
@@ -98,14 +97,23 @@
               </div>
             </div>
 
+            <div class="col-12 col-md-6 d-flex align-items-center">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="is_resident" name="is_resident" value="1">
+                <label class="form-check-label" for="is_resident">
+                  Resident
+                </label>
+              </div>
+            </div>
+
             {{-- Owner Name --}}
             <div class="col-12 col-md-6 form-floating">
               <input type="text" class="form-control" id="owner_name" name="owner_name"
-                    placeholder="Owner name" required>
+                    placeholder="Owner name" {{ old('owner_name') }}>
               <label for="owner_name">Owner Name</label>
             </div>
           </div>
-
+          
           {{-- Violations Section --}}
           <div class="mt-4">
             <h5 class="mb-2">Select Violations</h5>
@@ -179,7 +187,7 @@
     <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
     <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-
+    console.log('ticket script loaded')
     document.getElementById('ticketForm')
         .addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -211,6 +219,7 @@
             <strong>Type:</strong> ${p.vehicle.vehicle_type}<br>
             <strong>Owner:</strong> ${p.vehicle.is_owner}<br>
             <strong>Owner Name:</strong> ${p.vehicle.owner_name}<br>
+            <strong>Resident:</strong> ${p.ticket.is_resident ? 'Yes' : 'No'}<br>
             <strong>Location:</strong> ${p.ticket.location}<br>
             <strong>Confiscated:</strong> ${p.ticket.confiscated}<br>
             <strong>Impounded?:</strong> ${p.ticket.is_impounded}<br>
@@ -220,7 +229,7 @@
             <strong>Violations:</strong>
             <ul>`;
             p.violations.forEach(v => {
-            html += `<li>${v.name} — ₱${v.fine}, pts ${v.points}</li>`;
+            html += `<li>${v.name} — Php${v.fine}</li>`;
             });
             html += `</ul>`;
 
@@ -247,9 +256,10 @@
             // Build ESC/POS text once
             const ESC = '\x1B', GS = '\x1D', NL = '\x0A';
             let txt = '';
+            txt += '\tCity of San Carlos' + NL;
             txt += 'Public Order and Safety Office' + NL;
             txt += '\t(POSO)' + NL + NL;
-            txt += 'Traffic Citation Ticket' + NL;
+            txt += '\tTraffic Citation Ticket' + NL;
             txt += 'Date issued: ' + p.ticket.issued_at + NL + NL;
             txt += 'Violator: ' + p.violator.name + NL;
             txt += 'Phone: ' + p.violator.phone_number + NL + NL;
@@ -262,7 +272,7 @@
             txt += 'Owner Name: ' + p.vehicle.owner_name + NL + NL;
             txt += 'Violations:' + NL;
             p.violations.forEach(v => {
-            txt += `- ${v.name} (Php${v.fine}` + NL;
+            txt += `- ${v.name} (Php${v.fine})` + NL;
             });
             txt += NL;
             txt += 'Username: ' + p.credentials.username + NL;
@@ -284,7 +294,7 @@
             }
 
             // 4) Show success, then reset form
-            await Swal.fire('Success', 'Printed two copies.', 'success');
+            await Swal.fire('Success', 'Ticket Submitted.', 'success');
             form.reset();
 
         } catch (err) {
@@ -308,22 +318,24 @@
 
         const ESC = '\x1B', GS = '\x1D', NL = '\x0A';
         let txt = '';
+        txt += '\tCity of San Carlos' + NL;
         txt += 'Public Order and Safety Office' + NL;
-        txt += '\t(POSO)' + NL + NL;
-        txt += 'Traffic Citation Ticket' + NL;
+        txt += '\t\t(POSO)' + NL + NL;
+        txt += '\tTraffic Citation Ticket' + NL;
         txt += 'Date issued: ' + p.ticket.issued_at + NL + NL;
         txt += 'Violator: ' + p.violator.name + NL;
         txt += 'Phone: ' + p.violator.phone_number + NL + NL;
         txt += 'Birthdate: ' + p.violator.birthdate + NL;
         txt += 'Address: ' + p.violator.address + NL;
+        txt += 'Resident: ' + (p.ticket.is_resident ? 'Yes' : 'No') + NL;
         txt += 'License No.: ' + p.violator.license_number + NL + NL;
-        txt += 'Plate: ' + p.vehicle.plate_number + NL;
+        txt += 'Plate No.: ' + p.vehicle.plate_number + NL;
         txt += 'Type: ' + p.vehicle.vehicle_type + NL;
         txt += 'Owner: ' + p.vehicle.is_owner + NL;
         txt += 'Owner Name: ' + p.vehicle.owner_name + NL + NL;
-        txt += 'Violations:' + NL;
+        txt += 'Violation(s):' + NL;
         p.violations.forEach(v => {
-        txt += `- ${v.name} (Php${v.fine}, Penalty: ${v.points})` + NL;
+        txt += `- ${v.name} (Php${v.fine})` + NL;
         });
         txt += NL;
         txt += 'Username: ' + p.credentials.username + NL;
@@ -332,7 +344,6 @@
         if (p.ticket.is_impounded === 'true') {
         txt += '*** VEHICLE IMPOUNDED ***' + NL + NL;
         }
-        txt += 'Enforcer: ' + p.enforcer.name + NL;
         txt += 'Badge No: ' + p.enforcer.badge_num + NL;
         txt += NL + ESC + 'd' + '\x03' + GS + 'V' + '\x00';
 

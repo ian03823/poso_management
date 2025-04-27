@@ -1,65 +1,90 @@
-document.addEventListener('DOMContentLoaded', function () {
-    const editButtons = document.querySelectorAll('.edit-btn');
+// update-modal.js
 
-    editButtons.forEach(button => {
-        button.addEventListener('click', function (event) {
-            event.preventDefault();
+/**
+ * Delegate handling of the Edit modal to the document,
+ * so it works even after AJAX content swaps.
+ */
 
-            const id = this.dataset.id;
-            document.getElementById('edit_badge_num').value = this.dataset.badge;
-            document.getElementById('edit_fname').value = this.dataset.fname;
-            document.getElementById('edit_mname').value = this.dataset.mname;
-            document.getElementById('edit_lname').value = this.dataset.lname;
-            document.getElementById('edit_phone').value = this.dataset.phone;
-
-            document.getElementById('editEnforcerForm').action = `/enforcer/${id}`;
+// Populate the modal inputs any time it is shown
+document.addEventListener('show.bs.modal', event => {
+    // Only care about our Edit modal
+    if (event.target.id !== 'editModal') return;
+  
+    const btn  = event.relatedTarget;
+    const form = document.getElementById('editEnforcerForm');
+    if (!btn || !form) return;
+  
+    const id = btn.getAttribute('data-id');
+    form.action = `/enforcer/${id}`; // ensure your route matches
+  
+    form.querySelector('#edit_badge_num').value = btn.getAttribute('data-badge') || '';
+    form.querySelector('#edit_fname').value     = btn.getAttribute('data-fname') || '';
+    form.querySelector('#edit_mname').value     = btn.getAttribute('data-mname') || '';
+    form.querySelector('#edit_lname').value     = btn.getAttribute('data-lname') || '';
+    form.querySelector('#edit_phone').value     = btn.getAttribute('data-phone') || '';
+  });
+  
+  // Intercept submission of the Edit form anywhere in the document
+  document.body.addEventListener('submit', async e => {
+    const form = e.target;
+    if (form.id !== 'editEnforcerForm') return;
+    e.preventDefault();
+  
+    const modalEl = document.getElementById('editModal');
+  
+    try {
+      const resp = await fetch(form.action, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: new FormData(form)
+      });
+  
+      if (resp.status === 422) {
+        const json = await resp.json();
+        throw json.errors;
+      }
+      if (!resp.ok) throw new Error(resp.statusText);
+      await resp.json();
+  
+      // Success toast
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'Enforcer updated',
+        showConfirmButton: false,
+        timer: 1500
+      });
+  
+      // Hide the modal
+      const modalInstance = bootstrap.Modal.getInstance(modalEl);
+      modalInstance.hide();
+  
+      // When fully hidden, clean up and reload the table
+      modalEl.addEventListener('hidden.bs.modal', () => {
+        document.body.classList.remove('modal-open');
+        document.querySelectorAll('.modal-backdrop').forEach(el=>el.remove());
+        loadContent(window.location.pathname);
+      }, { once: true });
+  
+    } catch (errors) {
+      if (typeof errors === 'object') {
+        // Validation errors: display under inputs
+        Object.entries(errors).forEach(([field, msgs]) => {
+          const input = form.querySelector(`[name="${field}"]`);
+          if (!input) return;
+          input.classList.add('is-invalid');
+          let fb = input.nextElementSibling;
+          if (!fb || !fb.classList.contains('invalid-feedback')) {
+            fb = document.createElement('div');
+            fb.classList.add('invalid-feedback');
+            input.after(fb);
+          }
+          fb.textContent = Array.isArray(msgs) ? msgs[0] : msgs;
         });
-    });
-
-    document.getElementById('editEnforcerForm').addEventListener('submit', function (e) {
-        e.preventDefault();
-
-        const url = this.action;
-        const formData = new FormData(this);
-
-        fetch(url, {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            },
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) throw response;
-            return response.json();
-        })
-        .then(() => {
-            bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
-            document.body.classList.remove('modal-open');
-            document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-
-            Swal.fire({
-                title: 'Updated!',
-                text: 'Enforcer updated successfully.',
-                icon: 'success',
-                timer: 1500,
-                showConfirmButton: false
-            });
-
-            fetch('/enforcer/partial')
-              .then(res => res.text())
-              .then(html => {
-                  document.querySelector('#enforcer-content').innerHTML = html;
-              });
-        })
-        .catch(() => {
-            Swal.fire({
-                title: 'Error!',
-                text: 'Failed to update. Please try again.',
-                icon: 'error'
-            });
-        });
-    });
-});
+      } else {
+        Swal.fire({ icon: 'error', title: 'Update failed', text: errors.message || errors });
+      }
+    }
+  });
+  

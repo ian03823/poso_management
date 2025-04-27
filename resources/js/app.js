@@ -1,4 +1,5 @@
 import './bootstrap';
+import '../css/app.css';
 
 // resources/js/app.js
 

@@ -9,55 +9,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
     <script src="https://kit.fontawesome.com/7922e0fdab.js" crossorigin="anonymous"></script>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
 
-    <style>
-        body{
-            margin: 0;
-            padding: 0;
-        }
-        .top-nav {
-            background-color: #1B5E20;
-            padding: 0.75rem 3rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            color: white;
-        }
+    @vite(['resources/css/app.css','resources/js/app.js'])
 
-        .sidebar {
-            background-color: #fff;
-            width: 300px;
-            min-height: 100vh;
-            border-right: 1px solid #ddd;
-            padding: 1rem;
-        }
-
-        .sidebar img {
-            width: 120px;
-            display: block;
-            margin: 0 auto 1rem;
-        }
-
-        .sidebar .nav-link {
-            color: #222;
-            font-weight: 500;
-            margin: 0.3rem 0;   
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 0.75rem;
-            border-radius: 8px;
-            transition: background-color 0.2s;
-        }
-
-        .sidebar .nav-link:hover {
-            background-color: #36e339;
-            border-radius: 8px;
-        }
-
-    </style>
 </head>
 <body>
 
@@ -121,8 +75,8 @@
                 </li>
                 <li class="nav-item">
                     <a href="#" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
-                        <i class="bi bi-person-lines-fill me-3"></i>
-                         <span>Dispute</span>
+                        <i class="bi bi-person-exclamation me-3 fs-5"></i>
+                         <span>Complaint</span>
                     </a>
                 </li>
             </ul>
@@ -134,8 +88,6 @@
         </main>
 
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
         const logoutBtn  = document.getElementById('logoutBtn');
@@ -182,12 +134,15 @@
         // Initial call
         updateDateTime();
     </script>
+
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ asset('js/ajax.js') }}"></script>
     <script src="{{ asset('js/sweetalerts.js') }}"></script>
     <script src="{{ asset('js/update-modal.js') }}"></script>
-
+    <script src="{{ asset('js/violationTable.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="{{ asset('js/enforcer-filter.js') }}"></script>
     @stack('scripts')
 </body>
 </html>

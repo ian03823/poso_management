@@ -5,8 +5,7 @@
       fetch(url, { headers:{ 'X-Requested-With':'XMLHttpRequest' } })
         .then(r => r.text())
         .then(html => {
-          const doc = new DOMParser()
-                        .parseFromString(html,'text/html');
+          const doc = new DOMParser().parseFromString(html,'text/html');
           const wrapper = doc.getElementById('app-body');
           contentEl.innerHTML = wrapper
             ? wrapper.innerHTML
@@ -18,14 +17,14 @@
   
     // expose globally for sweetalert.js
     window.loadContent = loadContent;
-  
-    // 1) Sidebar nav
-    document.querySelectorAll('.sidebar .nav-link').forEach(a=>{
-      a.addEventListener('click', e=>{
+    
+    document.querySelectorAll('.sidebar .nav-link').forEach(a => {
+      a.addEventListener('click', e => {
         e.preventDefault();
         loadContent(a.href);
       });
     });
+
   
     // 2) In-content AJAX links
     document.body.addEventListener('click', e=>{
@@ -41,5 +40,7 @@
     window.addEventListener('popstate', ()=>{
       loadContent(location.pathname,false);
     });
+    
   })();
+  
   

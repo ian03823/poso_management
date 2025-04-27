@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use App\Models\Violation;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class TicketController extends Controller
 {
@@ -71,6 +72,7 @@ class TicketController extends Controller
                  'plate_num'     => 'required|string|max:50',
                  'vehicle_type'  => 'required|string',
                  'is_owner'      => 'sometimes|boolean',
+                 'is_resident'   => 'sometimes|boolean',
                  'owner_name'    => 'required|string',
                  'violations'    => 'required|array|min:1',
                  'location'      => 'required|string',
@@ -79,6 +81,7 @@ class TicketController extends Controller
              ]);
          
              $impounded = (bool) ($d['is_impounded'] ?? false);
+             $resident = (bool) ($d['is_resident'] ?? false);
          
              // 2) Violator (create or fetch)
              $violator = Violator::firstOrNew(
@@ -92,19 +95,19 @@ class TicketController extends Controller
                  $violator->name      = $d['name'];
                  $violator->address   = $d['address'];
                  $violator->birthdate = $d['birthdate'];
+                 
              }
              $violator->save();
          
-             // 3) Credentials: skip if impounded
-             if (! $impounded && ! $violator->username) {
-                 $violator->username = 'user'.rand(1000,9999);
-                 $rawPwd             = Str::random(8);
-                 $violator->password = bcrypt($rawPwd);
-                 $violator->save();
-                 $creds = ['username'=> $violator->username, 'password'=> $rawPwd];
-             } else {
-                 $creds = ['username'=> null, 'password'=> "••••••"];
-             }
+             if (! $impounded && $resident && ! $violator->username) {
+                $violator->username = 'user'.rand(1000,9999);
+                $rawPwd             = Str::random(8);
+                $violator->password = bcrypt($rawPwd);
+                $violator->save();
+                $creds = ['username'=> $violator->username, 'password'=> $rawPwd];
+            } else {
+                $creds = ['username'=> "Existing Username", 'password'=> "Existing Password"];
+            }
          
              // 4) Vehicle
              $vehicle = Vehicle::firstOrCreate(
@@ -129,12 +132,13 @@ class TicketController extends Controller
                  'offline'         => false,
                  'confiscated'     => $d['confiscated'],
                  'is_impounded'    => $impounded,
+                 'is_resident'     => $resident,
              ]);
          
              // 6) Last apprehended before **this** ticket
              $prev = Ticket::where('violator_id',$violator->id)
                            ->where('id','!=',$ticket->id)
-                           ->orderBy('issued_at','desc')
+                           ->orderBy('issued_at','desc')    
                            ->first();
              $lastAt = $prev
                  ? $prev->issued_at->format('d M Y, H:i')
@@ -146,7 +150,6 @@ class TicketController extends Controller
                                      ->map(fn($v) => [
                                          'name'   => $v->violation_name,
                                          'fine'   => $v->fine_amount,
-                                         'points' => $v->penalty_points,
                                      ]);
          
              return response()->json([
@@ -156,6 +159,7 @@ class TicketController extends Controller
                      'location'          => $ticket->location,
                      'confiscated'       => $ticket->confiscated,
                      'is_impounded'      => $ticket->is_impounded ? 'Yes' : 'No',
+                     'is_resident'   => $ticket->is_resident,
                  ],
                  'last_apprehended_at' => $lastAt,
                  'enforcer'    => [
@@ -167,6 +171,7 @@ class TicketController extends Controller
                      'name'           => $violator->name,
                      'address'        => $violator->address,
                      'birthdate'      => $violator->birthdate,
+                     
                      'license_number'=> $violator->license_number,
                      'phone_number'  => $violator->phone_number,
                  ],
