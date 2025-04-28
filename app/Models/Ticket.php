@@ -3,8 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use app\Models\Violator;
-use app\Models\Enforcer;
+use App\Models\Violator;
+use App\Models\Enforcer;
+use App\Models\Violation;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Notifications\Notifiable;
 
@@ -45,4 +46,13 @@ class Ticket extends Model
     {
         return $this->belongsTo(Vehicle::class, 'vehicle_id');
     }
+    public function violations()
+    {
+        return $this->belongsToMany(Violation::class,
+            'ticket_violation',
+            'ticket_id',
+            'violation_id'
+        );
+    }
+
 }

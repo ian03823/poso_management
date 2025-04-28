@@ -11,6 +11,7 @@
       height: auto !important;
     }
   </style>
+  @php $v = $violator; @endphp
 
   <div class="container py-4">
     {{-- Page Title --}}
@@ -26,41 +27,35 @@
             {{-- Name --}}
             <div class="col-12 col-md-6 form-floating">
               <input type="text" class="form-control" id="name" name="name"
-                    placeholder="Full name" value="{{ old('name') }}">
+                    placeholder="Full name" value="{{ $v->name ?? old('name') }}">
               <label for="name">To: Full name</label>
             </div>
 
             {{-- Address --}}
             <div class="col-12 col-md-6 form-floating">
               <textarea class="form-control" id="address" name="address"
-                        placeholder="Full address" style="height: 3rem" required></textarea>
+                        placeholder="Full address" style="height: 3rem">{{ $v->address ?? old('address') }}</textarea>
               <label for="address">Address</label>
             </div>
 
-            {{-- Mobile --}}
-            <div class="col-12 col-md-6 form-floating">
-              <input type="tel" class="form-control" id="phone" name="phone_number"
-                    placeholder="11 digit number" pattern="\d{11}" {{ old('phone_number') }}>
-              <label for="phone">Mobile No.</label>
-            </div>
 
             {{-- Birthdate --}}
             <div class="col-6 col-md-3 form-floating">
               <input type="date" class="form-control" id="birthdate" name="birthdate"
-                    placeholder="Birthdate" required>
+                    placeholder="Birthdate" value="{{ $v->birthdate ?? old('birthdate') }}">
               <label for="birthdate">Birthdate</label>
             </div>
 
             {{-- License No. --}}
             <div class="col-6 col-md-3 form-floating">
               <input type="text" class="form-control" id="license_num" name="license_num"
-                    placeholder="License number" autocomplete="off" {{ old('license_num') }}>
+                    placeholder="License number" autocomplete="off" value="{{ $v->license_number ?? old('license_num') }}">
               <label for="license_num">License No.</label>
             </div>  
             {{-- Plate No. --}}
             <div class="col-6 col-md-3 form-floating">
               <input type="text" class="form-control" id="plate_num" name="plate_num"
-                    placeholder="Plate number" autocomplete="off" {{ old('plate_num') }}>
+                    placeholder="Plate number" autocomplete="off" value="{{ old('plate_num') }}">
               <label for="plate_num">Plate No.</label>
             </div>
 
@@ -76,7 +71,7 @@
               </select>
               <label for="confiscated">Confiscated</label>
             </div>
-          
+            
             {{-- Vehicle Type --}}
             <div class="col-12 col-md-6 form-floating">
               <select class="form-select" id="vehicle_type" name="vehicle_type" required>
@@ -117,31 +112,50 @@
           {{-- Violations Section --}}
           <div class="mt-4">
             <h5 class="mb-2">Select Violations</h5>
-            <div class="accordion accordion-flush" id="violationsAccordion">
+            <div class="accordion" id="violationsAccordion">
+              @php use Illuminate\Support\Str; @endphp
+        
               @foreach($violationGroups as $category => $violations)
-                @php $slug = Str::slug($category); @endphp
+                @php $slug = Str::slug($category) @endphp
+        
                 <div class="accordion-item">
                   <h2 class="accordion-header" id="heading-{{ $slug }}">
-                    <button class="accordion-button collapsed py-2"
-                            type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#collapse-{{ $slug }}"
-                            aria-expanded="false"
-                            aria-controls="collapse-{{ $slug }}">
+                    <button
+                      class="accordion-button @unless($loop->first) collapsed @endunless"
+                      type="button"
+                      data-bs-toggle="collapse"
+                      data-bs-target="#collapse-{{ $slug }}"
+                      aria-expanded="{{ $loop->first ? 'true' : 'false' }}"
+                      aria-controls="collapse-{{ $slug }}">
                       {{ $category }}
                     </button>
                   </h2>
-                  <div id="collapse-{{ $slug }}"
-                      class="accordion-collapse collapse"
-                      aria-labelledby="heading-{{ $slug }}"
-                      data-bs-parent="#violationsAccordion">
+        
+                  <div
+                    id="collapse-{{ $slug }}"
+                    class="accordion-collapse collapse @if($loop->first) show @endif"
+                    aria-labelledby="heading-{{ $slug }}"
+                    data-bs-parent="#violationsAccordion"
+                  >
                     <div class="accordion-body">
                       @foreach($violations as $v)
-                        <div class="form-check">
-                          <input class="form-check-input" type="checkbox"
-                                name="violations[]" id="violation-{{ $v->id }}"
-                                value="{{ $v->violation_code }}">
-                          <label class="form-check-label" for="violation-{{ $v->id }}">
+                        <div
+                          class="form-check"
+                          onclick="event.stopPropagation()"
+                        >
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="violations[]"
+                            id="violation-{{ $v->id }}"
+                            value="{{ $v->violation_code }}"
+                            onclick="event.stopPropagation()"
+                          >
+                          <label
+                            class="form-check-label"
+                            for="violation-{{ $v->id }}"
+                            onclick="event.stopPropagation()"
+                          >
                             {{ $v->violation_name }} — ₱{{ number_format($v->fine_amount,2) }}
                           </label>
                         </div>
@@ -152,6 +166,7 @@
               @endforeach
             </div>
           </div>
+          
 
           {{-- Impounded & Location --}}
           <div class="row g-3 mt-3">
@@ -187,6 +202,7 @@
     <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
     <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+
     console.log('ticket script loaded')
     document.getElementById('ticketForm')
         .addEventListener('submit', async function(e) {

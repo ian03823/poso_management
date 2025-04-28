@@ -52,10 +52,9 @@ Route::middleware('admin')->group(function () {
     Route::resource('enforcer', AddEnforcer::class);
     Route::get('enforcer/{enforcer}/json', [AddEnforcer::class, 'json'])
      ->name('enforcer.json');
-     
+
     Route::resource('ticket', AdminTicketController::class);
 
-    
 
 });
 

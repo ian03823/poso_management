@@ -25,7 +25,7 @@
 
                 <!-- Username -->
                 <div class="mb-3">
-                    <label for="badge_num" class="form-label">Username</label>
+                    <label for="badge_num" class="form-label">Badge No.</label>
                     <input 
                         type="text"
                         name="badge_num"

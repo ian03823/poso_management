@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Ticket;
-
+use App\Models\Enforcer;
 class AdminTicketController extends Controller
 {
     /**
@@ -14,10 +14,11 @@ class AdminTicketController extends Controller
     {
         //
         $tickets = Ticket::with(['enforcer', 'violator', 'vehicle'])
-        ->orderBy('issued_at','desc')
+        ->orderBy('issued_at', 'desc')
         ->paginate(10);
 
-    return view('admin.issuedTicket.ticketTable', compact('tickets'));
+        // Render the main blade that @includes your partial
+        return view('admin.issuedTicket.ticketTable', compact('tickets'));
     }
 
     /**

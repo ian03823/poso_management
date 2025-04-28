@@ -45,16 +45,22 @@ class TicketController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(Request $request)
     {
         //
         $grouped = Violation::orderBy('category')
                         ->orderBy('violation_name')
                         ->get()
                         ->groupBy('category');
-
+        
+        $violator = null;
+        if ($request->filled('violator_id')) {
+            $violator = Violator::with('vehicles')
+            ->find($request->input('violator_id'));
+        }              
         return view('enforcer.issueTicket', [
             'violationGroups' => $grouped,
+            'violator'        => $violator,
         ]);
     }
 
@@ -67,7 +73,6 @@ class TicketController extends Controller
                  'name'          => 'required|string|max:255',
                  'address'       => 'required|string',
                  'birthdate'     => 'required|date',
-                 'phone_number'  => 'required|digits:11',
                  'license_num'   => 'required|string|max:50',
                  'plate_num'     => 'required|string|max:50',
                  'vehicle_type'  => 'required|string',
@@ -87,8 +92,6 @@ class TicketController extends Controller
              $violator = Violator::firstOrNew(
                  ['license_number' => $d['license_num']]
              );
-             // always update phone#
-             $violator->phone_number = $d['phone_number'];
          
              // on first create, fill name/address/birthdate
              if (! $violator->exists) {
@@ -171,9 +174,7 @@ class TicketController extends Controller
                      'name'           => $violator->name,
                      'address'        => $violator->address,
                      'birthdate'      => $violator->birthdate,
-                     
                      'license_number'=> $violator->license_number,
-                     'phone_number'  => $violator->phone_number,
                  ],
                  'vehicle'     => [
                      'plate_number' => $vehicle->plate_number,

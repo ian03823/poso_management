@@ -3,8 +3,8 @@
 
 @section('body')
 <div class="container my-3">
-    <a href="/enforcerTicket" class="btn btn-outline-secondary mb-3">
-      ← Back to Search
+    <a href="{{ route('enforcerTicket.create', ['violator_id' => $violators->id]) }}" class="btn btn-success mb-3">
+      Add Violation
     </a>
     <h2 style="text-align: center">Violator's Information</h2>
     <dl class="row p-3">
@@ -16,7 +16,7 @@
 
       <dt class="col-sm-3">Plate Number(s)</dt>
       <dd class="col-sm-9">
-        {{ $violators->vehicles->pluck('plate_number')->join(', ') }}
+        {{ $violators->vehicles->pluck('plate_number')->join(' - ') }}
         @if($violators->vehicles->pluck('plate_number')->isEmpty())
               <p>No registered plate number found.</p>
         @endif

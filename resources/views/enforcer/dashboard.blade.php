@@ -8,20 +8,22 @@
   <!-- Main Body -->
   <div class="bg-white shadow-sm py-3">
     <div class="container position-relative">
-      <div class="input-group mx-auto" style="max-width: 600px;">
+      <div class="input-group mx-auto " style="max-width: 600px;">
         <input
           id="violator-search"
           type="text"
           class="form-control border-0"
-          placeholder="Search by name, license, or plate…"
+          placeholder="Search"
           aria-label="Search"
           autocomplete="off"
         >
         <button class="btn btn-success" type="button" id="search-clear" disabled>
           <i class="bi bi-search"></i>
         </button>
+        
       </div>
-      <p class="text-sm muted p-3">Search by name, plate number, license number.</p>
+      <p class="text-sm muted p-3 mt-4">Search by name, plate number, license number.</p>
+      
 
       {{-- Suggestions dropdown --}}
       <div

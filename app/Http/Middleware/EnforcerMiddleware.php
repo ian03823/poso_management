@@ -23,6 +23,6 @@ class EnforcerMiddleware
         }
 
         // Proceed with the request if authenticated
-        return redirect()->route('enforcer.showLogin')->with('error', 'You must be logged in to access this page.');
+        return redirect()->route('enforcer.showLogin')->with('error', 'You must be logged in to access the page.');
     }
 }

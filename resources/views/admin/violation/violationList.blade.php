@@ -30,7 +30,7 @@
                     @endforeach
             </select>
           </div>
-          <div class="col-auto">
+          <div class="col-6 justify-content-end d-flex">
             <label for="search_input" class="col-form-label fw-semibold">Search:</label>
           </div>
           <div class="col-auto">
