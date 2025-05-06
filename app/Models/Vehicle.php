@@ -9,6 +9,8 @@ class Vehicle extends Model
 {
     //
     protected $primaryKey = 'vehicle_id';
+    public $incrementing = true;
+    protected $keyType = 'int';
 
     protected $fillable = [
         'violator_id',
@@ -19,5 +21,9 @@ class Vehicle extends Model
     ];
     public function violator(){
         return $this->belongsTo(Violator::class);
+    }
+    public function tickets()
+    {
+        return $this->hasMany(Ticket::class);
     }
 }

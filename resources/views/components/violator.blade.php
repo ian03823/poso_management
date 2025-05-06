@@ -20,7 +20,24 @@
 
 <body>
 
+    <header class="top-nav py-3">
+        <div class="fw-bold fs-6">POSO Digital Ticket System</div>
+        @auth('violator')
+        <div class="text-muted-white fw-medium" id="currentDateTime">—</div>
+
+        <div class="d-flex gap-3 align-items-center">
+            <a href="#" class="text-white" style="text-decoration: none"><i class="fa-solid fa-id-badge"></i> &nbsp Profile</a>
+            <form id="logoutForm" method="POST">
+                @csrf
+                <button type="submit" id="logoutBtn"> <i class="fa-solid fa-right-from-bracket"></i> &nbspLog out</button>
+            </form>
+        </div>
+        @endauth
+    </header>
+    
+
     @yield('body')
+
     
 </body>
 </html>

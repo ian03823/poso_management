@@ -1,6 +1,5 @@
-
-
-<table class="table table-bordered">
+<div id="table-container">
+<table class="table table-bordered table-hover">
     <thead>
       <tr>
         <th class="text-center">Code</th>
@@ -18,15 +17,23 @@
           <td>₱{{ number_format($violations->fine_amount, 2) }}</td>
           <td>{{ $violations->category }}</td>
           <td class="text-center">
-            <a href="{{ route('violation.edit', $violations->id) }}"
-               class="btn btn-warning btn-sm edit-btn">Edit
+            <a href=""
+                class="btn btn-warning btn-sm edit-btn"
+                data-bs-toggle="modal"
+                data-bs-target="#editModal"
+                data-id="{{ $violations->id }}"
+                data-violation_code="{{ $violations->violation_code }}"
+                data-violation_name="{{ $violations->violation_name }}"
+                data-fine_amount="{{ $violations->fine_amount }}"
+                data-category="{{ $violations->category }}">
+                Edit
               </a>
 
             <form action="violation/{{ $violations->id }}" method="POST" class="d-inline">
               @csrf
               @method('DELETE')
-              <button type="submit"
-                      class="btn btn-danger btn-sm delete-btn" data-name="{{ $violations->violation_name }} Violation">Delete</button>
+              <button type="submit" class="btn btn-danger btn-sm delete-btn" data-name="{{ $violations->violation_name }} Violation">
+                Delete</button>
             </form>
           </td>
         </tr>
@@ -38,8 +45,7 @@
     </tbody>
   </table>
 
-  {{-- ▶ Pagination links --}}
-
-  <nav aria-label="Pages navigation" class="mt-3">
+  <div class="mt-3">
     {{ $violation->links('pagination::bootstrap-5')->withClass('pagination-modern justify-content-center') }}
-  </nav>
+  </div>
+</div>

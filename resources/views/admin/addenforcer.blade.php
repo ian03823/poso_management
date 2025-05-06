@@ -3,5 +3,7 @@
 @section('title', 'POSO Admin Management')
 
 @section('content')
-    @include('admin.partials.addenforcer')
+    
+        @include('admin.partials.addenforcer')
+    
 @endsection

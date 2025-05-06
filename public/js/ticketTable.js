@@ -1,45 +1,55 @@
-$(function(){
-    const $cont      = $('#ticketContainer');
-    const $status    = $('#status_filter');
-    const $enforcer  = $('#enforcer_filter');
-    const $category  = $('#category_filter');
-    const $from      = $('#date_from');
-    const $to        = $('#date_to');
-    const $search    = $('#search_input');
-    const $btn       = $('#search_btn');
-  
-    function loadTickets(page=1){
-      const params={
-        status:   $status.val(),
-        enforcer: $enforcer.val(),
-        category: $category.val(),
-        date_from:$from.val(),
-        date_to:  $to.val(),
-        search:   $search.val().trim(),
-        page
-      };
-      $.ajax({
-        url:'/ticket/partial',
-        data:params,
-        headers:{'X-Requested-With':'XMLHttpRequest'},
-        success(html){ $cont.html(html); },
-        error(err){ console.error(err); }
-      });
-    }
-  
-    // Filters & search
-    $status.change(()=>loadTickets());
-    $enforcer.change(()=>loadTickets());
-    $category.change(()=>loadTickets());
-    $from.change(()=>loadTickets());
-    $to.change(()=>loadTickets());
-    $btn.click(e=>{ e.preventDefault(); loadTickets(); });
-    $search.keypress(e=>{ if(e.which===13){e.preventDefault(); loadTickets();}});
-  
-    // Pagination click
-    $cont.on('click','.pagination a',function(e){
-      e.preventDefault();
-      const page=new URL(this.href).searchParams.get('page')||1;
-      loadTickets(page);
-    });
+(function($){
+  // 1) Handle sort control change
+  $(document).on('change','#ticket-sort', function(){
+    const sort = $(this).val();
+    loadTable({ sort_option: sort, page: 1 });
   });
+
+  // 2) Delegate pagination links
+  $(document).on('click','#ticket-table .pagination a', function(e){
+    e.preventDefault();
+    // extract page number from href
+    const page = new URL(this.href).searchParams.get('page') || 1;
+    // read current sort
+    const sort = $('#ticket-sort').val();
+    loadTable({ sort_option: sort, page });
+
+  });
+
+  // 3) Popstate (back/forward)
+  window.addEventListener('popstate', () => {
+    // parse params
+    const params = new URLSearchParams(location.search);
+    const sort  = params.get('sort_option') || 'date_desc';
+    const page  = params.get('page')        || 1;
+    // update the select
+    $('#ticket-sort').val(sort);
+    // reload table without pushing state
+    loadTable({ sort_option: sort, page }, /*push=*/false);
+  });
+
+  // 4) Main loader
+  function loadTable(opts, push = true) {
+    // build query string
+    const qs = $.param(opts);
+    $.get(ticketPartialUrl + '?' + qs, html => {
+      $('#ticket-table').html(html);
+      if (push) {
+        // update URL to /ticket?sort_option=…&page=…
+        history.pushState(null,'','/ticket?' + qs);
+      }
+    });
+  }
+  
+
+  // 5) Initialize on first load
+  $(function(){
+    const params = new URLSearchParams(location.search);
+    const sort  = params.get('sort_option') || 'date_desc';
+    const page  = params.get('page')        || 1;
+    $('#ticket-sort').val(sort);
+    loadTable({ sort_option: sort, page }, /*push=*/false);
+    // replace initial history state
+    history.replaceState(null,'',location.pathname + location.search);
+  });
+})(jQuery);

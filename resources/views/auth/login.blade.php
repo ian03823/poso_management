@@ -8,7 +8,9 @@
             <div class="text-center mb-6">
                 <h1 class="text-2xl font-bold text-gray-800">LOGIN</h1>
             </div>
-
+            @if(session('error'))
+                <div class="alert alert-danger text-center">{{ session('error') }}</div>
+            @endif
             <form action="{{ route('admin.login') }}" method="POST" class="space-y-6">
                 @csrf
                 <div class="space-y-2">

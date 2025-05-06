@@ -12,7 +12,7 @@
     }
   </style>
   @php $v = $violator; @endphp
-
+  
   <div class="container py-4">
     {{-- Page Title --}}
     <h1 class="h4 text-center mb-4">Traffic Citation Ticket</h1>

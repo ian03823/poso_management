@@ -107,8 +107,8 @@ class ViolationController extends Controller
      */
     public function edit(string $id)
     {
-        $violation = Violation::findOrFail($id);
-        return view('admin.violation.editViolation', compact('violation'));
+        $violation = Violation::find($id);
+        return view('admin.')->with('violation', $violation);
     }
 
     /**
@@ -116,18 +116,23 @@ class ViolationController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $request->validate([
-            'violation_code' => 'required|string|unique:violations,violation_code,'.$id,
-            'violation_name' => 'required|string|unique:violations,violation_name,'.$id,
-            'fine_amount' => 'required|numeric|min:0',
-            'description' => 'nullable|string',
-            'category' => 'required|string',
+        $v = Violation::findOrFail($id);
+
+        $data = $request->validate([
+            'violation_code' => 'nullable|string|min:2|max:3',
+            'violation_name' => 'nullable|min:3',
+            'fine_amount' => 'nullable|min:0|numeric',
+            'category' => 'nullable|string',
+
         ]);
 
-        $violation = Violation::findOrFail($id);
-        $violation->update($request->all());
+        $v->update($data);
 
-        return redirect()->route('violation.index')->with('success', 'Violation updated successfully!');
+        return response()->json([
+            'success' => true,
+            'message' => 'Violation Updated Successfully',
+            'violation'=> $v
+        ], 200);
     }
 
     /**

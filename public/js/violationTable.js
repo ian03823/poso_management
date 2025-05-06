@@ -1,54 +1,71 @@
-// public/js/violationTable.js
-$(function() {
-    const $category = $('#category_filter');
-    const $search   = $('#search_input');
-    const $btn      = $('#search_btn');
-    const $cont     = $('#violationContainer');
-  
-    // Central loader: pulls in the partial
-    function loadPage(page = 1) {
-      const data = {
-        category: $category.val(),
-        search:   $search.val().trim(),
-        page
-      };
-      $.ajax({
-        url: '/violation/partial',
-        data,
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        success(html) {
-          $cont.html(html);
-        },
-        error(err) {
-          console.error('AJAX Error:', err);
-        }
-      });
-    }
-  
-    // 1) Category change
-    $category.on('change', () => loadPage());
-  
-    // 2) Search button click
-    $btn.attr('type','button')  // ensure it doesn't submit
-        .on('click', e => {
-          e.preventDefault();
-          loadPage();
-        });
-  
-    // 3) Enter key in search input
-    $search.on('keypress', e => {
-      if (e.which === 13) {
-        e.preventDefault();
-        loadPage();
+(function($){
+  const $category = $('#category_filter');
+  const $search   = $('#search_input');
+  const $btn      = $('#search_btn');
+  const $cont     = $('#violationContainer');
+
+  function getUrlParams() {
+    const p = new URLSearchParams(window.location.search);
+    return {
+      category: p.get('category') || '',
+      search:   p.get('search')   || '',
+      page:     p.get('page')     || '1'
+    };
+  }
+
+  function updateUrl(category, search, page) {
+    const p = new URLSearchParams();
+    if (category) p.set('category', category);
+    if (search)   p.set('search',   search);
+    if (page && page !== '1') p.set('page', page);
+    history.pushState(null, '', `${window.location.pathname}?${p}`);
+  }
+
+  function loadPage(page = '1', push = true) {
+    const category = $category.val() || '';
+    const search   = ($search.val() || '').trim();
+
+    $.ajax({
+      url: '/violation/partial',      // ← confirm this route exists
+      data: { category, search, page },
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      success(html) {
+        $cont.html(html);
+        if (push) updateUrl(category, search, page);
+      },
+      error(err) {
+        console.error('AJAX Error:', err);
       }
     });
-  
-    // 4) AJAX pagination links (delegated)
-    $cont.on('click', '.pagination a', function(e) {
-      e.preventDefault();
-      // extract ?page= from href
-      const page = new URL(this.href).searchParams.get('page') || 1;
-      loadPage(page);
-    });
+  }
+
+  $(function(){
+    const { category, search, page } = getUrlParams();
+    if (category) $category.val(category);
+    if (search)   $search.val(search);
+    loadPage(page, /*push=*/false);
   });
-  
+
+  $category.on('change', () => loadPage('1'));
+  $btn.attr('type','button').on('click', () => loadPage('1'));
+  $search.on('keypress', e => {
+    if (e.which === 13) {
+      e.preventDefault();
+      loadPage('1');
+    }
+  });
+
+  // Delegate *inside* #violationContainer to .pagination a
+  $cont.on('click', '.pagination a', function(e) {
+    e.preventDefault();
+    const newPage = new URL(this.href).searchParams.get('page') || '1';
+    loadPage(newPage);
+  });
+
+  window.addEventListener('popstate', () => {
+    const { category, search, page } = getUrlParams();
+    $category.val(category);
+    $search.val(search);
+    loadPage(page, /*push=*/false);
+  });
+})(jQuery);

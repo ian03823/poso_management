@@ -1,4 +1,4 @@
-<div class="container-fluid py-4">
+<div class="container-fluid py-4" id="form-container">
     <!-- Back Button -->
     <h2 class="mb-3">Add Enforcer</h2>
 
@@ -14,22 +14,9 @@
     <!-- Enforcer Form Card -->
     <div class="card mx-auto shadow" style="max-width: 800px;">
   
-      <form action="{{ url('/enforcer') }}" method="POST" id="enforcerForm">
+      <form  id="enforcerForm" action="{{ route('enforcer.store') }}" method="POST">
         @csrf
         <div class="card-body">
-          @if(session('success'))
-            <div class="alert alert-success">{{ session('success') }}</div>
-          @endif
-          @if($errors->any())
-            <div class="alert alert-danger">
-              <ul class="mb-0">
-                @foreach($errors->all() as $error)
-                  <li>{{ $error }}</li>
-                @endforeach
-              </ul>
-            </div>
-          @endif
-  
           <div class="row g-3">
             <div class="col-md-6">
               <label for="badge_num" class="form-label">Badge No.</label>
@@ -88,10 +75,5 @@
           </button>
         </div>
       </form>
-
-      <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-        <script src="{{ asset('js/sweetalert.js') }}"></script>
-        <!-- AJAX navigation loader -->
-        <script src="{{ asset('js/ajax.js') }}"></script>
     </div>
   </div>

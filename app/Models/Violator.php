@@ -26,12 +26,21 @@ class Violator extends Authenticatable
     protected $hidden = [
         'password',
     ];
-    public function vehicles()
+    public function vehicle()
     {
         return $this->hasMany(Vehicle::class);
     }
     public function tickets()  
     { 
         return $this->hasMany(Ticket::class);  
+    }
+    public function latestTicket()
+    {
+        return $this->hasOne(Ticket::class, 'violator_id', 'id')
+                    ->latestOfMany('issued_at');
+    }
+    public function violations()
+    {
+        return $this->belongsToMany(Violation::class);
     }
 }

@@ -12,6 +12,8 @@ use App\Http\Controllers\ViolatorManagementController;
 use App\Http\Controllers\ViolatorAuthController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\AdminTicketController;
+use App\Http\Controllers\ViolatorTableController;
+
 
 Route::get('/', function () {
     return view('welcome');
@@ -44,17 +46,26 @@ Route::middleware('enforcer')->group(function () {
 // Admin protected routes
 Route::middleware('admin')->group(function () {
     Route::get('/admin', [AdminDashboardController::class,'adminDash'])->name('admin.dashboard');
+
     //Violation routes
     Route::get('/violation/partial', [ViolationController::class,'partial'])->name('violation.partial');
-    Route::resource('violation', ViolationController::class)->only(['index','create','store','edit','update','destroy']); 
+    Route::resource('violation', ViolationController::class); 
+    Route::get('violation/{violation}/json', [ViolationController::class, 'json'])
+     ->name('violation.json');
+
+
     //Enforcer routes
     Route::get('/enforcer/partial', [AddEnforcer::class, 'partial'])->name('enforcer.partial');
     Route::resource('enforcer', AddEnforcer::class);
     Route::get('enforcer/{enforcer}/json', [AddEnforcer::class, 'json'])
      ->name('enforcer.json');
 
-    Route::resource('ticket', AdminTicketController::class);
+    Route::get('/violatorTable/partial', [ViolatorTableController::class, 'partial'])->name('violatorTable.partial');
+    Route::resource('violatorTable', ViolatorTableController::class);
 
+    
+    Route::get('ticket/partial', [AdminTicketController::class, 'partial'])->name('ticket.partial');
+    Route::resource('ticket', AdminTicketController::class);
 
 });
 

@@ -11,7 +11,7 @@
           <div class="card-body d-flex align-items-center">
             <i class="bi bi-receipt-cutoff display-4 me-3"></i>
             <div>
-              <h6 class="card-title">Total Tickets</h6>
+              <h6 class="card-title">Total Issued Ticket</h6>
               <h2>{{ $ticketCount }}</h2>
             </div>
           </div>
@@ -22,7 +22,7 @@
           <div class="card-body d-flex align-items-center">
             <i class="bi bi-person-badge display-4 me-3"></i>
             <div>
-              <h6 class="card-title">Enforcers</h6>
+              <h6 class="card-title">Total Active Enforcer</h6>
               <h2>{{ $enforcerCount }}</h2>
             </div>
           </div>
@@ -33,7 +33,7 @@
           <div class="card-body d-flex align-items-center">
             <i class="bi bi-person-vcard display-4 me-3"></i>
             <div>
-              <h6 class="card-title">Violators</h6>
+              <h6 class="card-title">Total Violator(s)</h6>
               <h2>{{ $violatorCount }}</h2>
             </div>
           </div>

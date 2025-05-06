@@ -21,6 +21,6 @@ class AdminMiddleware
             return $next($request);
         }
         // Proceed with the request if authenticated
-        return redirect()->route('admin.showLogin')->with('error', 'Unauthorized access.');
+        return redirect()->route('admin.showLogin')->with('error', 'You must be logged in to access the page.');
     }
 }

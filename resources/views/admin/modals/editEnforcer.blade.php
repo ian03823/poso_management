@@ -1,6 +1,6 @@
-<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="editModal" tabindex="-1">
     <div class="modal-dialog">
-      <form id="editEnforcerForm">
+      <form id="editEnforcerForm" method="POST">
         @csrf
         @method('PUT')
         <div class="modal-content">

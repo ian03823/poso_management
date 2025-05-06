@@ -46,7 +46,7 @@
                 <li class="nav-item">
                     <a href="/ticket" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
                         <i class="bi bi-receipt-cutoff me-3"></i>
-                        <span class="">Tickets</span>
+                        <span class="">Ticket</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -62,7 +62,7 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
+                    <a href="/violatorTable" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
                         <i class="bi bi-person-vcard me-3"></i>   
                         <span>Violator</span>
                     </a>
@@ -76,7 +76,7 @@
                 <li class="nav-item">
                     <a href="#" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
                         <i class="bi bi-person-exclamation me-3 fs-5"></i>
-                         <span>Complaint</span>
+                         <span>Outsider</span>
                     </a>
                 </li>
             </ul>
@@ -136,13 +136,14 @@
     </script>
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ asset('js/ajax.js') }}"></script>
     <script src="{{ asset('js/sweetalerts.js') }}"></script>
     <script src="{{ asset('js/update-modal.js') }}"></script>
+    <script src="{{ asset('js/updateViolation.js') }}"></script>
     <script src="{{ asset('js/violationTable.js') }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="{{ asset('js/enforcer-filter.js') }}"></script>
+    <script src="{{ asset('js/enforcer-ajax.js') }}"></script>
     @stack('scripts')
 </body>
 </html>

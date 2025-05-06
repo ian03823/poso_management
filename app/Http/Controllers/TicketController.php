@@ -153,7 +153,7 @@ class TicketController extends Controller
                                      ->map(fn($v) => [
                                          'name'   => $v->violation_name,
                                          'fine'   => $v->fine_amount,
-                                     ]);
+                                     ]);    
          
              return response()->json([
                  'ticket'      => [
