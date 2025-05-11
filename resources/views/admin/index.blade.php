@@ -107,7 +107,7 @@
               <tbody>
                 @forelse($recentTickets as $t)
                   <tr>
-                    <td>{{ $t->id }}</td>
+                    <td>{{ $t->ticket_number }}</td>
                     <td>{{ $t->violator->name }}</td>
                     <td>{{ $t->enforcer->fname.' '.$t->enforcer->lname }}</td>
                     <td>{{ \Carbon\Carbon::parse($t->issued_at)->format('d M Y, H:i') }}</td>

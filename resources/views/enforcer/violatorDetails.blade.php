@@ -2,7 +2,15 @@
 @section('title', 'POSO Enforcer')
 
 @section('body')
-<div class="container my-3">
+<style>
+  /* Ensure page is scrollable */
+  html, body {
+    overflow: auto !important;
+    /* allow full height */
+    height: auto !important;
+  }
+</style>
+<div class="container-fluid my-3">
     <a href="{{ route('enforcerTicket.create', ['violator_id' => $violators->id]) }}" class="btn btn-success mb-3">
       Add Violation
     </a>
@@ -13,7 +21,10 @@
 
       <dt class="col-sm-3">License Number</dt>
       <dd class="col-sm-9">{{ $violators->license_number }}</dd>
-
+      
+      <dt class="col-sm-3">Vehicle(s)</dt>
+      <dd class="col-sm-9">{{ $violators->vehicles->pluck('vehicle_type')->join(' - ') }}</dd>
+      
       <dt class="col-sm-3">Plate Number(s)</dt>
       <dd class="col-sm-9">
         {{ $violators->vehicles->pluck('plate_number')->join(' - ') }}
@@ -25,12 +36,7 @@
       <dt class="col-sm-3">Address</dt>
       <dd class="col-sm-9">{{ $violators->address }}</dd>
 
-      <dt class="col-sm-3">Phone</dt>
-      <dd class="col-sm-9">{{ $violators->phone_number }}
-        @if($violators->phone_number == null)
-            <p>No registered phone number found.</p>
-        @endif
-      </dd>
+      
     </dl>
 
     <h3 class="mt-4">Ticket History</h3>
@@ -48,7 +54,7 @@
         <tbody>
           @foreach($violators->tickets as $ticket)
             <tr>
-              <td>{{ $ticket->id }}</td>
+              <td>{{ $ticket->ticket_number }}</td>
               <td>{{ $ticket->issued_at->format('d M Y, H:i') }}</td>
               <td>{{ $ticket->location }}</td>
               <td>
@@ -57,7 +63,7 @@
                       ->value('violation_name') }}<br>
                 @endforeach
               </td>
-              <td>{{ ucfirst($ticket->status) }}</td> 
+              <td>{{ ucfirst($ticket->status->name) }}</td> 
             </tr>
           @endforeach
         </tbody>

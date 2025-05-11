@@ -33,6 +33,7 @@ class AuthController extends Controller
         ]);
     }
     
+    
     public function logout(Request $request){
         Auth::guard('admin')->logout();
         $request->session()->regenerate();

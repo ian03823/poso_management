@@ -19,6 +19,8 @@ class Enforcer extends Authenticatable
         "lname",
         "phone",
         "password",
+        'ticket_start',
+        'ticket_end',
     ];
     protected $hidden = [
         'password',

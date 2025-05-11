@@ -22,24 +22,26 @@
 <body>
     
     <!-- Navbar -->
-    @auth('enforcer')
     <nav class="navbar bg-light px-3 border-bottom">
         <div class="container-fluid">
+            @if(auth()->guard('enforcer')->check())
             <button class="btn btn-outline-secondary btn-sm mt-1" type="button" data-bs-toggle="offcanvas" data-bs-target="#enforcerMenu" aria-controls="enforcerMenu">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            
-            <span class="navbar-brand ms-auto fw-bold text-success">POSO Enforcer</span>
+            @endif
+        
+            <div class="fw-bold fs-5 text-success">POSO Digital Ticket</div>
         </div>
     </nav>
     <!-- Offcanvas Menu -->
+    @if(auth()->guard('enforcer')->check())
     <div class="offcanvas offcanvas-start" tabindex="-1" id="enforcerMenu" aria-labelledby="enforcerMenuLabel">
         <div class="offcanvas-header">
             <h5 class="offcanvas-title" id="enforcerMenuLabel">Menu</h5>
             <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
-            @if(auth()->guard('enforcer')->check())
+            
                 <p><strong>{{ auth()->guard('enforcer')->user()->fname }} {{ auth()->guard('enforcer')->user()->lname }}</strong></p>
                 <p class="text-muted">Badge No: {{ auth()->guard('enforcer')->user()->badge_num }}</p>
                 <a href="" class="btn btn-primary w-100 ">
@@ -49,14 +51,17 @@
                     @csrf
                     <button type="submit" class="btn btn-danger w-100 mt-3"><i class="bi bi-box-arrow-right"></i> Logout</button>
                 </form>
-            @endif
+            
         </div>
     </div>
-    @endauth
+    @endif
 
-    <main>
+    <main id="app-body">
         @yield('body')
     </main>
+
+
+
     <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
     <!-- Bootstrap Icons (Optional) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">

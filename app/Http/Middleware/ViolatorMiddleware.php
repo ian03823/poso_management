@@ -16,11 +16,11 @@ class ViolatorMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (Auth::guard('enforcer')->check()) {
+        if (Auth::guard('violator')->check()) {
             // Redirect to the violator login page if not authenticated
             return $next($request);
         }
         // Proceed with the request if authenticated
-        return redirect()->route('violator.showLogin')->with('error', 'Unauthorized Access.');
+        return redirect()->route('violator.showLogin')->with('error', 'You must be logged in to access the page.');
     }
 }

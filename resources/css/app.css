@@ -24,7 +24,7 @@ body {
 
 .sidebar {
     background-color: #fff;
-    width: 300px;
+    min-width: 300px;
     min-height: 100vh;
     border-right: 1px solid #ddd;
     padding: 1rem;
@@ -35,6 +35,7 @@ body {
     display: block;
     margin: 0 auto 1rem;
 }
+
 
 .sidebar .nav-link {
     color: #222;
@@ -83,53 +84,23 @@ body {
     outline: none;
     border: 2px solid blue;
 }
+.half-bg-image {
+    position: fixed;
+    top: 10%;
+    left: 60%;                 /* or right: 0; for the right half */
+    width: 50vw;             /* half the viewport width */
+    height: 100vh;           /* full viewport height */
+    opacity: 0.2;            /* adjust between 0 (invisible) and 1 (fully opaque) */
+    pointer-events: none;    /* so it doesn’t block clicks on other elements */
+    z-index: -1;             /* send it behind your page content */
+  }
 
-
-.pagination-modern {
-    display: flex;
-    justify-content: center;    /* center the UL */
-    margin: 1rem 0;
+  .table-fixed {
+    table-layout: fixed;
+    width: 100%;
   }
-  
-  /* target the <ul class="pagination"> inside our wrapper */
-  .pagination-modern .pagination {
-    background: transparent;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
+  .table-fixed th,
+  .table-fixed td {
+    /* if you want equal widths: */
+    width: 20%;
   }
-  
-  /* pill shape for each link */
-  .pagination-modern .page-link {
-    border-radius: 50px !important;
-    margin: 0 0.25rem;
-    padding: 0.5rem 0.75rem;
-    border: none !important;
-    background-color: #f5f5f5;
-    color: #1B5E20;
-    transition: background-color .2s, transform .1s;
-  }
-  
-  /* active page */
-  .pagination-modern .page-item.active .page-link {
-    background-color: #1B5E20 !important;
-    color: #fff !important;
-    box-shadow: 0 2px 6px rgba(0,0,0,.15);
-  }
-  
-  /* hover/focus */
-  .pagination-modern .page-link:hover,
-  .pagination-modern .page-link:focus {
-    background-color: #e0e0e0;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,.1);
-  }
-  
-  /* disabled */
-  .pagination-modern .page-item.disabled .page-link {
-    background: transparent;
-    color: #ccc !important;
-    pointer-events: none;
-  }
-  

@@ -3,6 +3,7 @@
 @section('title', 'Admin Login')
 
 @section('content')
+<div class="container-fluid">
     <div class="flex justify-center items-center min-h-[calc(100vh-80px)]">
         <div class="bg-white rounded-lg shadow-md p-8 w-full max-w-md">
             <div class="text-center mb-6">
@@ -15,14 +16,14 @@
                 @csrf
                 <div class="space-y-2">
                     <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-                    <input 
-                        type="text" 
+                    <input type="text" 
                         name="username" 
                         id="username"
                         required 
                         value="{{ old('username') }}"
                         class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="Enter your username"
+                        autocomplete="username"
                     >
                 </div>
                 <div class="space-y-2">
@@ -34,15 +35,13 @@
                         required
                         class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="Enter your password"
-                    >
+                        autocomplete="current-password">
                 </div>
                 <br>
 
                 <div>
-                    <button 
-                        type="submit" 
-                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-700 hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
-                    >
+                    <button type="submit" 
+                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-700 hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
                         Login
                     </button>
                 </div>
@@ -59,4 +58,5 @@
             </form>
         </div>
     </div>
+</div>
 @endsection

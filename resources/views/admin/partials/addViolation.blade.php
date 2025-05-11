@@ -33,7 +33,7 @@
             <div class="col-md-6">
               <label for="violation_code" class="form-label">Violation Code</label>
               <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
+                <span class="input-group-text"><i class="bi bi-hash"></i></span>
                 <input type="text" id="violation_code" name="violation_code" class="form-control" value="{{ old('violation_code') }}">
               </div>
             </div>
@@ -49,24 +49,15 @@
             <div class="col-md-6">
               <label for="fine_amount" class="form-label">Fine Amount</label>
               <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-person"></i></span>
+                <span class="input-group-text">₱</span>
                 <input type="number" id="fine_amount" name="fine_amount" step="0.01" class="form-control" value="{{ old('fine_amount') }}">
-              </div>
-            </div>
-  
-  
-            <div class="col-md-6">
-              <label for="description" class="form-label">Description</label>
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-phone"></i></span>
-                <textarea class="form-control" name="description" id="description" rows="2"></textarea>
               </div>
             </div>
   
             <div class="col-md-6">
               <label for="category" class="form-label">Category</label>
               <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
+                <span class="input-group-text"><i class="bi bi-filter-square"></i></span>
 
                     <select class="form-select" name="category" id="category">
                         <option value="" disabled selected>Choose category…</option>

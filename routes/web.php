@@ -60,10 +60,11 @@ Route::middleware('admin')->group(function () {
     Route::get('enforcer/{enforcer}/json', [AddEnforcer::class, 'json'])
      ->name('enforcer.json');
 
+     //Violator routes
     Route::get('/violatorTable/partial', [ViolatorTableController::class, 'partial'])->name('violatorTable.partial');
     Route::resource('violatorTable', ViolatorTableController::class);
 
-    
+    Route::post('ticket/{ticket}/status', [AdminTicketController::class, 'updateStatus'])->name('ticket.updateStatus');
     Route::get('ticket/partial', [AdminTicketController::class, 'partial'])->name('ticket.partial');
     Route::resource('ticket', AdminTicketController::class);
 
@@ -71,6 +72,8 @@ Route::middleware('admin')->group(function () {
 
 Route::middleware('violator')->group(function () {
     Route::get('/vdash', [ViolatorManagementController::class,'violatorDash'])->name('violator.dashboard');
+    Route::get('/violator/password/change', [ViolatorAuthController::class, 'showChangePasswordForm'])->name('violator.password.change');
+    Route::post('/violator/password/change', [ViolatorAuthController::class, 'changePassword'])->name('violator.password.update');
 });
 
 //Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');

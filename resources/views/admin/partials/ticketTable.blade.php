@@ -1,28 +1,26 @@
-<table class="table table-bordered">
+<table class="table table-bordered table-hover">
     <thead>
       <tr>
-        <th>#</th>
-        <th>Enforcer</th>
-        <th>Violator</th>
-        <th>Violation(s)</th>
-        <th>Location</th>
-        <th>Issued At</th>
-        <th>Confiscated</th>
-        <th>Impound</th>
-        <th>Status</th>
+        <th class="text-center">#</th>
+        <th class="text-center">Enforcer</th>
+        <th class="text-center">Violator</th>
+        <th class="text-center">Violation(s)</th>
+        <th class="text-center">Location</th>
+        <th class="text-center">Issued At</th>
+        <th class="text-center">Status</th>
       </tr>
     </thead>
     <tbody>
       @forelse($tickets as $t)
       <tr>
-        <td>{{ $t->id }}</td>
+        <td class="text-right">{{ $t->ticket_number }}</td>
         <td>{{ $t->enforcer->fname }}</td>
         <td>{{ $t->violator->name }}</td>
         <td>{{ $t->violation_names }}</td>
         <td>{{ $t->location }}</td>
         <td>{{ $t->issued_at->format('Y-m-d H:i') }}</td>
-        <td>{{ $t->confiscated }}</td>
-        <td>{{ $t->is_impounded ? 'Yes' : 'No' }}</td>
+        
+        
         <td>
           <select class="form-select form-select-sm status-select" data-id="{{ $t->id }}">
             @foreach(['pending','paid','unpaid','cancelled'] as $st)
@@ -42,7 +40,8 @@
     </tbody>
   </table>
   
-  <nav aria-label="Pages navigation" class="mt-3">
-    {{ $tickets->links('pagination::bootstrap-5') }}
-  </nav>
+<div class="mt-3 justify-content-center d-flex position-sticky" >
+  {{ $tickets->links() }}
+</div>
+
   

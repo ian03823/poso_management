@@ -245,4 +245,15 @@ class AdminTicketController extends Controller
         // Render the partial view
         return view('admin.partials.ticketTable', compact('tickets', 'sortOption'));
     }
+    public function updateStatus(Request $request, Ticket $ticket)
+    {
+        $data = $request->validate([
+            'status_id' => 'required|exists:ticket_statuses,id',
+        ]);
+
+        $ticket->status_id = $data['status_id'];
+        $ticket->save();
+
+        return response()->json(['success' => true]);
+    }
 }

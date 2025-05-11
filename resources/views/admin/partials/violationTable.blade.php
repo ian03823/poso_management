@@ -1,5 +1,5 @@
-<div id="table-container">
-<table class="table table-bordered table-hover">
+<div id="table-container" class="table-responsive">
+<table class="table table-bordered table-hover ">
     <thead>
       <tr>
         <th class="text-center">Code</th>
@@ -45,7 +45,7 @@
     </tbody>
   </table>
 
-  <div class="mt-3">
-    {{ $violation->links('pagination::bootstrap-5')->withClass('pagination-modern justify-content-center') }}
+  <div class="mt-3 justify-content-center d-flex position-sticky">
+    {{ $violation->links() }}
   </div>
 </div>

@@ -1,7 +1,7 @@
 @extends('components.layout')
 @section('title', 'POSO Admin Management')  
 @section('content')
-<div class="container mt-4">
+<div class="container-fluid mt-4">
     <h2 class="mb-3">Violation List</h2>
   
     <a href="{{ route('violation.create') }}"
@@ -11,7 +11,7 @@
   
     {{-- ▶ Filter Form --}}
     <form method="GET" id="filterForm" onsubmit="return false;" class="mb-4">
-        <div class="row g-2 align-items-center">
+        <div class="row g-2 align-items-center justify-content-between d-flex">
           <div class="col-auto">
             <label class="col-form-label fw-semibold">
               Sort by:
@@ -30,7 +30,7 @@
                     @endforeach
             </select>
           </div>
-          <div class="col-6 justify-content-end d-flex">
+          <div class="col-5 justify-content-end d-flex">
             <label for="search_input" class="col-form-label fw-semibold">Search:</label>
           </div>
           <div class="col-auto">

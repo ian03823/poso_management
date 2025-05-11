@@ -20,7 +20,6 @@
     {{-- Form Card --}}
     <div class="card mx-auto shadow-sm rounded-3" style="max-width: 800px;">
       <div class="card-body p-3 p-sm-4">
-
         <form id="ticketForm" action="/enforcerCreate" method="POST">
           @csrf
           <div class="row g-3">
@@ -61,16 +60,20 @@
 
             {{-- Confiscated --}}
             <div class="col-12 col-md-6 form-floating">
-              <select class="form-select" id="confiscated" name="confiscated" required>
-                <option value="" disabled selected>Choose…</option>
-                <option value="None">None</option>
-                <option value="License ID">License ID</option>
-                <option value="Plate Number">Plate Number</option>
-                <option value="ORCR">ORCR</option>
-                <option value="TCT/TOP">TCT/TOP</option>
+              <select class="form-select" id="confiscation_type_id" name="confiscation_type_id">
+                <option value="" disabled {{ old('confiscation_type_id')?'':'selected' }}>
+                  Choose…
+                </option>
+                @foreach(\App\Models\ConfiscationType::all() as $type)
+                  <option value="{{ $type->id }}"
+                    {{ old('confiscation_type_id') == $type->id ? 'selected' : '' }}>
+                    {{ $type->name }}   
+                  </option>
+                @endforeach
               </select>
-              <label for="confiscated">Confiscated</label>
+              <label for="confiscation_type_id">Confiscated</label>
             </div>
+            
             
             {{-- Vehicle Type --}}
             <div class="col-12 col-md-6 form-floating">
@@ -94,7 +97,7 @@
 
             <div class="col-12 col-md-6 d-flex align-items-center">
               <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="is_resident" name="is_resident" value="1">
+                <input class="form-check-input" type="checkbox" id="is_resident" checked name="is_resident" value="1">
                 <label class="form-check-label" for="is_resident">
                   Resident
                 </label>
@@ -112,61 +115,32 @@
           {{-- Violations Section --}}
           <div class="mt-4">
             <h5 class="mb-2">Select Violations</h5>
-            <div class="accordion" id="violationsAccordion">
-              @php use Illuminate\Support\Str; @endphp
-        
-              @foreach($violationGroups as $category => $violations)
-                @php $slug = Str::slug($category) @endphp
-        
-                <div class="accordion-item">
-                  <h2 class="accordion-header" id="heading-{{ $slug }}">
-                    <button
-                      class="accordion-button @unless($loop->first) collapsed @endunless"
-                      type="button"
-                      data-bs-toggle="collapse"
-                      data-bs-target="#collapse-{{ $slug }}"
-                      aria-expanded="{{ $loop->first ? 'true' : 'false' }}"
-                      aria-controls="collapse-{{ $slug }}">
-                      {{ $category }}
-                    </button>
-                  </h2>
-        
-                  <div
-                    id="collapse-{{ $slug }}"
-                    class="accordion-collapse collapse @if($loop->first) show @endif"
-                    aria-labelledby="heading-{{ $slug }}"
-                    data-bs-parent="#violationsAccordion"
-                  >
-                    <div class="accordion-body">
-                      @foreach($violations as $v)
-                        <div
-                          class="form-check"
-                          onclick="event.stopPropagation()"
-                        >
-                          <input
-                            class="form-check-input"
-                            type="checkbox"
-                            name="violations[]"
-                            id="violation-{{ $v->id }}"
-                            value="{{ $v->violation_code }}"
-                            onclick="event.stopPropagation()"
-                          >
-                          <label
-                            class="form-check-label"
-                            for="violation-{{ $v->id }}"
-                            onclick="event.stopPropagation()"
-                          >
-                            {{ $v->violation_name }} — ₱{{ number_format($v->fine_amount,2) }}
-                          </label>
-                        </div>
-                      @endforeach
-                    </div>
-                  </div>
-                </div>
-              @endforeach
+            <div class="border rounded p-3">
+              {{-- Category selector --}}
+              <div class="form-floating mb-3">
+                <select
+                  class="form-select" 
+                  id="categorySelect"
+                  aria-label="Select violation category"
+                >
+                  <option value="" disabled selected>Choose category…</option>
+                  @foreach($violationGroups->keys() as $category)
+                    <option value="{{ $category }}">{{ $category }}</option>
+                  @endforeach
+                </select>
+                <label for="categorySelect">Category</label>
+              </div>
+
+              {{-- Scrollable checklist container --}}
+              <div
+                id="violationsContainer"
+                style="max-height: 250px; "
+                class="px-1 overflow-auto"
+              >
+                {{-- JS will inject <div class="form-check">…</div> here --}}
+              </div>
             </div>
           </div>
-          
 
           {{-- Impounded & Location --}}
           <div class="row g-3 mt-3">
@@ -193,6 +167,7 @@
             </button>
           </div>
         </form>
+        <script> const violationGroups = @json($violationGroups->toArray()); </script>
       </div>
     </div>
   </div>
@@ -202,6 +177,62 @@
     <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
     <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        document.addEventListener('DOMContentLoaded', () => {
+      const select    = document.getElementById('categorySelect');
+      const container = document.getElementById('violationsContainer');
+
+      // Keep track of all checked codes across categories:
+      const selectedCodes = new Set();
+
+      function renderCategory() {
+        const cat = select.value;
+        container.innerHTML = ''; // wipe old
+
+        if (!violationGroups[cat]) return;
+
+        violationGroups[cat].forEach(v => {
+          // create wrapper
+          const wrapper = document.createElement('div');
+          wrapper.className = 'form-check mb-2';
+
+          // build checkbox HTML, marking 'checked' if in our Set
+          wrapper.innerHTML = `
+            <input
+              class="form-check-input"
+              type="checkbox"
+              name="violations[]"
+              id="violation-${v.id}"
+              value="${v.violation_code}"
+              ${ selectedCodes.has(v.violation_code) ? 'checked' : '' }
+            >
+            <label
+              class="form-check-label"
+              for="violation-${v.id}"
+            >
+              ${v.violation_name} — ₱${parseFloat(v.fine_amount).toFixed(2)}
+            </label>
+          `;
+
+          // once in DOM, wire up its change-handler
+          const input = wrapper.querySelector('input');
+          input.addEventListener('change', () => {
+            if (input.checked) {
+              selectedCodes.add(v.violation_code);
+            } else {
+              selectedCodes.delete(v.violation_code);
+            }
+          });
+
+          container.appendChild(wrapper);
+        });
+      }
+
+      // whenever you switch category, re-render that category’s list:
+      select.addEventListener('change', renderCategory);
+
+      // (optional) if you want to pre-render the first category on page-load:
+      // if (select.value) renderCategory();
+    }); 
 
     console.log('ticket script loaded')
     document.getElementById('ticketForm')
@@ -228,6 +259,7 @@
 
             // 2) Show confirmation
             let html = `
+            <strong>Ticket #:</strong> ${p.ticket.ticket_number}<br>
             <strong>Enforcer:</strong> ${p.enforcer.name}<br>
             <strong>Violator:</strong> ${p.violator.name}<br>
             <strong>License No.:</strong> ${p.violator.license_number}<br>
@@ -238,7 +270,7 @@
             <strong>Resident:</strong> ${p.ticket.is_resident ? 'Yes' : 'No'}<br>
             <strong>Location:</strong> ${p.ticket.location}<br>
             <strong>Confiscated:</strong> ${p.ticket.confiscated}<br>
-            <strong>Impounded?:</strong> ${p.ticket.is_impounded}<br>
+            <strong>Impounded:</strong> ${p.ticket.is_impounded}<br> 
             <strong>Last Apprehended:</strong> ${p.last_apprehended_at || 'Never'}<br>
             <strong>Username:</strong> ${p.credentials.username}<br>
             <strong>Password:</strong> ${p.credentials.password}<br>
@@ -275,10 +307,41 @@
             txt += '\tCity of San Carlos' + NL;
             txt += 'Public Order and Safety Office' + NL;
             txt += '\t(POSO)' + NL + NL;
-            txt += '\tTraffic Citation Ticket' + NL;
+            txt += 'Traffic Citation Ticket' + NL;
+            txt += '\tENFORCER' + NL;
+            txt += 'Ticket #: '+ p.ticket.ticket_number + NL;
             txt += 'Date issued: ' + p.ticket.issued_at + NL + NL;
             txt += 'Violator: ' + p.violator.name + NL;
-            txt += 'Phone: ' + p.violator.phone_number + NL + NL;
+            txt += 'Birthdate: ' + p.violator.birthdate + NL;
+            txt += 'Address: ' + p.violator.address + NL;
+            txt += 'License No.: ' + p.violator.license_number + NL + NL;
+            txt += 'Plate: ' + p.vehicle.plate_number + NL;
+            txt += 'Type: ' + p.vehicle.vehicle_type + NL;
+            txt += 'Owner: ' + p.vehicle.is_owner + NL;
+            txt += 'Owner Name: ' + p.vehicle.owner_name + NL + NL;
+            txt += 'Violations:' + NL;
+            p.violations.forEach(v => {
+            txt += `- ${v.name} (Php${v.fine})` + NL;
+            });
+            txt += NL;
+            txt += 'Username: ' + p.credentials.username + NL;
+            txt += 'Password: ' + p.credentials.password + NL + NL;
+            txt += 'Last Apprehended: ' + (p.last_apprehended_at || 'Never') + NL + NL;
+            if (p.ticket.is_impounded === 'true') {
+            txt += '*** VEHICLE IMPOUNDED ***' + NL + NL;
+            }
+            txt += 'Badge No: ' + p.enforcer.badge_num + NL + NL;
+            
+            txt += '- - - - - - - - - - - - - - - -' + NL + NL;
+
+            txt += '\tCity of San Carlos' + NL;
+            txt += 'Public Order and Safety Office' + NL;
+            txt += '\t(POSO)' + NL + NL;
+            txt += 'Traffic Citation Ticket' + NL;
+            txt += '\tVIOLATOR' + NL;
+            txt += 'Ticket #: '      + p.ticket.ticket_number        + NL;
+            txt += 'Date issued: ' + p.ticket.issued_at + NL + NL;
+            txt += 'Violator: ' + p.violator.name + NL;
             txt += 'Birthdate: ' + p.violator.birthdate + NL;
             txt += 'Address: ' + p.violator.address + NL;
             txt += 'License No.: ' + p.violator.license_number + NL + NL;
@@ -300,13 +363,12 @@
             txt += 'Badge No: ' + p.enforcer.badge_num + NL;
             txt += NL + ESC + 'd' + '\x03' + GS + 'V' + '\x00';
 
-            // Encode and send twice
+             
+            
             const dataBytes = new TextEncoder().encode(txt);
-            for (let copy = 0; copy < 2; copy++) {
             for (let i = 0; i < dataBytes.length; i += 20) {
                 await ch.writeValue(dataBytes.slice(i, i + 20));
                 await new Promise(r => setTimeout(r, 50));
-            }
             }
 
             // 4) Show success, then reset form
@@ -365,8 +427,8 @@
 
         const data = new TextEncoder().encode(txt);
         for (let i = 0; i < data.length; i += 20) {
-        await ch.writeValue(data.slice(i, i + 20));
-        await new Promise(r => setTimeout(r, 50));
+          await ch.writeValue(data.slice(i, i + 20));
+          await new Promise(r => setTimeout(r, 50));
         }
     }
 

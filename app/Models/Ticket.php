@@ -17,27 +17,42 @@ class Ticket extends Model
     protected $table = "tickets";
     protected $fillable = [
         'enforcer_id',
+        'ticket_number',
         'violator_id',
         'vehicle_id',
         'violation_codes',
         'location',
         'issued_at',
-        'status',
         'offline',
-        'confiscated',
-        'is_impounded',
+        'status_id',
+        'confiscation_type_id',
     ];
 
     protected $casts = [
         'violation_codes' => 'array',
         'offline' => 'boolean',
         'issued_at' => 'datetime',
-        'is_impounded' => 'boolean',
+        'status_id'            => 'integer',
+        'confiscation_type_id' => 'integer',
     ];
+    protected $with = ['status', 'confiscationType', 'violations', 'flags'];
 
     public function violator()
     {
         return $this->belongsTo(Violator::class );
+    }
+    public function flags()
+    {
+        return $this->belongsToMany(Flag::class, 'ticket_flags','ticket_id',
+            'flag_id');
+    }
+    public function status()
+    {
+        return $this->belongsTo(TicketStatus::class, 'status_id');
+    }
+    public function confiscationType()
+    {
+        return $this->belongsTo(ConfiscationType::class, 'confiscation_type_id');
     }
 
     public function enforcer()
@@ -46,7 +61,15 @@ class Ticket extends Model
     }
     public function vehicle()
     {
-        return $this->belongsTo(Vehicle::class, 'vehicle_id', 'vehicle_id');
+        return $this->belongsTo(Vehicle::class, 'vehicle_id');
+    }
+    public function getIsImpoundedAttribute()
+    {
+        return $this->flags->contains('key','is_impounded');
+    }
+    public function getIsResidentAttribute()
+    {
+        return $this->flags->contains('key','is_resident');
     }
     public function violations()
     {

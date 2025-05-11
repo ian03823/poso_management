@@ -5,9 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\Ticket;
 use App\Models\Vehicle;
 use App\Models\Violator;
+use App\Models\Enforcer;
 use Illuminate\Http\Request;
 use App\Models\Violation;
+use App\Models\TicketStatus;
+use App\Models\ConfiscationType;
+use App\Models\Flag;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
@@ -53,7 +60,7 @@ class TicketController extends Controller
                         ->get()
                         ->groupBy('category');
         
-        $violator = null;
+        $violator = null;   
         if ($request->filled('violator_id')) {
             $violator = Violator::with('vehicles')
             ->find($request->input('violator_id'));
@@ -69,123 +76,172 @@ class TicketController extends Controller
      */
     public function store(Request $request)
     {
-             $d = $request->validate([
-                 'name'          => 'required|string|max:255',
-                 'address'       => 'required|string',
-                 'birthdate'     => 'required|date',
-                 'license_num'   => 'required|string|max:50',
-                 'plate_num'     => 'required|string|max:50',
-                 'vehicle_type'  => 'required|string',
-                 'is_owner'      => 'sometimes|boolean',
-                 'is_resident'   => 'sometimes|boolean',
-                 'owner_name'    => 'required|string',
-                 'violations'    => 'required|array|min:1',
-                 'location'      => 'required|string',
-                 'confiscated'   => 'required|in:none,License ID,Plate Number,ORCR,TCT/TOP',
-                 'is_impounded'  => 'sometimes|boolean',
-             ]);
-         
-             $impounded = (bool) ($d['is_impounded'] ?? false);
-             $resident = (bool) ($d['is_resident'] ?? false);
-         
-             // 2) Violator (create or fetch)
-             $violator = Violator::firstOrNew(
-                 ['license_number' => $d['license_num']]
-             );
-         
-             // on first create, fill name/address/birthdate
-             if (! $violator->exists) {
-                 $violator->name      = $d['name'];
-                 $violator->address   = $d['address'];
-                 $violator->birthdate = $d['birthdate'];
-                 
-             }
-             $violator->save();
-         
-             if (! $impounded && $resident && ! $violator->username) {
-                $violator->username = 'user'.rand(1000,9999);
-                $rawPwd             = Str::random(8);
-                $violator->password = bcrypt($rawPwd);
-                $violator->save();
-                $creds = ['username'=> $violator->username, 'password'=> $rawPwd];
+         $d = $request->validate([
+            'name'          => 'nullable|string|max:255',
+            'address'       => 'nullable|string|min:2',
+            'birthdate'     => 'nullable|date',
+            'license_num'   => 'nullable|string|max:50|min:8',
+            'plate_num'     => 'required|string|max:50|min:5',
+            'vehicle_type'  => 'required|string',
+            'is_owner'      => 'sometimes|boolean',
+            'is_resident'   => 'sometimes|boolean',
+            'owner_name'    => 'nullable|',
+            'violations'    => 'required|array|min:1',
+            'location'      => 'nullable|string',
+            'confiscation_type_id'   => 'nullable|exists:confiscation_types,id',
+            'is_impounded'  => 'sometimes|boolean',
+        ]);
+
+        $resident  = ! empty($d['is_resident']);
+        $impounded = ! empty($d['is_impounded']);
+
+        // 2) Violator (firstOrNew then save)
+        $violator = Violator::firstOrNew(
+            ['license_number' => $d['license_num']]
+        );
+        if (! $violator->exists) {
+            $violator->name      = $d['name'];
+            $violator->address   = $d['address'];
+            $violator->birthdate = $d['birthdate'];
+        }
+        $violator->save();
+
+        // possibly create credentials
+        if (! $violator->license_number && ! $violator->username) {
+            $violator->username = 'user'.rand(1000,9999);
+        
+            // generate an 8-char password
+            $rawPwd = Str::random(8);
+        
+            // set the default password
+            $violator->defaultPassword = Hash::make($rawPwd);
+            
+            $violator->save();
+        
+            // return the plain text so you can e.g. email it
+            $creds = [
+              'username' => $violator->username,
+              'password' => $rawPwd,
+            ];
+        } else {
+            $creds = ['username'=>'Existing','password'=>'Existing'];
+        }
+
+        // 3) Vehicle
+        $vehicle = Vehicle::firstOrCreate(
+            ['plate_number' => $d['plate_num']],
+            [
+                'violator_id'  => $violator->id,
+                'vehicle_type' => $d['vehicle_type'],
+                'is_owner'     => $d['is_owner'] ?? true,
+                'owner_name'   => $d['owner_name'],
+            ]
+        );
+
+        $ticket = DB::transaction(function() use($d, $violator, $vehicle) {
+            // a) Lock the enforcer row
+            $enf = Enforcer::lockForUpdate()->find(auth()->guard('enforcer')->id());
+    
+            // b) Find the highest ticket_number they’ve already used
+            $last = Ticket::where('enforcer_id', $enf->id)
+                          ->lockForUpdate()
+                          ->max('ticket_number');
+    
+            // c) Compute the next one
+            if ($last !== null) {
+                $next = $last + 1;
             } else {
-                $creds = ['username'=> "Existing Username", 'password'=> "Existing Password"];
+                $next = $enf->ticket_start;
             }
-         
-             // 4) Vehicle
-             $vehicle = Vehicle::firstOrCreate(
-                 ['plate_number' => $d['plate_num']],
-                 [
-                     'violator_id'  => $violator->id,
-                     'vehicle_type' => $d['vehicle_type'],
-                     'is_owner'     => $d['is_owner'] ?? true,
-                     'owner_name'   => $d['owner_name'],
-                 ]
-             );
-         
-             // 5) Ticket
-             $ticket = Ticket::create([
-                 'enforcer_id'     => auth()->guard('enforcer')->id(),
-                 'violator_id'     => $violator->id,
-                 'vehicle_id'      => $vehicle->id,
-                 'violation_codes' => json_encode($d['violations']),
-                 'location'        => $d['location'],
-                 'issued_at'       => now(),
-                 'status'          => 'pending',
-                 'offline'         => false,
-                 'confiscated'     => $d['confiscated'],
-                 'is_impounded'    => $impounded,
-                 'is_resident'     => $resident,
-             ]);
-         
-             // 6) Last apprehended before **this** ticket
-             $prev = Ticket::where('violator_id',$violator->id)
-                           ->where('id','!=',$ticket->id)
-                           ->orderBy('issued_at','desc')    
-                           ->first();
-             $lastAt = $prev
-                 ? $prev->issued_at->format('d M Y, H:i')
-                 : null;
-         
-             // 7) Build JSON payload
-             $violations = Violation::whereIn('violation_code', json_decode($ticket->violation_codes))
+    
+            // d) Enforce their range
+            if ($next > $enf->ticket_end) {
+                throw ValidationException::withMessages([
+                    'ticket_number' => "You’ve hit your allocated range ({$enf->ticket_start}–{$enf->ticket_end})."
+                ]);
+            }
+            // 4) Ticket – note: no more violation_codes JSON
+            return Ticket::create([
+                'enforcer_id'            => $enf->id,
+                'ticket_number'          => $next,
+                'violator_id'            => $violator->id,
+                'vehicle_id'             => $vehicle->vehicle_id,
+                'violation_codes'        => json_encode($d['violations']),
+                'location'               => $d['location'],
+                'issued_at'              => now(),
+                'offline'                => false,
+                'status_id'              => TicketStatus::where('name','pending')->value('id'),
+                'confiscation_type_id'   => $d['confiscation_type_id'],
+            ]);
+        });
+
+        // 5) Attach violations via pivot
+        // assumes your Ticket model has:
+        // public function violations() { return $this->belongsToMany(Violation::class,'ticket_violation','ticket_id','violation_code','id','violation_code'); }
+        $violationIds = Violation::whereIn('violation_code', $d['violations'])
+                         ->pluck('id')
+                         ->all();
+
+        $ticket->violations()->sync($violationIds);
+
+        // 6) Sync boolean flags (resident, impounded)
+        $flagKeys = [];
+        if ($resident)  $flagKeys[] = 'is_resident';
+        if ($impounded) $flagKeys[] = 'is_impounded';
+
+        $flagIds = Flag::whereIn('key',$flagKeys)->pluck('id')->all();
+        $ticket->flags()->sync($flagIds);
+
+        // 7) Last apprehended before this ticket
+        $prev = Ticket::where('violator_id',$violator->id)
+                      ->where('id','!=',$ticket->id)
+                      ->orderBy('issued_at','desc')
+                      ->first();
+        $lastAt = $prev
+            ? $prev->issued_at->format('d M Y, H:i')
+            : null;
+
+        // 8) Build JSON payload (using relationships)
+        $violations = Violation::whereIn('violation_code', json_decode($ticket->violation_codes))
                                      ->get()
                                      ->map(fn($v) => [
                                          'name'   => $v->violation_name,
                                          'fine'   => $v->fine_amount,
-                                     ]);    
-         
-             return response()->json([
-                 'ticket'      => [
-                     'id'                => $ticket->id,
-                     'issued_at'         => $ticket->issued_at->format('d M Y, H:i'),
-                     'location'          => $ticket->location,
-                     'confiscated'       => $ticket->confiscated,
-                     'is_impounded'      => $ticket->is_impounded ? 'Yes' : 'No',
-                     'is_resident'   => $ticket->is_resident,
-                 ],
-                 'last_apprehended_at' => $lastAt,
-                 'enforcer'    => [
-                     'name'      => auth()->guard('enforcer')->user()->fname
-                                    .' '.auth()->guard('enforcer')->user()->lname,
-                     'badge_num' => auth()->guard('enforcer')->user()->badge_num,
-                 ],
-                 'violator'    => [
-                     'name'           => $violator->name,
-                     'address'        => $violator->address,
-                     'birthdate'      => $violator->birthdate,
-                     'license_number'=> $violator->license_number,
-                 ],
-                 'vehicle'     => [
-                     'plate_number' => $vehicle->plate_number,
-                     'vehicle_type' => $vehicle->vehicle_type,
-                     'is_owner'     => $vehicle->is_owner ? 'Yes' : 'No',
-                     'owner_name'   => $vehicle->owner_name,
-                 ],
-                 'violations'  => $violations,
-                 'credentials' => $creds,
-                ]);
-         
+                                     ]);
+
+        return response()->json([
+            'ticket' => [
+                'id'                  => $ticket->id,
+                'ticket_number'       => $ticket->ticket_number,
+                'issued_at'           => $ticket->issued_at->format('d M Y, H:i'),
+                'location'            => $ticket->location,
+                'status'              =>  optional($ticket->status)->name      ?? 'Unknown',
+                'confiscated'         =>  optional($ticket->confiscationType)->name ?? 'None',
+                'is_impounded'        => $ticket->is_impounded ? 'Yes' : 'No',
+                'is_resident'         => $ticket->is_resident  ? 'Yes' : 'No',
+            ],
+            'last_apprehended_at' => $lastAt,
+            'enforcer' => [
+                'name'      => auth()->guard('enforcer')->user()->fname
+                                .' '.auth()->guard('enforcer')->user()->lname,
+                'badge_num' => auth()->guard('enforcer')->user()->badge_num,
+            ],
+            'violator' => [
+                'name'           => $violator->name,
+                'address'        => $violator->address,
+                'birthdate'      => $violator->birthdate,
+                'license_number'=> $violator->license_number,
+            ],
+            'vehicle' => [
+                'plate_number' => $vehicle->plate_number,
+                'vehicle_type' => $vehicle->vehicle_type,
+                'is_owner'     => $vehicle->is_owner ? 'Yes' : 'No',
+                'owner_name'   => $vehicle->owner_name,
+            ],
+            'violations'  => $violations,
+            'credentials' => $creds,
+        ]);
+    
     }
 
     /**

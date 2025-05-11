@@ -14,6 +14,7 @@ class Violator extends Authenticatable
     //
     use Notifiable, HasFactory;
     protected $table = "violators";
+    protected $primaryKey = 'id';
 
     protected $fillable = [
         'name', 
@@ -22,13 +23,19 @@ class Violator extends Authenticatable
         'license_number', 
         'username', 
         'password',
+        'defaultPassword',
     ];
     protected $hidden = [
         'password',
+        'defaultPassword',
     ];
-    public function vehicle()
+    public function vehicles()
     {
-        return $this->hasMany(Vehicle::class);
+        return $this->hasMany(
+            Vehicle::class,
+            'violator_id',   // FK in vehicles table
+            'id'    // PK in violators table
+        );
     }
     public function tickets()  
     { 

@@ -10,16 +10,16 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
     <script src="https://kit.fontawesome.com/7922e0fdab.js" crossorigin="anonymous"></script>
 
-    @vite(['resources/css/app.css','resources/js/app.js'])
-
+    @vite(['resources/css/app.css'])
+    @vite(['resources/js/app.js'])
 </head>
 <body>
 
     <!-- Top Navigation -->
-    <header class="top-nav py-3">
+    <header class="top-nav">
         <div class="fw-bold fs-5">POSO Admin Management</div>
         @auth('admin')
-        <div class="text-muted-white fw-medium" id="currentDateTime">—</div>
+        <div class="text-muted-white fw-medium"><span id="currentDateTime">—</span></div>
 
         <div class="d-flex gap-3 align-items-center">
             <a href="#" class="text-white" style="text-decoration: none"><i class="fa-solid fa-id-badge"></i> &nbsp Profile</a>
@@ -30,6 +30,9 @@
         </div>
         @endauth
     </header>
+    <div class="half-bg-image">
+        <img src="{{ asset('images/icons/POSO-Logo.png') }}" alt="POSO Logo">
+    </div>
 
     <div class="d-flex">
         <!-- Sidebar -->
@@ -75,8 +78,8 @@
                 </li>
                 <li class="nav-item">
                     <a href="#" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
-                        <i class="bi bi-person-exclamation me-3 fs-5"></i>
-                         <span>Outsider</span>
+                        <i class="bi bi-car-front me-3 fs-5"></i>
+                         <span>Impounded Vehicle</span>
                     </a>
                 </li>
             </ul>
@@ -109,7 +112,6 @@
             }
             });
         });
-        });
         // Format options for day/month/year and 24h time
         const fmtOpts = {
         weekday: 'long',    // e.g. "Thursday"
@@ -126,13 +128,15 @@
         const now = new Date();
         // e.g. "Thursday, April 24, 2025 07:05:09"
         const s = now.toLocaleString(undefined, fmtOpts);
-        document.getElementById('currentDateTime').textContent = s;
+            document.getElementById('currentDateTime').textContent = s;
         }
 
         // Update every second
         setInterval(updateDateTime, 1000);
         // Initial call
         updateDateTime();
+        });
+        
     </script>
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>

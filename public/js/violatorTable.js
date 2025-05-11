@@ -1,85 +1,71 @@
 (function($){
-    // debounce helper
-    function debounce(fn, delay=300){
-      let t;
-      return function(...args){
-        clearTimeout(t);
-        t = setTimeout(()=> fn.apply(this,args), delay);
-      };
-    }
-  
-    // fetch & render partial
-    function loadTable(opts, push=true){
-      const qs = $.param(opts);
-      $.get(`${violatorPartialUrl}?${qs}`, html => {
-        $('#violator-table-container').html(html);
-        if(push){
-          history.pushState(null,'',`?${qs}`);
-        }
-      });
-    }
-  
-    $(function(){
-      // initialize from URL
-      const params = new URLSearchParams(location.search);
-      const sort   = params.get('sort_option') || 'date_desc';
-      const search = params.get('search')      || '';
-      const page   = params.get('page')        || 1;
-  
-      $('#violator-sort').val(sort);
-      $('#violator-search').val(search);
-  
-      loadTable({ sort_option: sort, search, page }, false);
-      history.replaceState(null,'',location.pathname + location.search);
-  
-      // sort change
-      $(document).on('change','#violator-sort', function(){
-        loadTable({
-          sort_option: this.value,
-          search:      $('#violator-search').val(),
-          page:        1
-        });
-      });
-  
-      // live-search (debounced)
-      $(document).on('input','#violator-search',
-        debounce(function(){
-          loadTable({
-            sort_option: $('#violator-sort').val(),
-            search:      this.value,
-            page:        1
-          });
-        }, 500)
-      );
-  
-      // pagination click
-      $(document).on('click','#violator-table-container .pagination a', function(e){
-        e.preventDefault();
-        const p = new URL(this.href).searchParams.get('page') || 1;
-        loadTable({
-          sort_option: $('#violator-sort').val(),
-          search:      $('#violator-search').val(),
-          page:        p
-        });
-      });
-  
-      // back/forward buttons
-      window.addEventListener('popstate', () => {
-        const pr = new URLSearchParams(location.search);
-        loadTable({
-          sort_option: pr.get('sort_option') || 'date_desc',
-          search:      pr.get('search')      || '',
-          page:        pr.get('page')        || 1
-        }, false);
-      });
-  
-      // delete button (delegated)
-      $(document).on('click','.delete-btn', function(){
-        const id = $(this).data('id');
-        if(confirm('Are you sure you want to delete this violator?')){
-          $(`#delete-form-${id}`).submit();
-        }
-      });
+  const $category = $('#category_filter');
+  const $search   = $('#search_input');
+  const $btn      = $('#search_btn');
+  const $cont     = $('#violatorContainer');
+
+  function getUrlParams() {
+    const p = new URLSearchParams(window.location.search);
+    return {
+      category: p.get('category') || '',
+      search:   p.get('search')   || '',
+      page:     p.get('page')     || '1'
+    };
+  }
+
+  function updateUrl(category, search, page) {
+    const p = new URLSearchParams();
+    if (category) p.set('category', category);
+    if (search)   p.set('search',   search);
+    if (page && page !== '1') p.set('page', page);
+    history.pushState(null, '', `${window.location.pathname}?${p}`);
+  }
+
+  function loadPage(page = '1', push = true) {
+    const category = $category.val() || '';
+    const search   = ($search.val() || '').trim();
+
+    $.ajax({
+      url: '/violatorTable/partial',      // ← confirm this route exists
+      data: { category, search, page },
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      success(html) {
+        $cont.html(html);
+        if (push) updateUrl(category, search, page);
+      },
+      error(err) {
+        console.error('AJAX Error:', err);
+      }
     });
-  })(jQuery);
-  
+  }
+
+  $(function(){
+    const { category, search, page } = getUrlParams();
+    if (category) $category.val(category);
+    if (search)   $search.val(search);
+    loadPage(page, /*push=*/false);
+  });
+
+  $category.on('change', () => loadPage('1'));
+  $btn.attr('type','button').on('click', () => loadPage('1'));
+  $search.on('keypress', e => {
+    if (e.which === 13) {
+      e.preventDefault();
+      loadPage('1');
+    }
+  });
+
+  // Delegate *inside* #violationContainer to .pagination a
+  $cont.on('click', '.pagination a', function(e) {
+    e.preventDefault();
+    const newPage = new URL(this.href).searchParams.get('page') || '1';
+    loadPage(newPage);
+  });
+
+  window.addEventListener('popstate', () => {
+    const { category, search, page } = getUrlParams();
+    $category.val(category);
+    $search.val(search);
+    loadPage(page, /*push=*/false);
+  });
+})(jQuery);

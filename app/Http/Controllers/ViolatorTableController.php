@@ -5,65 +5,73 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Violator;
 use App\Models\Ticket;
+use App\Models\Vehicle;
 
 class ViolatorTableController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-
-    //  protected function buildQuery(Request $request)
-    // {
-    //     $sortOption = $request->get('sort_option','date_desc');
-    //     $search     = $request->get('search','');
-
-    //     // determine sort column & direction
-    //     switch($sortOption) {
-    //         case 'date_asc':
-    //             $col = 'tickets.issued_at'; $dir = 'asc'; break;
-    //         case 'name_asc':
-    //             $col = 'violators.name';    $dir = 'asc'; break;
-    //         case 'name_desc':
-    //             $col = 'violators.name';    $dir = 'desc'; break;
-    //         case 'date_desc':
-    //         default:
-    //             $col = 'tickets.issued_at'; $dir = 'desc'; break;
-    //     }
-
-    //     // base query: join latest ticket & vehicle for sorting/search
-    //     return Violator::with([
-    //                 'tickets'   => fn($q)=> $q->latest()->limit(1),
-    //                 'tickets.vehicle',
-    //                 'tickets.violations'
-    //             ])
-    //             ->select('violators.*')
-    //             ->distinct()
-    //             ->leftJoin('tickets','tickets.violator_id','violators.id')
-    //             ->leftJoin('vehicles','vehicles.vehicle_id','tickets.vehicle_id')
-    //             ->when($search, fn($q) =>
-    //                 $q->where(function($q2) use($search){
-    //                     $q2->where('violators.name','like',"%{$search}%")
-    //                        ->orWhere('violators.license_number','like',"%{$search}%")
-    //                        ->orWhere('vehicles.plate_number','like',"%{$search}%");
-    //                 })
-    //             )
-    //             ->groupBy('violators.id')        // avoid duplicate rows after join
-    //             ->orderBy($col, $dir);
-    // }
     public function index(Request $request)
     {
-        //
+        
+        // grab the UI inputs (with sensible defaults)
+        $sortOption   = $request->get('sort_option','date_desc');
+        $search       = $request->get('search','');
+        $vehicleType  = $request->get('vehicle_type','all');
+
+        // 1) find each violator’s latest ticket id
         $latestTicketIds = Ticket::groupBy('violator_id')
             ->selectRaw('MAX(id) as id')
             ->pluck('id');
 
-        // 2) load those tickets (with violator & vehicle)
-        $tickets = Ticket::with(['violator','vehicle'])
-            ->whereIn('id', $latestTicketIds)
-            ->orderBy('issued_at','desc')
-            ->paginate(10);
+        // 2) build the base Ticket query
+        $query = Ticket::with(['violator','vehicle'])
+            ->whereIn('id',$latestTicketIds)
+            // filter by vehicle_type if requested
+            ->when($vehicleType!=='all', fn($q) => $q
+                ->whereHas('vehicle', fn($q2) =>
+                    $q2->where('vehicle_type',$vehicleType)
+                )
+            )
+            // search name/license/plate
+            ->when($search, fn($q) => $q
+                ->whereHas('violator', fn($q2) => $q2
+                    ->where('name','like',"%{$search}%")
+                    ->orWhere('license_number','like',"%{$search}%")
+                )
+                ->orWhereHas('vehicle', fn($q2) =>
+                    $q2->where('plate_number','like',"%{$search}%")
+                )
+            );
 
-        return view('admin.violator.violatorTable', compact('tickets'));
+        // 3) apply sorting
+        match($sortOption) {
+            'date_asc'   => $query->orderBy('issued_at','asc'),
+            'name_asc'   => $query->join('violators','tickets.violator_id','violators.id')
+                                  ->orderBy('violators.name','asc'),
+            'name_desc'  => $query->join('violators','tickets.violator_id','violators.id')
+                                  ->orderBy('violators.name','desc'),
+            default      => $query->orderBy('issued_at','desc'),
+        };
+
+        // 4) paginate & carry filters in links
+        $tickets = $query
+            ->distinct('tickets.id')
+            ->paginate(5)
+            ->appends([
+                'sort_option'  => $sortOption,
+                'search'       => $search,
+                'vehicle_type' => $vehicleType,
+            ]);
+
+        // 5) for the vehicle-type dropdown
+        $vehicleTypes = Vehicle::distinct()->pluck('vehicle_type');
+
+        return view(
+            'admin.violator.violatorTable',
+            compact('tickets','sortOption','search','vehicleType','vehicleTypes')
+        );
     }
 
     /**
@@ -88,6 +96,18 @@ class ViolatorTableController extends Controller
     public function show(string $id)
     {
         //
+        $violator = Violator::with([
+            'vehicles',
+            'tickets.violations',
+            'tickets.status'
+        ])->findOrFail($id);
+
+        // sort tickets newest → oldest
+        $violator->tickets = $violator->tickets
+                                      ->sortByDesc('issued_at')
+                                      ->values();
+
+        return view('admin.partials.violatorView', compact('violator'));
     }
 
     /**
@@ -115,28 +135,58 @@ class ViolatorTableController extends Controller
     }
     public function partial(Request $request)
     {
-        $categoryFilter = $request->get('category','all');
-        $search         = $request->get('search','');
+        $sortOption   = $request->get('sort_option','date_desc');
+        $search       = $request->get('search','');
+        $vehicleType  = $request->get('vehicle_type','all');
 
-        $query = Violator::query();
-        if ($categoryFilter!=='all') {
-            $query->where('category',$categoryFilter);
-        }
-        if (!empty($search)) {
-            $query->where(function($q) use ($search) {
-                $q->where('name','like',"%{$search}%")
-                  ->orWhere('license_number','like',"%{$search}%");
-            });
-        }
-    
-        $violators = $query
-            ->orderBy('updated_at','desc')
+        // 1) find each violator’s latest ticket id
+        $latestTicketIds = Ticket::groupBy('violator_id')
+            ->selectRaw('MAX(id) as id')
+            ->pluck('id');
+
+        // 2) build the base Ticket query
+        $query = Ticket::with(['violator','vehicle'])
+            ->whereIn('id',$latestTicketIds)
+            // filter by vehicle_type if requested
+            ->when($vehicleType!=='all', fn($q) => $q
+                ->whereHas('vehicle', fn($q2) =>
+                    $q2->where('vehicle_type',$vehicleType)
+                )
+            )
+            // search name/license/plate
+            ->when($search, fn($q) => $q
+                ->whereHas('violator', fn($q2) => $q2
+                    ->where('name','like',"%{$search}%")
+                    ->orWhere('license_number','like',"%{$search}%")
+                )
+                ->orWhereHas('vehicle', fn($q2) =>
+                    $q2->where('plate_number','like',"%{$search}%")
+                )
+            );
+
+        // 3) apply sorting
+        match($sortOption) {
+            'date_asc'   => $query->orderBy('issued_at','asc'),
+            'name_asc'   => $query->join('violators','tickets.violator_id','violators.id')
+                                  ->orderBy('violators.name','asc'),
+            'name_desc'  => $query->join('violators','tickets.violator_id','violators.id')
+                                  ->orderBy('violators.name','desc'),
+            default      => $query->orderBy('issued_at','desc'),
+        };
+
+        // 4) paginate & carry filters in links
+        $tickets = $query
+            ->distinct('tickets.id')
             ->paginate(5)
             ->appends([
-                'category' => $categoryFilter,
-                'search' => $search,
+                'sort_option'  => $sortOption,
+                'search'       => $search,
+                'vehicle_type' => $vehicleType,
             ]);
 
-        return view('admin.partials.violatorTable', compact('violators'));
+        // 5) for the vehicle-type dropdown
+        $vehicleTypes = Vehicle::distinct()->pluck('vehicle_type');
+
+        return view('admin.partials.violatorTable', compact('tickets'));
     }
 }

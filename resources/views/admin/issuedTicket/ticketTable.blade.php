@@ -1,7 +1,7 @@
 @extends('components.layout')
 @section('title', 'POSO Admin Management')
 @section('content')
-<div class="container mt-4" id="ticketContainer">
+<div class="container-fluid mt-4" id="ticketContainer">
   <h2 class="mb-3">All Issued Tickets - Recently</h2>
 
   <a href="/ticket/create"
@@ -9,9 +9,9 @@
     <i class="bi bi-receipt-cutoff me-3"></i>Add Ticket
   </a>
 
-    <div id="ticket-sort-form" class="row mb-3">
+    <div id="ticket-sort-form" class="row mb-4">
       <div class="col-auto">
-        <label for="ticket-sort" class="form-label">Sort by:</label>
+        <label for="ticket-sort" class="col-form-label fw-semibold">Sort by:</label>
       </div>
       <div class="col-auto">
         <select id="ticket-sort" class="form-select">

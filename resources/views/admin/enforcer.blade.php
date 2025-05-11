@@ -2,7 +2,7 @@
 @section('title', 'POSO Admin Management')
 @section('content')
 
-<div class="container mt-4" id="enforcerContainer">
+<div class="container-fluid mt-4" id="enforcerContainer">
     <h2 class="mb-3">Enforcer List</h2>
   
     <a href="{{ url('/enforcer/create') }}"
@@ -12,7 +12,7 @@
     </a>
 
         <form method="GET" id="filterForm" onsubmit="return false;" class="mb-4">
-          <div class="row g-2 align-items-center">
+          <div class="row g-2 align-items-center justify-content-between d-flex">
             <div class="col-auto">
               <label for="sort_option" class="col-form-label fw-semibold">
                 Sort by:
@@ -34,7 +34,7 @@
                 </option>
               </select>
             </div>
-            <div class="col-6 justify-content-end d-flex">
+            <div class="col-5 justify-content-end d-flex">
               <label for="search_input" class="col-form-label fw-semibold">Search:</label>
             </div>
             <div class="col-auto">
@@ -44,6 +44,7 @@
               <button type="button" id="search_btn" name="search_btn" class="btn btn-primary">
                 Go
               </button>
+            </div>
           </div>
         </form>
 
