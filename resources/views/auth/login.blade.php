@@ -1,6 +1,6 @@
 @extends('components.layout')
 
-@section('title', 'Admin Login')
+@section('title', 'POSO Admin Management')
 
 @section('content')
 <div class="container-fluid">

@@ -22,7 +22,7 @@
         </button>
         
       </div>
-      <p class="text-sm muted p-3 mt-4">Search by name, plate number, license number.</p>
+      <p class="text-sm text-center muted p-3 mt-4">Search by name, plate number, license number.</p>
       
 
       {{-- Suggestions dropdown --}}

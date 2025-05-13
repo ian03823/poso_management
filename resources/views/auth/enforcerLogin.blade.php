@@ -1,5 +1,5 @@
 @extends('components.app') 
-@section('title', 'POSO Enforcer Login')
+@section('title', 'POSO Enforcer Management')
 
 @section('body')
 <div class="d-flex flex-column min-vh-100 justify-content-center align-items-center" style="background-color: #017C3F;">
@@ -39,12 +39,12 @@
                 </button>
                 @if($errors->any()) 
                 <div class="bg-red-50 text-red-700 p-4 rounded-md border border-red-200">
-                        <ul class="list-disc list-inside">
-                            @foreach($errors->all() as $error)
-                                <li>{{ $error }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
+                    <ul class="list-disc list-inside">
+                        @foreach($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
                 @endif
             </form>
         </div>

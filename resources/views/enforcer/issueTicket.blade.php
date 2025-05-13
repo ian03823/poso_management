@@ -20,7 +20,7 @@
     {{-- Form Card --}}
     <div class="card mx-auto shadow-sm rounded-3" style="max-width: 800px;">
       <div class="card-body p-3 p-sm-4">
-        <form id="ticketForm" action="/enforcerCreate" method="POST">
+        <form id="ticketForm" action="/enforcerTicket" method="POST">
           @csrf
           <div class="row g-3">
             {{-- Name --}}
@@ -87,15 +87,13 @@
             </div>
 
             {{-- Owner Checkbox --}}
-            <div class="col-12 col-md-6 d-flex align-items-center">
+            <div class="col-12 col-md-6 d-flex justify-content-evenly align-items-center">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="is_owner"
                       name="is_owner" value="1" checked>
                 <label class="form-check-label" for="is_owner">Violator is owner</label>
+                
               </div>
-            </div>
-
-            <div class="col-12 col-md-6 d-flex align-items-center">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="is_resident" checked name="is_resident" value="1">
                 <label class="form-check-label" for="is_resident">
@@ -177,62 +175,79 @@
     <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
     <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-      const select    = document.getElementById('categorySelect');
-      const container = document.getElementById('violationsContainer');
+      document.addEventListener('DOMContentLoaded', () => {
+        @if(session('duplicate_error'))
+            Swal.fire({
+              icon: 'warning',
+              title: 'Oops—Duplicate Entry!',
+              text: "{{ session('duplicate_error') }}",
+              confirmButtonText: 'Understood',
+              confirmButtonColor: '#d33',
 
-      // Keep track of all checked codes across categories:
-      const selectedCodes = new Set();
+              background: '#fff5f5',
+              color: '#611a15',
+              width: 400,
+              showCloseButton: true,
 
-      function renderCategory() {
-        const cat = select.value;
-        container.innerHTML = ''; // wipe old
+              timer: 4000,
+              timerProgressBar: true,
+            });
+        @endif
+    const select    = document.getElementById('categorySelect');
+    const container = document.getElementById('violationsContainer');
 
-        if (!violationGroups[cat]) return;
+    // Keep track of all checked codes across categories:
+    const selectedCodes = new Set();
 
-        violationGroups[cat].forEach(v => {
-          // create wrapper
-          const wrapper = document.createElement('div');
-          wrapper.className = 'form-check mb-2';
+    function renderCategory() {
+      const cat = select.value;
+      container.innerHTML = ''; // wipe old
 
-          // build checkbox HTML, marking 'checked' if in our Set
-          wrapper.innerHTML = `
-            <input
-              class="form-check-input"
-              type="checkbox"
-              name="violations[]"
-              id="violation-${v.id}"
-              value="${v.violation_code}"
-              ${ selectedCodes.has(v.violation_code) ? 'checked' : '' }
-            >
-            <label
-              class="form-check-label"
-              for="violation-${v.id}"
-            >
-              ${v.violation_name} — ₱${parseFloat(v.fine_amount).toFixed(2)}
-            </label>
-          `;
+      if (!violationGroups[cat]) return;
 
-          // once in DOM, wire up its change-handler
-          const input = wrapper.querySelector('input');
-          input.addEventListener('change', () => {
-            if (input.checked) {
-              selectedCodes.add(v.violation_code);
-            } else {
-              selectedCodes.delete(v.violation_code);
-            }
-          });
+      violationGroups[cat].forEach(v => {
+        // create wrapper
+        const wrapper = document.createElement('div');
+        wrapper.className = 'form-check mb-2';
 
-          container.appendChild(wrapper);
+        // build checkbox HTML, marking 'checked' if in our Set
+        wrapper.innerHTML = `
+          <input
+            class="form-check-input"
+            type="checkbox"
+            name="violations[]"
+            id="violation-${v.id}"
+            value="${v.violation_code}"
+            ${ selectedCodes.has(v.violation_code) ? 'checked' : '' }
+          >
+          <label
+            class="form-check-label"
+            for="violation-${v.id}"
+          >
+            ${v.violation_name} — ₱${parseFloat(v.fine_amount).toFixed(2)}
+          </label>
+        `;
+
+        // once in DOM, wire up its change-handler
+        const input = wrapper.querySelector('input');
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            selectedCodes.add(v.violation_code);
+          } else {
+            selectedCodes.delete(v.violation_code);
+          }
         });
-      }
 
-      // whenever you switch category, re-render that category’s list:
-      select.addEventListener('change', renderCategory);
+        container.appendChild(wrapper);
+      });
+    }
 
-      // (optional) if you want to pre-render the first category on page-load:
-      // if (select.value) renderCategory();
-    }); 
+    // whenever you switch category, re-render that category’s list:
+    select.addEventListener('change', renderCategory);
+
+    // (optional) if you want to pre-render the first category on page-load:
+    // if (select.value) renderCategory();
+  }); 
 
     console.log('ticket script loaded')
     document.getElementById('ticketForm')
@@ -282,7 +297,7 @@
             html += `</ul>`;
 
             const { isConfirmed } = await Swal.fire({
-            title: 'Confirm & Print',
+            title: 'Confirm Details',
             html,
             width: 600,
             showCancelButton: true,
@@ -331,7 +346,9 @@
             txt += '*** VEHICLE IMPOUNDED ***' + NL + NL;
             }
             txt += 'Badge No: ' + p.enforcer.badge_num + NL + NL;
-            
+            txt += NL + NL + NL + NL;
+            txt += '__________________________' + NL;
+            txt += 'Signature of Violator' + NL + NL;
             txt += '- - - - - - - - - - - - - - - -' + NL + NL;
 
             txt += '\tCity of San Carlos' + NL;
@@ -381,57 +398,7 @@
         }
         });
 
-    // Bluetooth-print helper
-    async function printReceipt(p) {
-        const S = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
-        const C = '49535343-8841-43f4-a8d4-ecbe34729bb3';
-
-        const dev = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [S]
-        });
-        const srv = await dev.gatt.connect();
-        const svc = await srv.getPrimaryService(S);
-        const ch  = await svc.getCharacteristic(C);
-
-        const ESC = '\x1B', GS = '\x1D', NL = '\x0A';
-        let txt = '';
-        txt += '\tCity of San Carlos' + NL;
-        txt += 'Public Order and Safety Office' + NL;
-        txt += '\t\t(POSO)' + NL + NL;
-        txt += '\tTraffic Citation Ticket' + NL;
-        txt += 'Date issued: ' + p.ticket.issued_at + NL + NL;
-        txt += 'Violator: ' + p.violator.name + NL;
-        txt += 'Phone: ' + p.violator.phone_number + NL + NL;
-        txt += 'Birthdate: ' + p.violator.birthdate + NL;
-        txt += 'Address: ' + p.violator.address + NL;
-        txt += 'Resident: ' + (p.ticket.is_resident ? 'Yes' : 'No') + NL;
-        txt += 'License No.: ' + p.violator.license_number + NL + NL;
-        txt += 'Plate No.: ' + p.vehicle.plate_number + NL;
-        txt += 'Type: ' + p.vehicle.vehicle_type + NL;
-        txt += 'Owner: ' + p.vehicle.is_owner + NL;
-        txt += 'Owner Name: ' + p.vehicle.owner_name + NL + NL;
-        txt += 'Violation(s):' + NL;
-        p.violations.forEach(v => {
-        txt += `- ${v.name} (Php${v.fine})` + NL;
-        });
-        txt += NL;
-        txt += 'Username: ' + p.credentials.username + NL;
-        txt += 'Password: ' + p.credentials.password + NL + NL;
-        txt += 'Last Apprehended: ' + (p.last_apprehended_at || 'Never') + NL + NL;
-        if (p.ticket.is_impounded === 'true') {
-        txt += '*** VEHICLE IMPOUNDED ***' + NL + NL;
-        }
-        txt += 'Badge No: ' + p.enforcer.badge_num + NL;
-        txt += NL + ESC + 'd' + '\x03' + GS + 'V' + '\x00';
-
-        const data = new TextEncoder().encode(txt);
-        for (let i = 0; i < data.length; i += 20) {
-          await ch.writeValue(data.slice(i, i + 20));
-          await new Promise(r => setTimeout(r, 50));
-        }
-    }
-
+    
 
     const isOwnerCheckbox = document.getElementById('is_owner');
     const ownerInput      = document.getElementById('owner_name');

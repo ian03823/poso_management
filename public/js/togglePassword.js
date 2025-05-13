@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // swap icon
     const icon = toggle.querySelector('i');
-    icon.classList.toggle('fa-eye');
-    icon.classList.toggle('fa-eye-slash');
+    icon.classList.toggle('bi-eye');
+    icon.classList.toggle('bi-eye-slash');
   });
 });

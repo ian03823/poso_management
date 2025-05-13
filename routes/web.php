@@ -12,6 +12,7 @@ use App\Http\Controllers\ViolatorManagementController;
 use App\Http\Controllers\ViolatorAuthController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\AdminTicketController;
+use App\Http\Controllers\ImpoundedController;
 use App\Http\Controllers\ViolatorTableController;
 
 
@@ -64,9 +65,13 @@ Route::middleware('admin')->group(function () {
     Route::get('/violatorTable/partial', [ViolatorTableController::class, 'partial'])->name('violatorTable.partial');
     Route::resource('violatorTable', ViolatorTableController::class);
 
+    //Ticket routes
     Route::post('ticket/{ticket}/status', [AdminTicketController::class, 'updateStatus'])->name('ticket.updateStatus');
     Route::get('ticket/partial', [AdminTicketController::class, 'partial'])->name('ticket.partial');
     Route::resource('ticket', AdminTicketController::class);
+
+    //Impound Vehicle routes
+    Route::resource('impounded', ImpoundedController::class);
 
 });
 

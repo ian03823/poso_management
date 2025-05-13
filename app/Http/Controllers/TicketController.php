@@ -95,7 +95,30 @@ class TicketController extends Controller
         $resident  = ! empty($d['is_resident']);
         $impounded = ! empty($d['is_impounded']);
 
+        $licenseExists = Violator::where('license_number', $d['license_num'])->exists();
+        $plateExists   = Vehicle::where('plate_number',    $d['plate_num'])->exists();
+
+        if ($licenseExists) {
+            if ($request->expectsJson()) {
+                return response()
+                    ->json(['message' => 'The license number already exists.'], 422);
+            }
+            return back()
+                ->withInput()
+                ->with('duplicate_error', 'The license number already exists.');
+        }
+        
+        if ($plateExists) {
+            if ($request->expectsJson()) {
+                return response()
+                    ->json(['message' => 'The plate number already exists.'], 422);
+            }
+            return back()
+                ->withInput()
+                ->with('duplicate_error', 'The plate number already exists.');
+        }
         // 2) Violator (firstOrNew then save)
+
         $violator = Violator::firstOrNew(
             ['license_number' => $d['license_num']]
         );
@@ -107,7 +130,7 @@ class TicketController extends Controller
         $violator->save();
 
         // possibly create credentials
-        if (! $violator->license_number && ! $violator->username) {
+        if ($violator->wasRecentlyCreated) {
             $violator->username = 'user'.rand(1000,9999);
         
             // generate an 8-char password

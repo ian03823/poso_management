@@ -7,8 +7,7 @@
 >
   <a 
     href="{{ route('enforcerTicket.create', ['violator_id' => $violator->id]) }}" 
-    class="btn btn-success mb-3"
-  >
+    class="btn btn-success mb-3">
     Add Violation
   </a>
 
@@ -19,16 +18,6 @@
 
     <dt class="col-sm-3">License Number</dt>
     <dd class="col-sm-9">{{ $violator->license_number }}</dd>
-
-    <dt class="col-sm-3">Vehicle(s)</dt>
-    <dd class="col-sm-9">
-      {{ $violator->vehicles->pluck('vehicle_type')->join(' - ') ?: 'None' }}
-    </dd>
-
-    <dt class="col-sm-3">Plate Number(s)</dt>
-    <dd class="col-sm-9">
-      {{ $violator->vehicles->pluck('plate_number')->join(' - ') ?: 'None' }}
-    </dd>
 
     <dt class="col-sm-3">Address</dt>
     <dd class="col-sm-9">{{ $violator->address }}</dd>

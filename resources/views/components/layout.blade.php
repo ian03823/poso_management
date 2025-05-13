@@ -77,7 +77,7 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
+                    <a href="/impounded" class="nav-link active d-flex align-items-center justify-content-start gap-2 w-100">
                         <i class="bi bi-car-front me-3 fs-5"></i>
                          <span>Impounded Vehicle</span>
                     </a>

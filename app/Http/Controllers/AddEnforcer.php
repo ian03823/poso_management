@@ -84,6 +84,14 @@ class AddEnforcer extends Controller
             'phone' => 'required|digits:11',
             'password' => 'required|string|max:16',
         ]);
+        $badge_num = Enforcer::where('badge_num', $data['badge_num'])->exists();
+        if ($badge_num) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Badge number already exists',
+            ], 422);
+        }
+
         $data['password'] = Hash::make($data['password']);
         Enforcer::create($data);
 

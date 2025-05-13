@@ -3,10 +3,13 @@
 @section('title', 'POSO Digital Ticket')
 
 @section('violator')
+
+<div class="container-fluid">
+    <h2 class="mb-3">Change Your Password</h2>
     <h2>Change Your Password</h2>
     <form method="POST" action="{{ route('violator.password.update') }}">
         @csrf
-        <div class="mb-3">
+        <div class="mb-3 form-group">
             <label for="password">New Password</label>
             <input id="password" type="password" name="password"
                 class="form-control @error('password') is-invalid @enderror" required>
@@ -21,5 +24,6 @@
         </div>
         <button type="submit" class="btn btn-primary">Save New Password</button>
     </form>
+</div>
 @endsection
 
