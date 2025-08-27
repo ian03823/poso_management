@@ -34,7 +34,7 @@ class ViolatorAuthController extends Controller
         if (Hash::check($plain, $violator->password)) {
             Auth::guard('violator')->login($violator);
             $request->session()->regenerate();
-            return redirect()->route('violator.dashboard');
+            return redirect()->route('violator.dashboard')->with('login_success', true);
         }
 
         // 3) Check default password (first-time login)

@@ -53,11 +53,14 @@
 </div>
 @endsection
 
+
 @push('scripts')
-  
+  <script>
+    // so your JS doesn’t have to hard-code “/violation/partial”
+    window.violationPartialUrl = "{{ route('violation.partial') }}";
+  </script>
   <script src="{{ asset('js/updateViolation.js') }}"></script>
   <script src="{{ asset('js/sweetalerts.js') }}"></script>
   <script src="{{ asset('js/violationTable.js') }}"></script>
-  
 
 @endpush

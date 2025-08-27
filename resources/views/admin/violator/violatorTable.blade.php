@@ -31,8 +31,7 @@
         <select id="vehicle_type" class="form-select">
           <option value="all" {{ $vehicleType==='all'?'selected':'' }}>All</option>
           @foreach($vehicleTypes as $type)
-            <option value="{{ $type }}"
-              {{ $vehicleType===$type?'selected':'' }}>
+            <option value="{{ $type }}" {{ $vehicleType===$type?'selected':'' }}>
               {{ $type }}
             </option>
           @endforeach
@@ -56,6 +55,78 @@
     </div>
 
 </div>
+
+{{-- Reference-Number Modal & JS globals --}}
+@php
+  $paidStatusId = \App\Models\TicketStatus::where('name','paid')->value('id');
+@endphp
+<script>
+  window.PAID_STATUS_ID   = @json($paidStatusId);
+  window.STATUS_UPDATE_URL = "{{ url('paid') }}";
+  console.log('PAID_STATUS_ID=', window.PAID_STATUS_ID);
+</script>
+
+<div class="modal fade" id="refModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="refForm">
+      @csrf
+      <input type="hidden" id="ref_ticket_id" name="ticket_id">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Enter Reference Number</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="text"
+                 class="form-control"
+                 id="reference_number"
+                 name="reference_number"
+                 placeholder="Reference #"
+                 required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Confirm</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal fade" id="pwdModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="pwdForm">
+      @csrf
+      <input type="hidden" id="pwd_ticket_id" name="ticket_id">
+      <input type="hidden" id="pwd_new_status" name="status_id">
+
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Admin Password Required</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label for="admin_password" class="form-label">Password</label>
+          <input
+            type="password"
+            class="form-control"
+            id="admin_password"
+            name="admin_password"
+            required
+          >
+        </div>
+        <div class="modal-footer">
+          <button type="button"
+                  class="btn btn-secondary"
+                  data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Confirm</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+
 <div class="modal fade" id="violatorModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <div class="modal-content">
@@ -72,8 +143,7 @@
 @endsection
 
 @push('scripts')
-    <script src="{{ asset('js/sweetalerts.js') }}"></script>
-    <script src="{{ asset('js/ajax.js') }}"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="{{ asset('js/violatorTable.js') }}"></script>
     <script src="{{ asset('js/violatorView.js') }}"></script>
 @endpush

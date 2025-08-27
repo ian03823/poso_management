@@ -1,55 +1,140 @@
 (function($){
-  // 1) Handle sort control change
+  // 1) Sort & pagination (unchanged) …
   $(document).on('change','#ticket-sort', function(){
-    const sort = $(this).val();
-    loadTable({ sort_option: sort, page: 1 });
+    loadTable({ sort_option: $(this).val(), page: 1 });
   });
-
-  // 2) Delegate pagination links
   $(document).on('click','#ticket-table .pagination a', function(e){
     e.preventDefault();
-    // extract page number from href
     const page = new URL(this.href).searchParams.get('page') || 1;
-    // read current sort
-    const sort = $('#ticket-sort').val();
-    loadTable({ sort_option: sort, page });
-
+    loadTable({ sort_option: $('#ticket-sort').val(), page });
   });
-
-  // 3) Popstate (back/forward)
   window.addEventListener('popstate', () => {
-    // parse params
-    const params = new URLSearchParams(location.search);
-    const sort  = params.get('sort_option') || 'date_desc';
-    const page  = params.get('page')        || 1;
-    // update the select
-    $('#ticket-sort').val(sort);
-    // reload table without pushing state
-    loadTable({ sort_option: sort, page }, /*push=*/false);
+    const p = new URLSearchParams(location.search);
+    loadTable({
+      sort_option: p.get('sort_option') || 'date_desc',
+      page:        p.get('page')        || 1
+    }, /*push=*/false);
+    $('#ticket-sort').val(p.get('sort_option') || 'date_desc');
   });
-
-  // 4) Main loader
   function loadTable(opts, push = true) {
-    // build query string
     const qs = $.param(opts);
     $.get(ticketPartialUrl + '?' + qs, html => {
       $('#ticket-table').html(html);
-      if (push) {
-        // update URL to /ticket?sort_option=…&page=…
-        history.pushState(null,'','/ticket?' + qs);
-      }
+      if (push) history.pushState(null,'','/ticket?' + qs);
     });
   }
-  
-
-  // 5) Initialize on first load
   $(function(){
-    const params = new URLSearchParams(location.search);
-    const sort  = params.get('sort_option') || 'date_desc';
-    const page  = params.get('page')        || 1;
-    $('#ticket-sort').val(sort);
-    loadTable({ sort_option: sort, page }, /*push=*/false);
-    // replace initial history state
+    const p = new URLSearchParams(location.search);
+    loadTable({
+      sort_option: p.get('sort_option') || 'date_desc',
+      page:        p.get('page')        || 1
+    }, /*push=*/false);
+    $('#ticket-sort').val(p.get('sort_option') || 'date_desc');
     history.replaceState(null,'',location.pathname + location.search);
   });
+
+  // 2) Payment-flow state
+  let _lastSelect, _lastValue, _paidConfirmed;
+
+  // 3) Intercept status <select>
+  $(document).on('change', '.status-select', function() {
+    const $sel      = $(this);
+    const ticketId  = +$sel.data('ticket-id');
+    const oldStatus = +$sel.data('current-status-id');
+    const newStatus = +$sel.val();
+    const paidId    = window.PAID_STATUS_ID;
+
+    _lastSelect    = $sel;
+    _lastValue     = oldStatus;
+    _paidConfirmed = false;
+
+    // into Paid → show Ref modal
+    if (newStatus === paidId) {
+      $('#ref_ticket_id').val(ticketId);
+      new bootstrap.Modal($('#ticketRefModal')).show();
+    }
+    // away from Paid → show Pwd modal
+    else if (oldStatus === paidId && newStatus !== paidId) {
+      $('#pwd_ticket_id').val(ticketId);
+      $('#pwd_new_status').val(newStatus);
+      new bootstrap.Modal($('#ticketPwdModal')).show();
+    }
+    // otherwise → AJAX
+    else {
+      postStatus(ticketId, { status_id: newStatus });
+    }
+  });
+
+  // 4) Ref-Modal hidden: revert if cancelled
+  $('#ticketRefModal').on('hidden.bs.modal', () => {
+    if (!_paidConfirmed && _lastSelect) {
+      _lastSelect.val(_lastValue);
+    }
+  });
+
+  // 5) Ref form submit
+  $('#ticketRefForm').on('submit', function(e){
+    e.preventDefault();
+    _paidConfirmed = true;
+    const ticketId = $('#ref_ticket_id').val();
+    const refNo    = $('#reference_number').val().trim();
+
+    postStatus(ticketId, {
+      status_id:        window.PAID_STATUS_ID,
+      reference_number: refNo
+    }, () => {
+      $('#ticketRefModal').modal('hide');
+    });
+  });
+
+  // 6) Pwd-Modal hidden: revert if cancelled
+  $('#ticketPwdModal').on('hidden.bs.modal', () => {
+    if (!_paidConfirmed && _lastSelect) {
+      _lastSelect.val(_lastValue);
+    }
+  });
+
+  // 7) Pwd form submit
+  $('#ticketPwdForm').on('submit', function(e){
+    e.preventDefault();
+    _paidConfirmed = true;
+    const ticketId = $('#pwd_ticket_id').val();
+    const statusId = $('#pwd_new_status').val();
+    const pw       = $('#admin_password').val();
+
+    postStatus(ticketId, {
+      status_id:      statusId,
+      admin_password: pw
+    }, () => {
+      $('#ticketPwdModal').modal('hide');
+    });
+  });
+
+  // 8) AJAX helper + reload
+  function postStatus(ticketId, data, onSuccess) {
+    data._token = $('meta[name="csrf-token"]').attr('content');
+    $.post(`${window.STATUS_UPDATE_URL}/${ticketId}/status`, data)
+      .done(json => {
+        onSuccess?.();
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: json.message,
+          timer: 1500,
+          showConfirmButton: false
+        });
+        // refresh table
+        const sort = $('#ticket-sort').val();
+        const page = new URLSearchParams(location.search)
+                     .get('page') || 1;
+        loadTable({ sort_option: sort, page }, /*push=*/false);
+      })
+      .fail(xhr => {
+        Swal.fire('Error',
+          xhr.responseJSON?.message || 'Could not update status',
+          'error'
+        );
+      });
+  }
 })(jQuery);

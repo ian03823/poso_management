@@ -1,3 +1,4 @@
+@php use App\Models\TicketStatus; @endphp
 <table class="table table-bordered table-hover">
     <thead>
       <tr>
@@ -15,26 +16,30 @@
       <tr>
         <td class="text-right">{{ $t->ticket_number }}</td>
         <td>{{ $t->enforcer->fname }}</td>
-        <td>{{ $t->violator->name }}</td>
+        <td>{{ $t->violator->first_name }} {{ $t->violator->middle_name }} {{ $t->violator->last_name }}</td>
         <td>{{ $t->violation_names }}</td>
         <td>{{ $t->location }}</td>
         <td>{{ $t->issued_at->format('Y-m-d H:i') }}</td>
-        
-        
+
         <td>
-          <select class="form-select form-select-sm status-select" data-id="{{ $t->id }}">
-            @foreach(['pending','paid','unpaid','cancelled'] as $st)
-              <option value="{{ $st }}"
-                {{ $t->status === $st ? 'selected' : '' }}>
-                {{ ucfirst($st) }}
+          <select class="form-select form-select-sm status-select" 
+            data-ticket-id="{{ $t->id }}"
+            data-current-status-id="{{ $t->status_id }}"
+          >
+            @foreach(TicketStatus::all() as $status)
+              <option
+                value="{{ $status->id }}"
+                {{ $t->status_id == $status->id ? 'selected' : '' }}
+              >
+                {{ ucfirst($status->name) }}
               </option>
             @endforeach
           </select>
         </td>
       </tr>
-    @empty
+    @empty  
       <tr>
-        <td colspan="9" class="text-center">No tickets found.</td>
+        <td colspan="7" class="text-center">No tickets found.</td>
       </tr>
     @endforelse
     </tbody>

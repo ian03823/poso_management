@@ -36,6 +36,86 @@
       @include('admin.partials.ticketTable')
     </div>
   </div>
+  @php
+  // fetch the “Paid” status ID once
+  $paidStatusId = \App\Models\TicketStatus::where('name','paid')->value('id');
+@endphp
+
+<script>
+  // available to your JS
+  window.PAID_STATUS_ID    = @json($paidStatusId);
+  window.STATUS_UPDATE_URL = "{{ url('ticket') }}";
+  console.log('PAID_STATUS_ID=', window.PAID_STATUS_ID);
+  console.log('STATUS_UPDATE_URL=', window.STATUS_UPDATE_URL);
+</script>
+
+{{-- Reference-Number Modal --}}
+<div class="modal fade" id="ticketRefModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <form id="ticketRefForm">
+      @csrf
+      <input type="hidden" id="ref_ticket_id" name="ticket_id">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Enter Reference Number</h5>
+          <button type="button" class="btn-close"
+                  data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="text"
+                 id="reference_number"
+                 name="reference_number"
+                 class="form-control"
+                 placeholder="Reference #"
+                 required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary"
+                  data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{{-- Admin-Password Modal --}}
+<div class="modal fade" id="ticketPwdModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog" role="document">
+    <form id="ticketPwdForm">
+      @csrf
+      <input type="hidden" id="pwd_ticket_id"   name="ticket_id">
+      <input type="hidden" id="pwd_new_status"   name="status_id">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Admin Password Required</h5>
+          <button type="button" class="btn-close"
+                  data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label for="admin_password" class="form-label">
+            Password
+          </label>
+          <input type="password"
+                 id="admin_password"
+                 name="admin_password"
+                 class="form-control"
+                 required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary"
+                  data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 
 @endsection
 
@@ -43,6 +123,5 @@
   <script>const ticketPartialUrl = @json(route('ticket.partial'));</script>
   <script src="{{ asset('js/sweetalerts.js') }}"></script>
   <script src="{{ asset('js/ajax.js') }}"></script>
-  <script src="{{ asset('js/ticketTable.js') }}"></script>
-
+  
 @endpush

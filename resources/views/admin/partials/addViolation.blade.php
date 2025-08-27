@@ -34,7 +34,7 @@
               <label for="violation_code" class="form-label">Violation Code</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-hash"></i></span>
-                <input type="text" id="violation_code" name="violation_code" class="form-control" value="{{ old('violation_code') }}">
+                <input type="text" id="violation_code" name="violation_code" class="form-control" value="{{ old('violation_code', $nextViolation ?? '') }}" readonly>
               </div>
             </div>
   

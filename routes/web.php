@@ -14,6 +14,7 @@ use App\Http\Controllers\TicketController;
 use App\Http\Controllers\AdminTicketController;
 use App\Http\Controllers\ImpoundedController;
 use App\Http\Controllers\ViolatorTableController;
+use App\Http\Controllers\AnalyticsController;
 
 
 Route::get('/', function () {
@@ -42,28 +43,38 @@ Route::middleware('enforcer')->group(function () {
     Route::resource('enf', EnforcerManagementController::class);
     Route::get('violators/suggestions', [TicketController::class, 'suggestions'])->name('enforcer.violators.suggestions');
     Route::get('violators/{id}', [TicketController::class, 'show'])->name('enforcer.violators.show');
+    Route::get('enforcer/change/password', [EnforcerAuthController::class, 'showChangePassword'])->name('enforcer.password.edit');
+    Route::post('enforcer/change/password', [EnforcerAuthController::class, 'changePassword'])->name('enforcer.password.update');
 });
 
 // Admin protected routes
 Route::middleware('admin')->group(function () {
     Route::get('/admin', [AdminDashboardController::class,'adminDash'])->name('admin.dashboard');
-
+    Route::get('/admin/profile/update', [AdminDashboardController::class,'edit'])->name('admin.profile.edit');
+    Route::put('/admin/profile/update', [AdminDashboardController::class,'update'])->name('admin.profile.update');
     //Violation routes
     Route::get('/violation/partial', [ViolationController::class,'partial'])->name('violation.partial');
     Route::resource('violation', ViolationController::class); 
+    
     Route::get('violation/{violation}/json', [ViolationController::class, 'json'])
      ->name('violation.json');
 
 
     //Enforcer routes
     Route::get('/enforcer/partial', [AddEnforcer::class, 'partial'])->name('enforcer.partial');
-    Route::resource('enforcer', AddEnforcer::class);
+    Route::resource('enforcer', AddEnforcer::class)->except(['destroy']);
+    
+    // soft-delete (deactivate)
+    Route::delete('enforcer/{enforcer}', [AddEnforcer::class,'destroy'])->name('enforcer.destroy');
+    Route::post('enforcer/{enforcer}/restore', [AddEnforcer::class,'restore'])->name('enforcer.restore');
     Route::get('enforcer/{enforcer}/json', [AddEnforcer::class, 'json'])
      ->name('enforcer.json');
 
      //Violator routes
     Route::get('/violatorTable/partial', [ViolatorTableController::class, 'partial'])->name('violatorTable.partial');
     Route::resource('violatorTable', ViolatorTableController::class);
+    Route::post('paid/{ticket}/status', [ViolatorTableController::class, 'updateStatus'])
+     ->name('ticket.updateStatus');
 
     //Ticket routes
     Route::post('ticket/{ticket}/status', [AdminTicketController::class, 'updateStatus'])->name('ticket.updateStatus');
@@ -71,8 +82,19 @@ Route::middleware('admin')->group(function () {
     Route::resource('ticket', AdminTicketController::class);
 
     //Impound Vehicle routes
-    Route::resource('impounded', ImpoundedController::class);
+    Route::post('/impounded/resolve', [ImpoundedController::class, 'resolve'])->name('impound.resolve');
+    Route::resource('impoundedVehicle', ImpoundedController::class);
 
+    Route::get('dataAnalytics', [AnalyticsController::class,'index'])
+     ->name('dataAnalytics.index');
+
+    Route::get('dataAnalytics/latest', [AnalyticsController::class,'latest'])
+        ->name('dataAnalytics.latest');
+
+    // On-demand report downloads
+    Route::get('reports/download/{format}', [AnalyticsController::class,'download'])
+        ->where('format','xlsx|docx')
+        ->name('reports.download');
 });
 
 Route::middleware('violator')->group(function () {

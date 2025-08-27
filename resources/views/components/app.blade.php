@@ -16,6 +16,8 @@
           navigator.serviceWorker.register('/serviceworker.js');
       }
     </script>
+    <link rel="icon" type="image/png" sizes="32x32"
+      href="{{ asset('POSO-Logo.png') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -62,7 +64,6 @@
 
 
 
-    <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
     <!-- Bootstrap Icons (Optional) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>

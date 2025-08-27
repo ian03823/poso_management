@@ -1,38 +1,50 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // Delete confirmation
-    document.body.addEventListener('click', e => {
-      const btn = e.target.closest('.delete-btn');
-      if (!btn) return;
-      e.preventDefault();
-      const form = btn.closest('form') || (() => {
-        // fallback: wrap button in a form tag
-        let f = document.createElement('form');
-        f.method = 'POST';
-        f.action = btn.dataset.action || window.location.href;
-        f.appendChild(btn);
-        return f;
-      })();
-      const name = btn.dataset.name || 'this item';
-  
-      Swal.fire({
-        title: `Delete ${name}?`,
-        text: 'This cannot be undone.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, delete',
-        cancelButtonText: 'Cancel'
-      }).then(res => {
-        if (res.isConfirmed) form.submit();
-      });
+document.body.addEventListener('click', e => {
+  const btn = e.target.closest('.status-btn');
+  if (!btn) return;
+  e.preventDefault();
+
+  // stash the URL + method on the modal form
+  const action = btn.dataset.action;
+  const method = btn.dataset.method;
+
+  const form = document.getElementById('confirmPasswordForm');
+  form.action = action;
+  document.getElementById('confirmMethod').value = method;
+
+  // clear any previous error
+  document.getElementById('confirmError').style.display = 'none';
+  form.reset();
+
+  // show the modal
+  new bootstrap.Modal(document.getElementById('confirmPasswordModal')).show();
+});
+document
+  .getElementById('confirmPasswordForm')
+  .addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const form = this;
+    const data = new FormData(form);
+
+    // send via fetch so we can catch a 422 if password fails
+    const resp = await fetch(form.action, {
+      method: data.get('_method') === 'DELETE' ? 'DELETE' : 'POST',
+      headers: {
+        'X-CSRF-TOKEN': data.get('_token'),
+        'Accept': 'application/json'
+      },
+      body: data
     });
-    //Generate Password
-    window.generatePassword = function() {
-        const prefix = 'posoenforcer_';
-        const rnd    = Math.floor(100 + Math.random() * 900);
-        const pwEl   = document.getElementById('password');
-        if (pwEl) pwEl.value = prefix + rnd;
-      };
-  
+
+    if (resp.status === 422) {
+      // show the error div
+      document.getElementById('confirmError').style.display = '';
+      return;
+    }
+
+    // on success, reload the table via your existing AJAX
+    // (or simply reload the page)
+    location.reload();
+  });
     // Back-button confirmation
     document.body.addEventListener('click', e => {
       const btn = e.target.closest('#previousBtn');
@@ -65,5 +77,4 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     });
-  });
   

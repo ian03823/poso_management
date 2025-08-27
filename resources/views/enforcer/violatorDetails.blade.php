@@ -1,82 +1,89 @@
 @extends('components.app')
-@section('title', 'POSO Enforcer')
+@section('title', 'POSO Enforcer Management')
 
 @section('body')
 <style>
-  /* Ensure page is scrollable */
-  html, body {
-    overflow: auto !important;
-    /* allow full height */
-    height: auto !important;
+  /* Fade-in animation */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in {
+    animation: fadeInUp 0.7s ease-out;
   }
 </style>
-<div class="container-fluid my-3">
-    <a href="{{ route('enforcerTicket.create', ['violator_id' => $violators->id]) }}" class="btn btn-success btn-sm mb-3">
-      Add Violation
+
+{{-- Ensure scrollable container on mobile --}}
+<div class="container-fluid my-3 fade-in" style="overflow-y: auto; max-height: calc(100vh - 56px);">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <a href="{{ route('enforcerTicket.create', ['violator_id' => $violators->id]) }}" class="btn btn-success btn-sm">
+      <i class="bi bi-file-earmark-plus-fill me-1"></i>Cite Ticket
     </a>
-    <h2 class="text-center fs-3">Violator's Information</h2>
-    <dl class="row p-1">
-      <dt class="col-sm-3 text-sm">Name</dt>
-      <dd class="col-sm-9 text-sm">{{ $violators->name }}</dd>
+  </div>
 
-      <dt class="col-sm-3 text-sm">License Number</dt>
-      <dd class="col-sm-9 text-sm">{{ $violators->license_number }}</dd>
-      
-      <dt class="col-sm-3 text-sm">Vehicle(s)</dt>
-      <dd class="col-sm-9 text-sm">{{ $violators->vehicles->pluck('vehicle_type')->join(' - ') }}</dd>
-      
-      <dt class="col-sm-3 text-sm">Plate Number(s)</dt>
-      <dd class="col-sm-9 text-sm">
-        {{ $violators->vehicles->pluck('plate_number')->join(' - ') }}
-        @if($violators->vehicles->pluck('plate_number')->isEmpty())
-              <p>No registered plate number found.</p>
-        @endif
-      </dd>
-
-      <dt class="col-sm-3 text-sm">Address</dt>
-      <dd class="col-sm-9 text-sm">{{ $violators->address }}</dd>
-
-      
-    </dl>
-
-    <h2 class="text-center fs-3">Ticket History</h2>
-    <div class="table-responsive">
-      <table class="table table-sm table-striped">
-        <thead class="table-light">
-          <tr>
-            <th scope="col" class="text-sm">#</th>
-            <th scope="col" class="text-sm">Issued At</th>
-            <th scope="col" class="text-sm">Location</th>
-            <th scope="col" class="text-sm">Violations</th>
-            <th scope="col" class="text-sm">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          @foreach($violators->tickets as $ticket)
-            <tr>
-              <td class="text-sm">{{ $ticket->ticket_number }}</td>
-              <td class="text-sm">{{ $ticket->issued_at->format('d M Y, H:i') }}</td>
-              <td class="text-sm">{{ $ticket->location }}</td>
-              <td class="text-sm">
-                @foreach(json_decode($ticket->violation_codes) as $code)
-                  {{ \App\Models\Violation::where('violation_code', $code)
-                      ->value('violation_name') }}<br>
-                @endforeach
-              </td>
-              <td class="text-sm">{{ ucfirst($ticket->status->name) }}</td> 
-            </tr>
-          @endforeach
-        </tbody>
-      </table>
-          @if($violators->tickets->isEmpty())
-              <div class="alert alert-info text-sm">
-                No ticket history found.
-              </div>
-          @endif
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <h2 class="fs-4 mb-4 text-center">Violator Information</h2>
+      <div class="row gx-2 gy-2">
+        <div class="col-12 d-flex align-items-center">
+          <i class="bi bi-person-circle fs-4 me-2"></i>
+          <span class="fw-semibold">{{ $violators->first_name }} {{ $violators->middle_name }} {{ $violators->last_name }}</span>
+        </div>
+        <div class="col-12 d-flex align-items-center">
+          <i class="bi bi-credit-card-2-front fs-4 me-2"></i>
+          <span class="fw-semibold">License No:</span>&nbsp;<span>{{ $violators->license_number }}</span>
+        </div>
+        <div class="col-12 d-flex align-items-center">
+          <i class="bi bi-geo-alt-fill fs-4 me-2"></i>
+          <span>{{ $violators->address }}</span>
+        </div>
+      </div>
     </div>
+  </div>
+
+  <h2 class="fs-4 text-center mb-3"><i class="bi bi-receipt-cutoff-fill me-2"></i>Ticket History</h2>
+  <div class="table-responsive">
+    <table class="table table-striped table-hover">
+      <thead class="table-light">
+        <tr>
+          <th>#</th>
+          <th>Issued</th>
+          <th>Location</th>
+          <th>Plate #</th>
+          <th>Vehicle</th>
+          <th>Violation</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach($violators->tickets as $ticket)
+        <tr>
+          <td>{{ $ticket->ticket_number }}</td>
+          <td>{{ $ticket->issued_at->format('d M Y, h:i A') }}</td>
+          <td>{{ $ticket->location }}</td>
+          <td>{{ $ticket->vehicle->plate_number }}</td>
+          <td>{{ $ticket->vehicle->vehicle_type }}</td>
+          <td>
+            @foreach(json_decode($ticket->violation_codes) as $code)
+              {{ \App\Models\Violation::where('violation_code', $code)->value('violation_name') }}<br>
+            @endforeach
+          </td>
+          <td>{{ ucfirst($ticket->status->name) }}</td>
+        </tr>
+        @endforeach
+      </tbody>
+    </table>
+    @if($violators->tickets->isEmpty())
+      <div class="alert alert-info text-center small mt-3">
+        <i class="bi bi-info-circle me-1"></i>No ticket history found.
+      </div>
+    @endif
+  </div>
 </div>
 @endsection
 
 @push('scripts')
-    
+<script>
+  // additional JS can go here
+</script>
 @endpush

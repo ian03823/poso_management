@@ -3,9 +3,27 @@
 @section('content')
 
 <div class="container-fluid mt-4" id="enforcerContainer">
-    <h2 class="mb-3">Enforcer List</h2>
+    <div class="mb-3 justify-content-between d-flex align-items-center">
+      
+    <h2>Enforcer List</h2>
+      @if($show==='inactive')
+      <a href="{{ url('/enforcer?show=active') }}&sort_option={{$sortOption}}&search={{$search}}"
+         class="btn btn-primary"
+         data-ajax>
+        View Active Enforcers
+      </a>
+      @else
+        <a href="{{ url('/enforcer?show=inactive') }}&sort_option={{$sortOption}}&search={{$search}}"
+          class="btn btn-secondary"
+          data-ajax>
+          View Inactive Enforcers
+        </a>
+      @endif
+    </div>
+    
   
     <a href="{{ url('/enforcer/create') }}"
+            id="add-btn"
             class="btn btn-success mb-3"
             data-ajax>
         <i class="bi bi-person-plus-fill"></i> Add Enforcer
@@ -60,8 +78,6 @@
 
 @push('scripts')
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="{{ asset('js/update-modal.js') }}"></script>
-    <script src="{{ asset('js/enforcer-ajax.js') }}"></script>
-
+    <script src="{{ asset('js/enforcer.js') }}"></script>
 @endpush
   

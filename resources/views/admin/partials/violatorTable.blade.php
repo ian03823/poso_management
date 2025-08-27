@@ -16,7 +16,7 @@
     @forelse($tickets as $t)
         <tr>
           <td>{{ $t->ticket_number }}</td>
-          <td>{{ $t->violator->name }}</td>
+          <td>{{ $t->violator->first_name }} {{ $t->violator->middle_name }} {{ $t->violator->middle_name }}</td>
           <td>{{ $t->violator->address }}</td>
           <td>{{ $t->violator->license_number }}</td>
           <td>{{ $t->vehicle?->vehicle_type}}</td>

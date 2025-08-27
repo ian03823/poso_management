@@ -1,46 +1,33 @@
-(function(){
-    const contentEl = document.getElementById('app-body');
-  
-    function loadContent(url, push=true) {
-      fetch(url, { headers:{ 'X-Requested-With':'XMLHttpRequest' } })
-        .then(r => r.text())
-        .then(html => {
-          const doc = new DOMParser().parseFromString(html,'text/html');
-          const wrapper = doc.getElementById('app-body');
-          contentEl.innerHTML = wrapper
-            ? wrapper.innerHTML
-            : html;
-          if (push) history.pushState(null,'',url);
-        })
-        .catch(console.error);
-    }
-  
-    // expose globally for sweetalert.js
-    window.loadContent = loadContent;
-    
-    document.querySelectorAll('.sidebar .nav-link').forEach(a => {
-      a.addEventListener('click', e => {
-        e.preventDefault();
-        loadContent(a.href);
-      });
-    });
+;(function(){
+  const contentEl = document.getElementById('app-body');
 
-  
-    // 2) In-content AJAX links
-    document.body.addEventListener('click', e=>{
-      const a = e.target.closest('a[data-ajax]');
-      if (!a) return;
-      e.preventDefault();
-      loadContent(a.href);
+  document.body.addEventListener('click', e => {
+    const a = e.target.closest('.sidebar .nav-link, a[data-ajax]');
+    if (!a) return;
+    if (a.dataset.noAjax !== undefined) return; // let normal submit happen (e.g., logout)
+    e.preventDefault();
+    loadContent(a.href);
+  });
+
+  window.addEventListener('popstate', () => {
+    loadContent(location.pathname + location.search, false);
+  });
+
+  function loadContent(url, push = true) {
+    fetch(url, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => r.text())
+    .then(html => {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const newContent = doc.getElementById('app-body').innerHTML;
+
+      contentEl.innerHTML = newContent;
+
+      if (push) history.pushState({}, '', url);
+
+      // Custom event trigger after swapping content
+      document.dispatchEvent(new Event('page:loaded'));
     });
-  
-    // 3) Back button handled in sweetalert.js
-  
-    // 4) Browser back/forward
-    window.addEventListener('popstate', ()=>{
-      loadContent(location.pathname,false);
-    });
-    
-  })();
-  
-  
+  }
+})();

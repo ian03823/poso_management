@@ -16,13 +16,26 @@ class EnforcerMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (Auth::guard('enforcer')->check()) {
-            // Redirect to the enforcer login page if not authenticated
-            return $next($request);
-           
+        $user = Auth::guard('enforcer')->user();
+
+        // Not logged in → go to enforcer login
+        if (!$user) {
+            return redirect()
+                ->route('enforcer.showLogin')
+                ->with('error', 'You must be logged in to access the page.');
         }
 
-        // Proceed with the request if authenticated
-        return redirect()->route('enforcer.showLogin')->with('error', 'You must be logged in to access the page.');
+        // Logged in BUT inactive (soft-deleted) → force logout + redirect
+        if (method_exists($user, 'trashed') && $user->trashed()) {
+            Auth::guard('enforcer')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('enforcer.showLogin')
+                ->withErrors(['badge_num' => 'Your account has been deactivated.']);
+        }
+
+        return $next($request);
     }
 }

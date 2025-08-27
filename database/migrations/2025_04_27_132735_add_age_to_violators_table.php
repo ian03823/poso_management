@@ -11,11 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('admins', function (Blueprint $table) {
+        Schema::table('violators', function (Blueprint $table) {
             //
-            $table->string('name', 50)->nullable(false);
-            $table->string('username', 50)->unique()->nullable(false);
-            $table->string('password', 50)->nullable(false);
+            $table->unsignedTinyInteger('age')->nullable()->after('birthdate');
         });
     }
 
@@ -24,9 +22,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('admins', function (Blueprint $table) {
+        Schema::table('violators', function (Blueprint $table) {
             //
-            $table->dropColumn(['name', 'username', 'password']);
+            $table->dropColumn('age');
         });
     }
 };

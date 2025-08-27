@@ -18,7 +18,11 @@ class AddEnforcer extends Controller
         $sortOption   = $request->get('sort_option','date_desc');
         $search = $request->get('search','');
 
-        $query = Enforcer::query();
+        $show       = $request->get('show','active');
+
+        $query = $show === 'inactive'
+        ? Enforcer::onlyTrashed()
+        : Enforcer::query();
 
         // 1) Search
         if ($search !== '') {
@@ -49,10 +53,11 @@ class AddEnforcer extends Controller
             ->appends([
               'sort_option' => $sortOption,
               'search'      => $search,
+              'show'        => $show,
             ]);
 
         // Full page
-        return view('admin.enforcer', compact('enforcer','sortOption','search'));
+        return view('admin.enforcer', compact('enforcer','sortOption','search', 'show'));
 
     }
 
@@ -61,14 +66,34 @@ class AddEnforcer extends Controller
      */
     public function create(Request $request)
     {
-        //
-        if ($request->ajax()) {
-            return view('admin.partials.addenforcer');
+        // Get last enforcer's ticket_end
+        $lastEnforcer = Enforcer::orderByDesc('id')->first();
+
+        if ($lastEnforcer && is_numeric($lastEnforcer->ticket_end)) {
+            $lastEnd = intval($lastEnforcer->ticket_end);
+            $nextStart = str_pad($lastEnd + 1, 3, '0', STR_PAD_LEFT);
+            $nextEnd   = str_pad($lastEnd + 100, 3, '0', STR_PAD_LEFT);
+        } else {
+            $nextStart = '001';
+            $nextEnd   = '100';
         }
-    
-        // Direct GET → full page with layout
-        return view('admin.addenforcer');
+
+         // Auto generate badge number
+        if ($lastEnforcer && is_numeric($lastEnforcer->badge_num)) {
+            $nextBadgeNum = str_pad(intval($lastEnforcer->badge_num) + 1, 3, '0', STR_PAD_LEFT);
+        } else {
+            $nextBadgeNum = '10001'; // Default start
+        }
+
+        // For AJAX requests (partial view only)
+        if ($request->ajax()) {
+            return view('admin.partials.addenforcer', compact('nextStart', 'nextEnd','nextBadgeNum'));
+        }
+
+        // Full page view with layout
+        return view('admin.addenforcer', compact('nextStart', 'nextEnd'));
     }
+
 
     /**
      * Store a newly created resource in storage.
@@ -77,12 +102,14 @@ class AddEnforcer extends Controller
     {
         //
         $data = $request->validate([
-            'badge_num' => 'required|string|max:7',
+            'badge_num' => 'required|string|max:4',
             'fname' => 'required|string|min:2|max:20',
             'mname' => 'nullable|string|min:3|max:20',
             'lname' => 'required|string|min:3|max:20',
             'phone' => 'required|digits:11',
             'password' => 'required|string|max:16',
+            'ticket_start'  => 'required|digits:3|numeric|min:1|max:999',
+            'ticket_end'    => 'required|digits:3|numeric|gte:ticket_start|max:999',
         ]);
         $badge_num = Enforcer::where('badge_num', $data['badge_num'])->exists();
         if ($badge_num) {
@@ -91,13 +118,19 @@ class AddEnforcer extends Controller
                 'message' => 'Badge number already exists',
             ], 422);
         }
-
-        $data['password'] = Hash::make($data['password']);
+        $raw = $data['password'];
+        $data['password']         = Hash::make($raw);
+        $data['defaultPassword'] = Hash::make($raw);
         Enforcer::create($data);
+        
 
         $enforcer = Enforcer::orderBy('updated_at','desc')->paginate(5);
 
-        return view('admin.partials.enforcerTable', compact('enforcer'));
+        return response()->json([
+            'success'      => true,
+            'raw_password' => $raw,
+            'html'         => view('admin.partials.enforcerTable', compact('enforcer'))->render(),
+        ], 201);
     }
 
     /**
@@ -129,20 +162,28 @@ class AddEnforcer extends Controller
         $e = Enforcer::findOrFail($id);
 
         $data = $request->validate([
-            'badge_num' => 'required|string|min:2|max:3',
-            'fname' => 'required|min:3',
+            'badge_num' => 'nullable|string|min:2|max:3',
+            'fname' => 'nullable|min:3',
             'mname' => 'nullable',
             'lname' => 'required|min:3',
-            'phone' => 'required|digits:11',
+            'phone' => 'nullable|digits:11',
+            'password' => 'nullable|string|min:8|max:20',
         ]);
+        $resp = ['success'=>true,'message'=>'Enforcer updated'];
 
+        if (!empty($data['password'])) {
+            // admin reset via JS-generated value or manual
+            $raw = $data['password'];
+            $data['password']         = Hash::make($raw);
+            $data['defaultPassword'] = Hash::make($raw);
+            $resp['raw_password']     = $raw;
+            $resp['message']          = 'Password reset & updated';
+        } else {
+            unset($data['password'],$data['defaultPassword']);
+        }
         $e->update($data);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Enforcer Updated Successfully',
-            'enforcer'=> $e
-        ], 200);
+        return response()->json($resp,200);
     }
 
     /**
@@ -155,11 +196,24 @@ class AddEnforcer extends Controller
         $enforcer->delete();
         return redirect('/enforcer')->with('success','Client Deleted Succesfully');
     }
+    public function restore(string $id)
+    {
+        // find even trashed records
+        $e = Enforcer::withTrashed()->findOrFail($id);
+
+        // “undelete” it
+        $e->restore();
+
+        // go back (preserves your ?show=inactive or ?show=active)
+        return redirect()->back()
+                        ->with('success','Enforcer has been re-activated.');
+    }
 
     public function partial(Request $request)
     {
         $sortOption   = $request->get('sort_option','date_desc');
         $search = $request->get('search','');
+        $show       = $request->get('show','active');
 
         $query = Enforcer::query();
         if ($search !== '') {

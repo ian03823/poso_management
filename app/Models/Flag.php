@@ -12,6 +12,11 @@ class Flag extends Model
 
     public function tickets()
     {
-        return $this->belongsToMany(Ticket::class, 'ticket_flag');
+        return $this->belongsToMany(
+            Ticket::class,
+            'ticket_flags',
+            'flag_id',
+            'ticket_id'
+        );
     }
 }

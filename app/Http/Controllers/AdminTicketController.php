@@ -5,9 +5,13 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash;
+use App\Models\TicketStatus;
 use App\Models\Vehicle;
 use App\Models\Violation;
 use App\Models\Violator; 
+use App\Models\PaidTicket;
 use App\Models\Enforcer;
 class AdminTicketController extends Controller
 {
@@ -31,14 +35,13 @@ class AdminTicketController extends Controller
                 $col = 'issued_at'; $dir = 'desc'; break;
         }
         
-        $tickets = Ticket::with(['enforcer','violator','vehicle'])
-                         ->select('tickets.*')
-                         ->leftJoin('violators','tickets.violator_id','violators.id')
-                         ->orderBy($col,$dir)
-                         ->paginate(5)
-                         ->appends('sort_option',$sortOption);
+        $tickets = Ticket::with(['enforcer', 'violator', 'vehicle', 'status'])
+    ->whereHas('enforcer') // only get tickets with enforcer
+    ->orderBy($col, $dir)
+    ->paginate(5)
+    ->appends('sort_option', $sortOption);
 
-
+        
         // Render the main blade that @includes your partial
         return view('admin.issuedTicket.ticketTable', compact('tickets', 'sortOption'));
     }
@@ -79,7 +82,7 @@ class AdminTicketController extends Controller
             'vehicle_type'   => 'required|string',
             'is_owner'       => 'sometimes|boolean',
             'is_resident'    => 'sometimes|boolean',
-            'owner_name'     => 'required|string',
+            'owner_name'     => 'nullable|string|max:255',
             'violations'     => 'required|array|min:1',
             'location'       => 'required|string',
             'confiscated'    => 'required|in:none,License ID,Plate Number,ORCR,TCT/TOP',
@@ -247,13 +250,64 @@ class AdminTicketController extends Controller
     }
     public function updateStatus(Request $request, Ticket $ticket)
     {
-        $data = $request->validate([
-            'status_id' => 'required|exists:ticket_statuses,id',
+        Log::info('AdminTicket updateStatus', [
+            'ticket_id' => $ticket->id,
+            'request'   => $request->all(),
         ]);
 
-        $ticket->status_id = $data['status_id'];
+        $newStatus = (int)$request->input('status_id');
+        $paidId    = TicketStatus::where('name', 'paid')->value('id');
+        $oldStatus = $ticket->status_id;
+
+        //
+        // 1) Going *away* from Paid → require password & delete latest PaidTicket
+        //
+        if ($oldStatus === $paidId && $newStatus !== $paidId) {
+            $request->validate([
+                'admin_password' => 'required|string',
+            ]);
+
+            $admin = Auth::guard('admin')->user();
+            if (! Hash::check($request->admin_password, $admin->password)) {
+                return response()->json(['message'=>'Incorrect password'], 403);
+            }
+
+            // delete only the most-recent payment record
+            $latest = PaidTicket::where('ticket_id', $ticket->id)
+                                ->orderBy('paid_at','desc')
+                                ->first();
+            if ($latest) {
+                $latest->delete();
+                Log::info('Deleted PaidTicket', ['id'=>$latest->id]);
+            }
+        }
+
+        //
+        // 2) Going *into* Paid → require ref# & create PaidTicket
+        //
+        if ($newStatus === $paidId) {
+            $request->validate([
+                'reference_number' => 'required|string|unique:paid_tickets,reference_number',
+            ]);
+
+            $payment = PaidTicket::create([
+                'ticket_id'        => $ticket->id,
+                'reference_number' => $request->reference_number,
+                'paid_at'          => now(),
+            ]);
+            Log::info('Created PaidTicket', ['id'=>$payment->id]);
+        }
+
+        //
+        // 3) Finally update the Ticket status
+        //
+        $ticket->status_id = $newStatus;
         $ticket->save();
 
-        return response()->json(['success' => true]);
+        return response()->json([
+            'message' => $newStatus === $paidId
+               ? 'Ticket marked as Paid.'
+               : 'Status updated successfully.'
+        ]);
     }
 }

@@ -31,20 +31,39 @@ class TicketController extends Controller
     {
         $term = $request->get('q', '');
 
-        $matches = Violator::with('vehicles')
-            ->where('name', 'like', "%{$term}%")
-            ->orWhere('license_number', 'like', "%{$term}%")
-            ->orWhereHas('vehicles', fn($q) =>
-                $q->where('plate_number', 'like', "%{$term}%")
-            )
-            ->limit(5)
-            ->get()
-            ->map(fn($v) => [
+         $matches = Violator::with('vehicles')
+        // ▶️ Search first/middle/last name or the full concatenated name
+        ->where(function($query) use ($term) {
+            $query->where('first_name', 'like', "%{$term}%")
+                  ->orWhere('middle_name', 'like', "%{$term}%")
+                  ->orWhere('last_name', 'like', "%{$term}%")
+                  ->orWhere(DB::raw("CONCAT_WS(' ', first_name, middle_name, last_name)"), 'like', "%{$term}%");
+        })
+        // ▶️ Also search license number
+        ->orWhere('license_number', 'like', "%{$term}%")
+        // ▶️ And any related vehicle’s plate number
+        ->orWhereHas('vehicles', function($q) use ($term) {
+            $q->where('plate_number', 'like', "%{$term}%");
+        })
+        ->limit(5)
+        ->get()
+        ->map(function($v) {
+            // build a full name for the JSON payload
+            $fullName = trim(implode(' ', array_filter([
+                $v->first_name,
+                $v->middle_name,
+                $v->last_name,
+            ])));
+
+            return [
                 'id'             => $v->id,
-                'name'           => $v->name,
+                'first_name'           => $v ->first_name,
+                'middle_name'          => $v->middle_name,
+                'last_name'            => $v->last_name,
                 'license_number' => $v->license_number,
                 'plate_number'   => $v->vehicles->pluck('plate_number')->first() ?? null,
-            ]);
+            ];
+        });
 
         return response()->json($matches);
     }
@@ -77,57 +96,48 @@ class TicketController extends Controller
     public function store(Request $request)
     {
          $d = $request->validate([
-            'name'          => 'nullable|string|max:255',
+            'first_name'    => 'nullable|string|max:50',
+            'middle_name'   => 'nullable|string|max:50',
+            'last_name'     => 'nullable|string|max:50',
             'address'       => 'nullable|string|min:2',
             'birthdate'     => 'nullable|date',
             'license_num'   => 'nullable|string|max:50|min:8',
             'plate_num'     => 'required|string|max:50|min:5',
             'vehicle_type'  => 'required|string',
             'is_owner'      => 'sometimes|boolean',
-            'is_resident'   => 'sometimes|boolean',
+            'flags'         => 'array',           // you can also validate an incoming flags[] if you switch to that
+            'flags.*'       => 'exists:flags,id',
             'owner_name'    => 'nullable|',
             'violations'    => 'required|array|min:1',
             'location'      => 'nullable|string',
+            'latitude'      => 'nullable|numeric',
+            'longitude'    => 'nullable|numeric',
             'confiscation_type_id'   => 'nullable|exists:confiscation_types,id',
-            'is_impounded'  => 'sometimes|boolean',
         ]);
-
-        $resident  = ! empty($d['is_resident']);
-        $impounded = ! empty($d['is_impounded']);
-
-        $licenseExists = Violator::where('license_number', $d['license_num'])->exists();
-        $plateExists   = Vehicle::where('plate_number',    $d['plate_num'])->exists();
-
-        if ($licenseExists) {
-            if ($request->expectsJson()) {
-                return response()
-                    ->json(['message' => 'The license number already exists.'], 422);
-            }
-            return back()
-                ->withInput()
-                ->with('duplicate_error', 'The license number already exists.');
-        }
-        
-        if ($plateExists) {
-            if ($request->expectsJson()) {
-                return response()
-                    ->json(['message' => 'The plate number already exists.'], 422);
-            }
-            return back()
-                ->withInput()
-                ->with('duplicate_error', 'The plate number already exists.');
-        }
         // 2) Violator (firstOrNew then save)
 
-        $violator = Violator::firstOrNew(
-            ['license_number' => $d['license_num']]
-        );
+        $violator = Violator::firstOrNew(['license_number' => $d['license_num']]);
         if (! $violator->exists) {
-            $violator->name      = $d['name'];
+            $violator->first_name      = $d['first_name'];
+            $violator->middle_name      = $d['middle_name'];
+            $violator->last_name      = $d['last_name'];
             $violator->address   = $d['address'];
             $violator->birthdate = $d['birthdate'];
         }
         $violator->save();
+
+        $existingPlate = Vehicle::where('plate_number', $d['plate_num'])->first();
+        if ($existingPlate && $existingPlate->violator_id !== $violator->id) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'The plate number is already registered under another violator.',
+                ], 422);
+            }
+
+            return back()
+                ->withInput()
+                ->with('duplicate_error', 'The plate number is already registered under another violator.');
+        }
 
         // possibly create credentials
         if ($violator->wasRecentlyCreated) {
@@ -184,7 +194,7 @@ class TicketController extends Controller
                 ]);
             }
             // 4) Ticket – note: no more violation_codes JSON
-            return Ticket::create([
+            $t = Ticket::create([
                 'enforcer_id'            => $enf->id,
                 'ticket_number'          => $next,
                 'violator_id'            => $violator->id,
@@ -194,8 +204,13 @@ class TicketController extends Controller
                 'issued_at'              => now(),
                 'offline'                => false,
                 'status_id'              => TicketStatus::where('name','pending')->value('id'),
+                'latitude'               => $d['latitude'] ?? null,
+                'longitude'              => $d['longitude'] ?? null,
                 'confiscation_type_id'   => $d['confiscation_type_id'],
             ]);
+
+            $t->flags()->sync($d['flags'] ?? []);
+            return $t;
         });
 
         // 5) Attach violations via pivot
@@ -206,14 +221,6 @@ class TicketController extends Controller
                          ->all();
 
         $ticket->violations()->sync($violationIds);
-
-        // 6) Sync boolean flags (resident, impounded)
-        $flagKeys = [];
-        if ($resident)  $flagKeys[] = 'is_resident';
-        if ($impounded) $flagKeys[] = 'is_impounded';
-
-        $flagIds = Flag::whereIn('key',$flagKeys)->pluck('id')->all();
-        $ticket->flags()->sync($flagIds);
 
         // 7) Last apprehended before this ticket
         $prev = Ticket::where('violator_id',$violator->id)
@@ -240,8 +247,9 @@ class TicketController extends Controller
                 'location'            => $ticket->location,
                 'status'              =>  optional($ticket->status)->name      ?? 'Unknown',
                 'confiscated'         =>  optional($ticket->confiscationType)->name ?? 'None',
-                'is_impounded'        => $ticket->is_impounded ? 'Yes' : 'No',
-                'is_resident'         => $ticket->is_resident  ? 'Yes' : 'No',
+                'is_impounded'        => (bool) $ticket->is_impounded,
+                'is_resident'         => (bool) $ticket->is_resident,
+                'flags'               => $ticket->flags->pluck('key')->all(),
             ],
             'last_apprehended_at' => $lastAt,
             'enforcer' => [
@@ -250,7 +258,9 @@ class TicketController extends Controller
                 'badge_num' => auth()->guard('enforcer')->user()->badge_num,
             ],
             'violator' => [
-                'name'           => $violator->name,
+                'first_name'    => $violator->first_name,
+                'middle_name'   => $violator->middle_name,
+                'last_name'     => $violator->last_name,
                 'address'        => $violator->address,
                 'birthdate'      => $violator->birthdate,
                 'license_number'=> $violator->license_number,
@@ -273,8 +283,13 @@ class TicketController extends Controller
     public function show(string $id)
     {
         $violators = Violator::with([
+            // load all vehicles (for your "Add Violation" dropdown)
             'vehicles',
-            'tickets' => fn($q) => $q->orderBy('issued_at','desc')
+            // load tickets *and* for each, load its vehicle, ordered by issued_at
+            'tickets' => function($q) {
+                $q->with('vehicle')
+                ->orderBy('issued_at','desc');
+            }
         ])->findOrFail($id);
 
         return view('enforcer.violatorDetails', compact('violators'));

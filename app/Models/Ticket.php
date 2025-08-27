@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\Violator;
 use App\Models\Enforcer;
 use App\Models\Violation;
+use App\Models\PaidTicket;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Notifications\Notifiable;
@@ -27,7 +28,10 @@ class Ticket extends Model
         'status_id',
         'confiscation_type_id',
     ];
-
+    protected $appends = [
+        'is_impounded',
+        'is_resident',
+    ];
     protected $casts = [
         'violation_codes' => 'array',
         'offline' => 'boolean',
@@ -54,10 +58,18 @@ class Ticket extends Model
     {
         return $this->belongsTo(ConfiscationType::class, 'confiscation_type_id');
     }
+    public function releasedVehicle()
+    {
+    return $this->hasOne(ReleasedVehicle::class);
+    }
 
     public function enforcer()
     {
         return $this->belongsTo(Enforcer::class);
+    }
+    public function admin()
+    {
+        return $this->belongsTo(Admin::class);
     }
     public function vehicle()
     {
@@ -79,33 +91,38 @@ class Ticket extends Model
             'violation_id'
         );
     }
+    public function paidTickets()
+    {
+        return $this->hasMany(PaidTicket::class, 'ticket_id');
+    }
     public function getViolationNamesAttribute(): string
     {
         // if your column is JSON: it's already an array
         // if it's comma-separated, you can json_decode or explode(',',$this->violation_codes)
-        $raw = $this->getAttribute('violation_codes');
+        $raw = $this->violation_codes;
 
-        if (! $raw || trim($raw) === '') {
+    // 2) If it somehow isn’t an array, force-explode it
+    if (! is_array($raw)) {
+        $raw = (string) $raw;
+        if (trim($raw) === '') {
             return '';
         }
-
-        // 2) Decode if JSON, otherwise split CSV
-        if (Str::startsWith(trim($raw), '[')) {
-            $codes = json_decode($raw, true) ?: [];
-        } else {
-            $codes = array_filter(array_map('trim', explode(',', $raw)));
-        }
-
-        if (empty($codes)) {
-            return '';
-        }
-
-        // 3) Lookup names in one query
-        $names = Violation::whereIn('violation_code', $codes)
-                          ->pluck('violation_name')
-                          ->toArray();
-
-        return implode(', ', $names);
+        // JSON string? or comma list?
+        $codes = Str::startsWith(trim($raw), '[')
+            ? (json_decode($raw, true) ?: [])
+            : array_filter(array_map('trim', explode(',', $raw)));
+    } else {
+        // Already an array: just strip out any blank entries
+        $codes = array_filter($raw, fn($v) => trim((string)$v) !== '');
     }
 
+    if (empty($codes)) {
+        return '';
+    }
+
+    // 3) Now $codes is guaranteed to be an array!
+    return Violation::whereIn('violation_code', $codes)
+                    ->pluck('violation_name')
+                    ->implode(', ');
+    }
 }

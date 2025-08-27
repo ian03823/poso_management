@@ -6,6 +6,12 @@ use Illuminate\Http\Request;
 use App\Models\Violator;
 use App\Models\Ticket;
 use App\Models\Vehicle;
+use App\Models\TicketStatus;
+use App\Models\PaidTicket;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+
 
 class ViolatorTableController extends Controller
 {
@@ -188,5 +194,63 @@ class ViolatorTableController extends Controller
         $vehicleTypes = Vehicle::distinct()->pluck('vehicle_type');
 
         return view('admin.partials.violatorTable', compact('tickets'));
+    }
+    public function updateStatus(Request $request, Ticket $ticket)
+    {
+
+        Log::info('updateStatus', [
+            'ticket'  => $ticket->id,
+            'request' => $request->all(),
+        ]);
+
+        $newStatus = $request->input('status_id');
+        $paidId    = TicketStatus::where('name','paid')->value('id');
+        $oldStatus = $ticket->status_id;
+
+        // 1) If changing *from* Paid → something else, require password
+        if ($oldStatus === $paidId && $newStatus !== $paidId) {
+            $request->validate([
+                'admin_password' => 'required|string',
+            ]);
+
+             $admin = Auth::guard('admin')->user(); // ensure this is your admin guard
+            if (! Hash::check($request->admin_password, $admin->password)) {
+                return response()->json(
+                ['message'=>'Incorrect password'],
+                403
+                );
+            }
+
+             $latestPayment = PaidTicket::where('ticket_id', $ticket->id)
+                                   ->orderBy('paid_at', 'desc')
+                                   ->first();
+             if ($latestPayment) {
+                $latestPayment->delete();
+                Log::info('Deleted single PaidTicket', ['id' => $latestPayment->id]);
+            }
+        }
+
+        if ($newStatus == $paidId) {
+            $request->validate([
+                'reference_number' => 'required|string|unique:paid_tickets,reference_number',
+            ]);
+
+            $payment = PaidTicket::create([
+                'ticket_id'        => $ticket->id,
+                'reference_number' => $request->reference_number,
+                'paid_at'          => now(),
+            ]);
+
+            Log::info('PaidTicket created', ['id' => $payment->id]);
+        }
+
+        $ticket->status_id = $newStatus;
+        $ticket->save();
+
+        return response()->json([
+            'message' => $newStatus == $paidId
+               ? 'Ticket marked as Paid.'
+               : 'Status updated successfully.'
+        ]);
     }
 }

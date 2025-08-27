@@ -7,17 +7,20 @@
     <!-- Summary Cards -->
     <div class="row g-4 mb-5">
       <div class="col-md-4">
-        <div class="card text-white bg-primary h-100">
-          <div class="card-body d-flex align-items-center">
-            <i class="bi bi-receipt-cutoff display-4 me-3"></i>
-            <div>
-              <h6 class="card-title">Total Issued Ticket</h6>
-              <h2>{{ $ticketCount }}</h2>
+        <a href="{{ url('/ticket') }}" class="text-decoration-none" data-ajax>
+          <div class="card text-white bg-primary h-100">
+            <div class="card-body d-flex align-items-center">
+              <i class="bi bi-receipt-cutoff display-4 me-3"></i>
+              <div>
+                <h6 class="card-title">Total Issued Ticket</h6>
+                <h2>{{ $ticketCount }}</h2>
+              </div>
             </div>
           </div>
-        </div>
+        </a>
       </div>
       <div class="col-md-4">
+        <a href="{{url('/enforcer') }}" class="text-decoration-none" data-ajax>
         <div class="card text-white bg-success h-100">
           <div class="card-body d-flex align-items-center">
             <i class="bi bi-person-badge display-4 me-3"></i>
@@ -27,8 +30,10 @@
             </div>
           </div>
         </div>
+      </a>
       </div>
       <div class="col-md-4">
+        <a href="{{ url('/violatorTable') }}" class="text-decoration-none" data-ajax>
         <div class="card text-white bg-warning h-100">
           <div class="card-body d-flex align-items-center">
             <i class="bi bi-person-vcard display-4 me-3"></i>
@@ -38,20 +43,37 @@
             </div>
           </div>
         </div>
+        </a>
       </div>
     </div>
-  
+
+    {{-- <div class="row mt-3 ">
+        <div class="col-md-4">
+        <a href="{{ url('/violatorTable') }}" class="text-decoration-none" data-ajax>
+        <div class="card text-white bg-info h-100">
+          <div class="card-body d-flex align-items-center">
+            <i class="bi bi-person-vcard display-4 me-3"></i>
+            <div>
+              <h6 class="card-title">Total Impounded Vehicle</h6>
+              <h2>{{ $violatorCount }}</h2>
+            </div>
+          </div>
+        </div>
+        </a>
+      </div>
+    </div>
+   --}}
     <!-- Recent Violators & Tickets -->
     <div class="row">
       <!-- Recent Violators -->
-      <div class="col-lg-6 mb-4">
+      <div class="col-lg-6 mb-4 mt-3">
         <div class="card h-100 shadow-sm">
           <div class="card-header bg-white d-flex align-items-center justify-content-between">
             <h5 class="mb-0">
                 <i class="bi bi-person-lines-fill me-2"></i>
                 Recent Violators
             </h5>
-            <a href="{{ url('/violator') }}" class="small text-decoration-none text-left" data-ajax>
+            <a href="{{ url('/violatorTable') }}" class="small text-decoration-none text-left" data-ajax>
                 View more
               </a>
           </div>
@@ -67,7 +89,7 @@
               <tbody>
                 @forelse($recentViolators as $v)
                   <tr>
-                    <td>{{ $v->name }}</td>
+                    <td>{{ $v->first_name }} {{ $v->middle_name }} {{ $v->last_name }}</td>
                     <td>{{ $v->license_number }}</td>
                     <td>{{ $v->created_at->format('d M Y') }}</td>
                   </tr>
@@ -83,7 +105,7 @@
       </div>
   
       <!-- Recent Tickets -->
-      <div class="col-lg-6 mb-4">
+      <div class="col-lg-6 mb-4 mt-3">
         <div class="card h-100 shadow-sm">
           <div class="card-header bg-white d-flex align-items-center justify-content-between">
             <h5 class="mb-0">
@@ -108,9 +130,9 @@
                 @forelse($recentTickets as $t)
                   <tr>
                     <td>{{ $t->ticket_number }}</td>
-                    <td>{{ $t->violator->name }}</td>
+                    <td>{{ $t->violator->first_name }} {{ $t->violator->middle_name }} {{ $t->violator->last_name }}</td>
                     <td>{{ $t->enforcer->fname.' '.$t->enforcer->lname }}</td>
-                    <td>{{ \Carbon\Carbon::parse($t->issued_at)->format('d M Y, H:i') }}</td>
+                    <td>{{ \Carbon\Carbon::parse($t->issued_at)->format('d M Y, g:i A') }}</td>
                   </tr>
                 @empty
                   <tr>

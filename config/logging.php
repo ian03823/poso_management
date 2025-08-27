@@ -126,6 +126,17 @@ return [
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],
+        'enforcer' => [
+        'driver' => 'single',
+        'path' => storage_path('logs/enforcer.log'),
+        'level' => 'info',
+        ],
+
+        'admin' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/admin.log'),
+            'level' => 'info',
+        ],
 
     ],
 

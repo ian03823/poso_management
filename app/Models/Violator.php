@@ -18,6 +18,9 @@ class Violator extends Authenticatable
 
     protected $fillable = [
         'name', 
+        'first_name',
+        'middle_name',
+        'last_name',
         'address',
         'birthdate',
         'license_number', 

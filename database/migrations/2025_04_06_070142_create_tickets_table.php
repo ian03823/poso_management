@@ -19,9 +19,6 @@ return new class extends Migration
             $table->json('violation_codes');
             $table->string('location');
             $table->timestamp('issued_at')->useCurrent();
-            $table->enum('status', ['pending', 'paid', 'contested'])->default('pending');
-            $table->boolean('offline')->default(false);
-            $table->enum('confiscated', ['none', 'License ID', 'Plate Number', 'ORCR', 'TCT/TOP'])->default('none');
             $table->timestamps();
             
             $table->foreign('enforcer_id')->references('id')->on('enforcers')->onDelete('cascade');

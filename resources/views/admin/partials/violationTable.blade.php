@@ -29,11 +29,11 @@
                 Edit
               </a>
 
-            <form action="violation/{{ $violations->id }}" method="POST" class="d-inline">
+            <form action="{{ route('violation.destroy', $violations->id) }}" method="POST" class="d-inline">
               @csrf
               @method('DELETE')
-              <button type="submit" class="btn btn-danger btn-sm delete-btn" data-name="{{ $violations->violation_name }} Violation">
-                Delete</button>
+              <button type="submit" class="btn btn-danger btn-sm archive-btn" data-name="{{ $violations->violation_name }} Violation">
+                 <i class="bi bi-archive"></i>Archive</button>
             </form>
           </td>
         </tr>

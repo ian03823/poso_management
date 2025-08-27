@@ -1,8 +1,9 @@
 // public/js/enforcer.js
 (function($){
-  const container      = $('#enforcerContainer');    // main wrapper
-  const tableContainer = $('#table-container');      // where the <table> lives
+  const container      = $('#enforcerContainer'); // main wrapper
+  const tableContainer = $('#table-container');   // where the <table> lives
   const partialRoute   = '/enforcer/partial';
+
 
   //
   // ——— SPA‐style navigation: Add / Back / popstate —————————————————————————
@@ -71,64 +72,74 @@
 
 
   //
-  // ——— Table filtering: sort / search / pagination ——————————————————————
+  // ——— Table loading with safe defaults —————————————————————————————————
   //
-  const $sort   = $('#sort_table');
-  const $search = $('#search_input');
-  const $btn    = $('#search_btn');
+  function loadTable(page = '1', push = true) {
+    // grab current controls *each time*, so they exist even after a DOM swap
+    const sortEl   = $('#sort_table');
+    const searchEl = $('#search_input');
 
-  function getParams() {
-    const p = new URLSearchParams(window.location.search);
-    return {
-      sort:   p.get('sort_option') || 'date_desc',
-      search: p.get('search')      || '',
-      page:   p.get('page')        || '1',
-    };
-  }
-
-  function updateUrl(sort, search, page){
-    const p = new URLSearchParams();
-    if (sort   && sort!=='date_desc') p.set('sort_option', sort);
-    if (search && search!=='')        p.set('search', search);
-    if (page   && page!=='1')         p.set('page', page);
-    history.pushState(null,'',`${window.location.pathname}?${p}`);
-  }
-
-  function loadTable(page='1', push=true){
-    const sort   = $sort.val();
-    const search = $search.val().trim();
+    const sort   = sortEl.length   ? sortEl.val()               : 'date_desc';
+    const search = searchEl.length ? (searchEl.val() ?? '').trim() : '';
 
     $.ajax({
       url: partialRoute,
       data: { sort_option: sort, search, page },
       headers: { 'X-Requested-With':'XMLHttpRequest' },
-      success(html){
+      success(html) {
         tableContainer.html(html);
-        if (push) updateUrl(sort, search, page);
+
+        if (push) {
+          const p = new URLSearchParams();
+          if (sort   !== 'date_desc') p.set('sort_option', sort);
+          if (search !== '')           p.set('search', search);
+          if (page   !== '1')          p.set('page', page);
+          history.pushState(null,'', `${window.location.pathname}?${p}`);
+        }
       },
-      error(err){
-        console.error('Enforcer table load error',err);
+      error(err) {
+        console.error('Enforcer table load error', err);
       }
     });
   }
 
+
+  //
+  // ——— Initial load (on document ready) ————————————————————————————————
+  //
   $(function(){
-    const { sort, search, page } = getParams();
-    $sort.val(sort);
-    $search.val(search);
-    loadTable(page,false);
+    const params = new URLSearchParams(window.location.search);
+    const sort   = params.get('sort_option') || 'date_desc';
+    const search = params.get('search')      || '';
+    const page   = params.get('page')        || '1';
+
+    // seed the controls with URL values
+    $('#sort_table').val(sort);
+    $('#search_input').val(search);
+
+    loadTable(page, false);
   });
 
-  $sort.on('change', ()=> loadTable('1'));
-  $btn .on('click',  ()=> loadTable('1'));
-  $search.on('keypress', e => {
-    if (e.which===13) {
+
+  //
+  // ——— Delegated event bindings —————————————————————————————————————
+  //
+  // sort dropdown change
+  $(document).on('change', '#sort_table',      () => loadTable('1'));
+
+  // Go button click
+  $(document).on('click',  '#search_btn',      () => loadTable('1'));
+
+  // Enter key in search input
+  $(document).on('keypress','#search_input', e => {
+    if (e.which === 13) {
       e.preventDefault();
       loadTable('1');
     }
   });
 
-  tableContainer.on('click','.pagination a', function(e){
+  // pagination link click
+  $(document).on('click', '#table-container .pagination a', function(e){
     e.preventDefault();
     const newPage = new URL(this.href).searchParams.get('page') || '1';
     loadTable(newPage);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Violation;
 use Illuminate\View\View;
+use Illuminate\Support\Facades\DB;
 
 class ViolationController extends Controller
 {
@@ -57,8 +58,18 @@ class ViolationController extends Controller
     public function create(Request $request)
     {
         //
+       $lastViolation = Violation::where('violation_code', 'like', 'V%')
+        ->orderByDesc(DB::raw('CAST(SUBSTRING(violation_code, 2) AS UNSIGNED)'))
+        ->first();
+
+        if ($lastViolation) {
+            $lastNumber = (int)substr($lastViolation->violation_code, 1); // remove 'V'
+            $nextViolation = 'V' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+        } else {
+            $nextViolation = 'V001';
+        }
         if ($request->ajax()) {
-            return view('admin.violation.addViolation');
+            return view('admin.partials.addViolation', compact('nextViolation'));
         }
         return view('admin.violation.addViolation');
     }
@@ -143,7 +154,8 @@ class ViolationController extends Controller
         //
         $violation = Violation::findOrfail($id);
         $violation->delete();
-        return redirect('/violation')->with('success','Violation Deleted Succesfully');
+        
+        return redirect('/violation')->with('success','Violation archived succesfully');
     }
     public function partial(Request $request)
     {

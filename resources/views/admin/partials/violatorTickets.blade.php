@@ -20,7 +20,7 @@
             <td>{{ $t->id }}</td>
             <td>{{ $t->issued_at->format('d M Y') }}</td>
             <td>{{ optional($t->vehicle)->plate_number ?? '—' }}</td>
-            <td></td>
+            <td>{{ optional($t->vehicle)->vehicle_type ?? '—' }} </td>
             <td>
               {{ $t->violation_names }}
             </td>

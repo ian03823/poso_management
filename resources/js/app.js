@@ -1,6 +1,5 @@
 import './bootstrap';
 import '../css/app.css';
-
 // resources/js/app.js
 
 if ('serviceWorker' in navigator) {

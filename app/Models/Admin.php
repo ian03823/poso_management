@@ -21,4 +21,8 @@ class Admin extends Authenticatable
     protected $hidden = [
         'password',
     ];
+    public function tickets()
+    {
+        return $this->hasMany(Ticket::class);
+    }
 }

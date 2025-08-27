@@ -6,7 +6,7 @@
   data-url="{{ route('violatorTable.show', $violator->id) }}"
 >
   <a 
-    href="{{ route('enforcerTicket.create', ['violator_id' => $violator->id]) }}" 
+    href="{{ route('ticket.create', ['violator_id' => $violator->id]) }}" 
     class="btn btn-success mb-3">
     Add Violation
   </a>
@@ -14,7 +14,7 @@
   <h2 class="text-center">Violator’s Information</h2>
   <dl class="row p-3">
     <dt class="col-sm-3">Name</dt>
-    <dd class="col-sm-9">{{ $violator->name }}</dd>
+    <dd class="col-sm-9">{{ $violator->first_name }} {{ $violator->middle_name }} {{ $violator->last_name }}</dd>
 
     <dt class="col-sm-3">License Number</dt>
     <dd class="col-sm-9">{{ $violator->license_number }}</dd>
@@ -55,6 +55,7 @@
               <select
                 class="form-select form-select-sm status-select"
                 data-ticket-id="{{ $ticket->id }}"
+                data-current-status-id="{{ $ticket->status_id }}"
               >
                 @foreach(TicketStatus::all() as $status)
                   <option

@@ -1,104 +1,135 @@
 @extends('components.app')
 
-@section('title', 'POSO Enforcer Dashboard')
+@section('title', 'POSO Enforcer Management')
 
 @section('body')
-    
-  
-  <!-- Main Body -->
-  <div class="bg-white shadow-sm py-3">
-    <div class="container position-relative">
-      <div class="input-group mx-auto " style="max-width: 600px;">
+<div class="container-fluid bg-light min-vh-100 p-3">
+  <!-- Search Card -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <div class="input-group input-group-lg">
+        <span class="input-group-text bg-white border-0">
+          <i class="bi bi-search text-muted"></i>
+        </span>
         <input
           id="violator-search"
           type="text"
-          class="form-control border-0"
-          placeholder="Search"
-          aria-label="Search"
+          class="form-control border-0 rounded-end-pill"
+          placeholder="Search violators..."
           autocomplete="off"
+          aria-label="Search violators"
         >
-        <button class="btn btn-success" type="button" id="search-clear" disabled>
-          <i class="bi bi-search"></i>
+        <button
+          id="search-clear"
+          class="btn btn-outline-secondary ms-1 rounded-pill"
+          type="button"
+          disabled
+          aria-label="Clear search"
+        >
+          <i class="bi bi-x-lg"></i>
         </button>
-        
       </div>
-      <p class="text-sm text-center muted p-3 mt-4">Search by name, plate number, license number.</p>
-      
-
-      {{-- Suggestions dropdown --}}
+      <small class="text-muted d-block text-center mt-3">
+        Search by name · plate number · license number
+      </small>
       <div
         id="suggestions"
-        class="list-group position-absolute w-100"
-        style="z-index:1000; top: 4.5rem;"
+        class="list-group position-relative mt-2"
+        style="z-index:1000; max-height:250px; overflow-y:auto;"
       ></div>
     </div>
   </div>
 
-  <div class="my-5 text-center">
-    <a href="/enforcerTicket/create" class="btn btn-lg btn-success rounded-pill shadow-sm">
-      <i class="bi bi-ticket-perforated-fill me-2"></i> Issue a Ticket
+  <!-- Issue Ticket Button -->
+  <div class="text-center mb-5">
+    <a
+      href="{{ url('/enforcerTicket/create') }}"
+      class="btn btn-success btn-lg shadow-sm rounded-pill"
+    >
+      <i class="bi bi-ticket-perforated-fill me-2"></i>
+      Issue a Ticket
     </a>
   </div>
-  @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</div>
+
+@push('scripts')
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const input        = document.getElementById('violator-search');
-      const suggestions  = document.getElementById('suggestions');
-      const clearBtn     = document.getElementById('search-clear');
-      const suggestionsUrl = "{{ route('enforcer.violators.suggestions') }}";
-      let timer;
+document.addEventListener('DOMContentLoaded', () => {
+  const input       = document.getElementById('violator-search');
+  const suggestions = document.getElementById('suggestions');
+  const clearBtn    = document.getElementById('search-clear');
+  const url         = "{{ route('enforcer.violators.suggestions') }}";
+  let timer;
 
-      clearBtn.addEventListener('click', () => {
-        input.value = '';
-        suggestions.innerHTML = '';
-        input.focus();
-      });
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    clearBtn.disabled = true;
+    suggestions.innerHTML = '';
+    input.focus();
+  });
 
-      input.addEventListener('input', () => {
-        clearTimeout(timer);
-        const term = input.value.trim();
-        if (term.length < 2) {
+  input.addEventListener('input', () => {
+    const term = input.value.trim();
+    clearBtn.disabled = (term === '');
+    clearTimeout(timer);
+
+    if (term.length < 2) {
+      suggestions.innerHTML = '';
+      return;
+    }
+
+    timer = setTimeout(() => {
+      fetch(`${url}?q=${encodeURIComponent(term)}`, { credentials: 'same-origin' })
+        .then(res => {
+          if (!res.ok) throw new Error(res.status);
+          return res.json();
+        })
+        .then(data => {
           suggestions.innerHTML = '';
-          return;
-        }
-        timer = setTimeout(() => {
-          fetch(`${suggestionsUrl}?q=${encodeURIComponent(term)}`, {
-            credentials: 'same-origin'
-          })
-            .then(res => {
-              if (!res.ok) throw new Error(res.status);
-              return res.json();
-            })
-            .then(data => {
-              suggestions.innerHTML = '';
-              data.forEach(v => {
-                const a = document.createElement('a');
-                a.href      = `/violators/${v.id}`;
-                a.className = 'list-group-item list-group-item-action';
-                a.innerHTML = `<strong>${v.name}</strong><br>
-                               <small class="text-muted">
-                                 ${v.license_number} &middot; ${v.plate_number || '—'}
-                               </small>`;
-                suggestions.appendChild(a);
-              });
-            })
-            .catch(err => {
-              suggestions.innerHTML = 
-                `<div class="list-group-item text-danger">
-                   Error fetching results (${err.message})
-                 </div>`;
-            });
-        }, 300);
-      });
 
-      document.addEventListener('click', e => {
-        if (!suggestions.contains(e.target) && e.target !== input) {
-          suggestions.innerHTML = '';
-        }
-      });
-    });
-  </script>
+          if (data.length === 0) {
+            const noItem = document.createElement('div');
+            noItem.className = 'list-group-item list-group-item-warning text-center';
+            noItem.textContent = `No "${term}" violator found`;
+            suggestions.appendChild(noItem);
+            return;
+          }
+
+          data.forEach(v => {
+            // build the full name, skipping empty middle
+            const fullName = [v.first_name, v.middle_name, v.last_name]
+                               .filter(n => n && n.trim())
+                               .join(' ');
+
+            const a = document.createElement('a');
+            a.href      = `/violators/${v.id}`;
+            a.className = 'list-group-item list-group-item-action';
+            a.innerHTML = `
+              <strong>${fullName}</strong><br>
+              <small class="text-muted">
+                ${v.license_number} &middot; ${v.plate_number || '—'}
+              </small>
+            `;
+            suggestions.appendChild(a);
+          });
+        })
+        .catch(err => {
+          suggestions.innerHTML = `
+            <div class="list-group-item text-danger text-center">
+              Error fetching results (${err.message || err})
+            </div>
+          `;
+        });
+    }, 300);
+  });
+
+  // close suggestions when clicking elsewhere
+  document.addEventListener('click', e => {
+    if (!suggestions.contains(e.target) && e.target !== input) {
+      suggestions.innerHTML = '';
+    }
+  });
+});
+</script>
 @endpush
-  
 @endsection

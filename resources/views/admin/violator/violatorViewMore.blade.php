@@ -10,8 +10,6 @@
     </a>
 
 
-
-
     <div id="viewMoreTable">
         @include('admin.partials.violatorView')
     </div>

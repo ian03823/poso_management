@@ -6,7 +6,6 @@
 
 <div class="container-fluid">
     <h2 class="mb-3">Change Your Password</h2>
-    <h2>Change Your Password</h2>
     <form method="POST" action="{{ route('violator.password.update') }}">
         @csrf
         <div class="mb-3 form-group">
