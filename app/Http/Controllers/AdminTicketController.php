@@ -51,19 +51,23 @@ class AdminTicketController extends Controller
      */
     public function create(Request $request)
     {
-        $grouped = Violation::orderBy('category')
-        ->orderBy('violation_name')
-        ->get()
-        ->groupBy('category');
+        $grouped = \App\Models\Violation::orderBy('category')
+            ->orderBy('violation_name')
+            ->get()
+            ->groupBy('category');
 
         $violator = null;
         if ($request->filled('violator_id')) {
-        $violator = Violator::with('vehicles')
-        ->find($request->input('violator_id'));
-        }              
+            $violator = \App\Models\Violator::with('vehicles')->find($request->input('violator_id'));
+        }
+
+        // Let admin choose which Enforcer’s range to consume
+        $enforcers = \App\Models\Enforcer::orderBy('lname')->orderBy('fname')->get();
+
         return view('admin.issueTicket.createTicket', [
-        'violationGroups' => $grouped,
-        'violator'        => $violator,
+            'violationGroups' => $grouped,
+            'violator'        => $violator,
+            'enforcers'       => $enforcers,
         ]);
     }
 
@@ -74,37 +78,62 @@ class AdminTicketController extends Controller
     {
         //
         $d = $request->validate([
-            'name'           => 'required|string|max:255',
-            'address'        => 'required|string',
-            'birthdate'      => 'required|date',
-            'license_num'    => 'required|string|max:50',
-            'plate_num'      => 'required|string|max:50',
-            'vehicle_type'   => 'required|string',
-            'is_owner'       => 'sometimes|boolean',
-            'is_resident'    => 'sometimes|boolean',
-            'owner_name'     => 'nullable|string|max:255',
-            'violations'     => 'required|array|min:1',
-            'location'       => 'required|string',
-            'confiscated'    => 'required|in:none,License ID,Plate Number,ORCR,TCT/TOP',
-            'is_impounded'   => 'sometimes|boolean',
-        ]);
+        'apprehending_enforcer_id' => 'required|exists:enforcers,id',
+        'first_name'           => 'nullable|string|max:50',
+        'middle_name'          => 'nullable|string|max:50',
+        'last_name'            => 'nullable|string|max:50',
+        'address'              => 'nullable|string|min:2',
+        'birthdate'            => 'nullable|date',
+        'license_num'          => 'nullable|string|max:50|min:8',
+        'plate_num'            => 'required|string|max:50|min:5',
+        'vehicle_type'         => 'required|string',
+        'is_owner'             => 'sometimes|boolean',
+        'owner_name'           => 'nullable|string|max:255',
+        'violations'           => 'required|array|min:1',
+        'location'             => 'nullable|string',
+        'latitude'             => 'nullable|numeric',
+        'longitude'            => 'nullable|numeric',
+        'confiscation_type_id' => 'nullable|exists:confiscation_types,id',
+        'flags'                => 'array',
+        'flags.*'              => 'exists:flags,id',
+    ]);
 
-        $impounded = (bool) ($d['is_impounded'] ?? false);
-        $resident  = (bool) ($d['is_resident']  ?? false);
-
-        // 1) Violator
-        $violator = Violator::firstOrNew(
-            ['license_number' => $d['license_num']]
-        );
+        // Violator (same logic as Enforcer)
+        $violator = \App\Models\Violator::firstOrNew(['license_number' => $d['license_num']]);
         if (! $violator->exists) {
-            $violator->name      = $d['name'];
-            $violator->address   = $d['address'];
-            $violator->birthdate = $d['birthdate'];
+            $violator->first_name  = $d['first_name'];
+            $violator->middle_name = $d['middle_name'];
+            $violator->last_name   = $d['last_name'];
+            $violator->address     = $d['address'];
+            $violator->birthdate   = $d['birthdate'];
         }
         $violator->save();
 
-        // 2) Vehicle
-        $vehicle = Vehicle::firstOrCreate(
+        // Prevent plate number bound to a different violator
+        $existingPlate = \App\Models\Vehicle::where('plate_number', $d['plate_num'])->first();
+        if ($existingPlate && $existingPlate->violator_id !== $violator->id) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'The plate number is already registered under another violator.',
+                ], 422);
+            }
+            return back()->withInput()
+                ->with('duplicate_error', 'The plate number is already registered under another violator.');
+        }
+
+        // Auto-provision violator credentials if newly created (same as Enforcer)
+        if ($violator->wasRecentlyCreated) {
+            $violator->username = 'user'.rand(1000,9999);
+            $rawPwd             = \Illuminate\Support\Str::random(8);
+            $violator->defaultPassword = \Illuminate\Support\Facades\Hash::make($rawPwd);
+            $violator->save();
+            $creds = ['username'=>$violator->username, 'password'=>$rawPwd];
+        } else {
+            $creds = ['username'=>'Existing','password'=>'Existing'];
+        }
+
+        // Vehicle (match your PK naming; Enforcer code uses vehicle_id)
+        $vehicle = \App\Models\Vehicle::firstOrCreate(
             ['plate_number' => $d['plate_num']],
             [
                 'violator_id'  => $violator->id,
@@ -114,59 +143,87 @@ class AdminTicketController extends Controller
             ]
         );
 
-        // 3) Ticket
-        $ticket = Ticket::create([
-            'enforcer_id'     => Auth::guard('admin')->id(),
-            'violator_id'     => $violator->id,
-            'vehicle_id'      => $vehicle->id,
-            'violation_codes' => json_encode($d['violations']),
-            'location'        => $d['location'],
-            'issued_at'       => now(),
-            'status'          => 'pending',
-            'offline'         => false,
-            'confiscated'     => $d['confiscated'],
-            'is_impounded'    => $impounded,
-            'is_resident'     => $resident,
-        ]);
+        // Transaction to consume the chosen Enforcer’s ticket range (exactly like Enforcer flow)
+        $ticket = \Illuminate\Support\Facades\DB::transaction(function() use ($d, $violator, $vehicle) {
+            $enf = \App\Models\Enforcer::lockForUpdate()->find($d['apprehending_enforcer_id']);
 
-        // 4) Last apprehended before this
-        $prev = Ticket::where('violator_id',$violator->id)
-                      ->where('id','!=',$ticket->id)
-                      ->orderBy('issued_at','desc')
-                      ->first();
-        $lastAt = $prev
-            ? $prev->issued_at->format('d M Y, H:i')
-            : null;
+            $last = \App\Models\Ticket::where('enforcer_id', $enf->id)
+                        ->lockForUpdate()
+                        ->max('ticket_number');
 
-        // 5) Build violations payload
-        $violations = Violation::whereIn('violation_code', json_decode($ticket->violation_codes))
-                                ->get()
-                                ->map(fn($v) => [
-                                    'name' => $v->violation_name,
-                                    'fine' => number_format($v->fine_amount,2),
-                                ]);
+            $next = $last !== null ? $last + 1 : $enf->ticket_start;
 
-        // 6) Return JSON for SweetAlert + print
+            if ($next > $enf->ticket_end) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'ticket_number' => "Selected enforcer’s range exhausted ({$enf->ticket_start}–{$enf->ticket_end})."
+                ]);
+            }
+
+            $t = \App\Models\Ticket::create([
+                'enforcer_id'          => $enf->id,
+                'ticket_number'        => $next,
+                'violator_id'          => $violator->id,
+                'vehicle_id'           => $vehicle->vehicle_id ?? $vehicle->id, // keep compatibility
+                'violation_codes'      => json_encode($d['violations']),
+                'location'             => $d['location'],
+                'issued_at'            => now(),
+                'offline'              => false,
+                'status_id'            => \App\Models\TicketStatus::where('name','pending')->value('id'),
+                'latitude'             => $d['latitude'] ?? null,
+                'longitude'            => $d['longitude'] ?? null,
+                'confiscation_type_id' => $d['confiscation_type_id'],
+            ]);
+
+            $t->flags()->sync($d['flags'] ?? []);
+            return $t;
+        });
+
+        // Attach violations via pivot (same as your Enforcer comment)
+        $violationIds = \App\Models\Violation::whereIn('violation_code', $d['violations'])
+                            ->pluck('id')->all();
+        $ticket->violations()->sync($violationIds);
+
+        // Previous apprehension
+        $prev = \App\Models\Ticket::where('violator_id',$violator->id)
+                    ->where('id','!=',$ticket->id)
+                    ->orderBy('issued_at','desc')
+                    ->first();
+        $lastAt = $prev ? $prev->issued_at->format('d M Y, H:i') : null;
+
+        // Build response (mirror Enforcer response keys)
+        $violations = \App\Models\Violation::whereIn('violation_code', json_decode($ticket->violation_codes))
+                        ->get()
+                        ->map(fn($v) => [
+                            'name' => $v->violation_name,
+                            'fine' => $v->fine_amount,
+                        ]);
+
+        $issuingEnforcer = \App\Models\Enforcer::find($d['apprehending_enforcer_id']);
+
         return response()->json([
             'ticket' => [
-                'id'             => $ticket->id,
-                'issued_at'      => $ticket->issued_at->format('d M Y, H:i'),
-                'location'       => $ticket->location,
-                'confiscated'    => $ticket->confiscated,
-                'is_impounded'   => $ticket->is_impounded ? 'Yes' : 'No',
-                'is_resident'    => $ticket->is_resident,
+                'id'            => $ticket->id,
+                'ticket_number' => $ticket->ticket_number,
+                'issued_at'     => $ticket->issued_at->format('d M Y, H:i'),
+                'location'      => $ticket->location,
+                'status'        => optional($ticket->status)->name ?? 'Unknown',
+                'confiscated'   => optional($ticket->confiscationType)->name ?? 'None',
+                'is_impounded'  => (bool) $ticket->is_impounded, // also reflected via flags
+                'is_resident'   => (bool) $ticket->is_resident,  // also reflected via flags
+                'flags'         => $ticket->flags->pluck('key')->all(),
             ],
             'last_apprehended_at' => $lastAt,
             'enforcer' => [
-                'name'      => Auth::guard('admin')->user()->fname
-                               .' '.Auth::guard('admin')->user()->lname,
-                'badge_num' => Auth::guard('admin')->user()->badge_num,
+                'name'      => $issuingEnforcer->fname.' '.$issuingEnforcer->lname,
+                'badge_num' => $issuingEnforcer->badge_num,
             ],
             'violator' => [
-                'name'            => $violator->name,
-                'address'         => $violator->address,
-                'birthdate'       => $violator->birthdate,
-                'license_number'  => $violator->license_number,
+                'first_name'     => $violator->first_name,
+                'middle_name'    => $violator->middle_name,
+                'last_name'      => $violator->last_name,
+                'address'        => $violator->address,
+                'birthdate'      => $violator->birthdate,
+                'license_number' => $violator->license_number,
             ],
             'vehicle' => [
                 'plate_number' => $vehicle->plate_number,
@@ -175,10 +232,8 @@ class AdminTicketController extends Controller
                 'owner_name'   => $vehicle->owner_name,
             ],
             'violations'  => $violations,
-            'credentials' => $creds ?? ['username'=>'Existing','password'=>'Existing'],
+            'credentials' => $creds,
         ]);
-
-
     }
 
     /**

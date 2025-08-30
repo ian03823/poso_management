@@ -52,6 +52,13 @@ Route::middleware('admin')->group(function () {
     Route::get('/admin', [AdminDashboardController::class,'adminDash'])->name('admin.dashboard');
     Route::get('/admin/profile/update', [AdminDashboardController::class,'edit'])->name('admin.profile.edit');
     Route::put('/admin/profile/update', [AdminDashboardController::class,'update'])->name('admin.profile.update');
+
+    //Issue Ticket 
+    Route::get('/admin/tickets/create', [AdminTicketController::class, 'create'])
+        ->name('admin.tickets.create');
+    Route::post('/admin/tickets', [AdminTicketController::class, 'store'])
+        ->name('admin.tickets.store');
+        
     //Violation routes
     Route::get('/violation/partial', [ViolationController::class,'partial'])->name('violation.partial');
     Route::resource('violation', ViolationController::class); 
@@ -101,6 +108,20 @@ Route::middleware('violator')->group(function () {
     Route::get('/vdash', [ViolatorManagementController::class,'violatorDash'])->name('violator.dashboard');
     Route::get('/violator/password/change', [ViolatorAuthController::class, 'showChangePasswordForm'])->name('violator.password.change');
     Route::post('/violator/password/change', [ViolatorAuthController::class, 'changePassword'])->name('violator.password.update');
+});
+
+// Serve Tesseract assets with correct headers (fixes stuck OCR)
+Route::get('/wasm/tesseract-core.wasm', function () {
+    return response()->file(public_path('vendor/tesseract/tesseract-core.wasm'), [
+        'Content-Type' => 'application/wasm',
+        'Cache-Control' => 'public, max-age=31536000'
+    ]);
+});
+Route::get('/wasm/eng.traineddata.gz', function () {
+    return response()->file(public_path('vendor/tesseract/eng.traineddata.gz'), [
+        'Content-Type' => 'application/gzip',
+        'Cache-Control' => 'public, max-age=31536000'
+    ]);
 });
 
 //Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');

@@ -23,6 +23,9 @@
     <button type="button" class="btn btn-outline-success mb-3" data-bs-toggle="modal" data-bs-target="#scanIdModal" id="openScanId">
       <i class="bi bi-camera"></i> Scan ID
     </button>
+    <button type="button" class="btn btn-outline-primary btn-sm" id="fill-self-test">
+      Fill Self-Test
+    </button>
     {{-- Form Card --}}
     <div class="card mx-auto shadow-sm rounded-3 ticket-card" style="max-width: 800px;">
       <div class="card-body p-3 p-sm-4">
@@ -178,6 +181,33 @@
     </div>
   </div>
 
+  <!-- QR generator lib -->
+<script src="{{ asset('vendor/qrcode/qrcode.min.js') }}"></script>
+
+<!-- Minimal on-page test QR (static JSON) -->
+<div class="mt-3">
+  <img id="dev-qr" alt="dev qr" />
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // put the same JSON you want to scan
+    const payload = {
+      first_name: "JUAN",
+      middle_name: "SANTOS",
+      last_name: "DELA CRUZ",
+      address: "San Carlos City, Pangasinan",
+      license_number: "AB1-2345678"
+    };
+
+    // using qrcode@1.5: create a data URL, then set <img>.src
+    QRCode.toDataURL(JSON.stringify(payload), { width: 200 })
+      .then(url => { document.getElementById('dev-qr').src = url; })
+      .catch(err => console.error('QR gen error:', err));
+  });
+</script>
+
+  
+
 
   <div class="modal fade" id="scanIdModal" tabindex="-1" aria-labelledby="scanIdModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
@@ -255,5 +285,7 @@
   <script src="{{ asset('js/issueTicket.js') }}"></script>
   <script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}"></script>
   <script src="{{ asset('vendor/tesseract/tesseract.min.js') }}"></script>
-  <script src="{{ asset('js/id-scan.js?v=20250827') }}"></script>
+  <script src="{{ asset('js/id-scan.js') }}"></script>
+
+
 @endsection

@@ -6,7 +6,7 @@
 
   <a href="/ticket/create"
       class="btn btn-success mb-3" data-ajax>
-    <i class="bi bi-receipt-cutoff me-3"></i>Add Ticket
+    <i class="bi bi-receipt-cutoff me-3"></i>Cite A Ticket
   </a>
 
     <div id="ticket-sort-form" class="row mb-4">
