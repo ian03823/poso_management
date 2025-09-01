@@ -22,11 +22,15 @@ class Ticket extends Model
         'violator_id',
         'vehicle_id',
         'violation_codes',
-        'location',
+        'location', 
         'issued_at',
         'offline',
         'status_id',
+        'latitude',
+        'longitude',
         'confiscation_type_id',
+        'offline',
+        'admin_id'
     ];
     protected $appends = [
         'is_impounded',
@@ -38,6 +42,8 @@ class Ticket extends Model
         'issued_at' => 'datetime',
         'status_id'            => 'integer',
         'confiscation_type_id' => 'integer',
+        'latitude'  => 'float',
+        'longitude' => 'float',
     ];
     protected $with = ['status', 'confiscationType', 'violations', 'flags'];
 

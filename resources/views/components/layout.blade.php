@@ -11,8 +11,7 @@
     <script src="https://kit.fontawesome.com/7922e0fdab.js" crossorigin="anonymous"></script>
     <link rel="icon" type="image/png" sizes="32x32"
       href="{{ asset('POSO-Logo.png') }}">
-    @vite(['resources/css/app.css'])
-    @vite(['resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/analytics.js'])
 
 </head>
 <body>
@@ -146,12 +145,16 @@
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link  href="https://unpkg.com/leaflet/dist/leaflet.css" rel="stylesheet"/>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ asset('js/ajax.js') }}"></script>
     
     <script src="{{ asset('js/enforcer.js') }}" defer></script>
     <script src="{{ asset('js/ticketTable.js') }}" defer></script>
-    <script src="{{ asset('js/analytics.js') }}"></script>
+    
     @stack('scripts')
 </body>
 </html>

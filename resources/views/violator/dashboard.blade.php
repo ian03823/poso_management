@@ -86,7 +86,7 @@
   <span class="fab-pulse" aria-hidden="true"></span>
 </button>
 
-<div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+<div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" data-bs-theme="light">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
       <div class="modal-header border-0">
@@ -106,14 +106,11 @@
             <div class="small">Visit the POSO Office or contact support.</div>
             <div class="mt-2 d-flex flex-wrap gap-2">
               <a href="tel:+63-900-000-0000" class="btn btn-sm btn-outline-primary">
-                <i class="bi bi-telephone"></i> Call POSO
+                <i class="bi bi-telephone"></i> 0961-281-2756 
               </a>
               <a href="mailto:support@poso.gov.ph" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-envelope"></i> Email Support
+                <i class="bi bi-envelope"></i> poso@gmail.com
               </a>
-              <button id="copyPayInfo" class="btn btn-sm btn-outline-success">
-                <i class="bi bi-clipboard-check"></i> Copy payment info
-              </button>
             </div>
           </div>
         </div>
@@ -128,9 +125,8 @@
             </h2>
             <div id="faq1" class="accordion-collapse collapse show" aria-labelledby="faq1h" data-bs-parent="#faqAccordion">
               <div class="accordion-body">
-                You can pay at the <strong>Public Order and Safety Office (POSO)</strong>, City Hall compound, San Carlos City, Pangasinan.
+                You can pay at the <strong>Cashier Office at Municipal Hall</strong>, San Carlos City, Pangasinan.
                 Bring your ticket number and a valid ID. Office hours: <span id="officeHours">Mon–Fri, 8:00 AM–5:00 PM</span>.
-                <div class="small text-muted mt-2">*Update this to your official schedule/location if needed.</div>
               </div>
             </div>
           </div>
@@ -273,6 +269,25 @@
   #helpModal .modal-body {
     max-height: min(70vh, 650px);
     overflow-y: auto;
+  }
+  #helpModal .accordion-collapse {
+    will-change: height;
+    transform: translateZ(0);
+  }
+  #helpModal .modal-content { background-color:#fff; color:#212529; }
+  #helpModal .accordion-button:not(.collapsed) { background-color:#f8f9fa; color:#212529; }
+  #helpModal .accordion-body { background-color:#fff; color:#212529; }
+  #helpModal .accordion-collapse { will-change: height; transform: translateZ(0); }
+
+  /* Ensure the expanded panel actually shows even if a stale style lingers */
+  #helpModal .accordion-collapse.show {
+    display: block !important;
+    height: auto !important;
+    visibility: visible !important;
+  } 
+  #helpModal .accordion-collapse {
+    will-change: height;
+    transform: translateZ(0);
   }
 </style>
 

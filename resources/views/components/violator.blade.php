@@ -26,16 +26,16 @@
         <div class="fw-bold text-white">POSO Digital Ticket</div>
       
         @auth('violator')
-          <button class="btn btn-outline-light" type="button" data-bs-toggle="offcanvas"
-            data-bs-target="#offcanvasMenu"
-            aria-controls="offcanvasMenu">
-            <i class="fa-solid fa-bars"></i>
-          </button>
+          <form method="POST" action="{{ route('violator.logout') }}">
+              @csrf
+              <button type="submit" class="btn btn-danger"><i class="fa-solid fa-right-from-bracket me-2"></i></button>
+            </form>
         @endauth
       </header>
       
       @auth('violator')
-        <!-- offcanvas panel -->
+        <!-- Logout form -->
+        {{-- <!-- offcanvas panel -->
         <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasMenu"
           aria-labelledby="offcanvasMenuLabel">
           <div class="offcanvas-header">
@@ -49,16 +49,9 @@
               Profile
             </a>
       
-            <!-- Logout form -->
-            <form method="POST" action="{{ route('violator.logout') }}">
-              @csrf
-              <button type="submit" class="btn btn-danger w-100 mt-3"
-              ><i class="fa-solid fa-right-from-bracket me-2"></i>
-                Log out
-              </button>
-            </form>
+            
           </div>
-        </div>
+        </div> --}}
       @endauth
       
     
@@ -67,7 +60,7 @@
 
         @stack('scripts')
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        
         <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </body>
 </html>

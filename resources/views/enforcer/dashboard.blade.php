@@ -4,6 +4,28 @@
 
 @section('body')
 <div class="container-fluid bg-light min-vh-100 p-3">
+  <!-- Enforcer's Information Card -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <div class="row gx-2 gy-2">
+        <div class="col-12 d-flex align-items-center">
+          <i class="bi bi-person-circle fs-4 me-2"></i>
+          {{-- Enforcer's Full Name --}}
+          <span class="fw-semibold">Name: {{ auth()->guard('enforcer')->user()->fname }} {{ auth()->guard('enforcer')->user()->lname }} </span> 
+        </div>
+        <div class="col-12 d-flex align-items-center">
+          <i class="bi-ticket fs-4 me-2"></i>
+          {{-- Enforcer's Ticket Range (But include the used to ticket number) --}}
+          <span class="fw-semibold">Badge No.: {{ auth()->guard('enforcer')->user()->badge_num }}</span>
+        </div>
+        <div class="col-12 d-flex align-items-center">
+          {{-- Enforcer's Address--}}
+          <i class="bi bi-geo-alt-fill fs-4 me-2"></i>
+          <span class="fw-semibold">Address:</span>
+        </div>
+      </div>
+    </div>
+  </div>
   <!-- Search Card -->
   <div class="card shadow-sm mb-4">
     <div class="card-body">

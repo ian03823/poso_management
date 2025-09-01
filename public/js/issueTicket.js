@@ -61,6 +61,7 @@ window.addEventListener('online', () => {
   if (typeof syncOfflineTickets === 'function') syncOfflineTickets();
 });
 
+
 // -------- Violations category & checklist --------
 const selectEl    = document.getElementById('categorySelect');
 const containerEl = document.getElementById('violationsContainer');
@@ -107,6 +108,36 @@ async function syncOfflineTickets() {
     }
   }
 }
+function getCurrentPositionOnce(opts = { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }) {
+  return new Promise((resolve, reject) => {
+    if (!('geolocation' in navigator)) return reject(new Error('Geolocation not supported'));
+    navigator.geolocation.getCurrentPosition(resolve, reject, opts);
+  });
+}
+async function ensureGpsFields() {
+  const latEl = document.getElementById('latitude');
+  const lngEl = document.getElementById('longitude');
+  if (latEl.value && lngEl.value) return true; // already set
+
+  try {
+    const pos = await getCurrentPositionOnce();
+    latEl.value = pos.coords.latitude;
+    lngEl.value = pos.coords.longitude;
+    return true;
+  } catch (e) {
+    // Let the enforcer choose: continue without GPS or cancel
+    const { isConfirmed } = await Swal.fire({
+      icon: 'warning',
+      title: 'GPS not available',
+      html: 'Allow location or move to an open area. Continue without coordinates?',
+      showCancelButton: true,
+      confirmButtonText: 'Continue',
+      cancelButtonText: 'Cancel'
+    });
+    return isConfirmed;
+  }
+}
+
 
 // -------- Form submission (online/offline) --------
 document.getElementById('ticketForm')

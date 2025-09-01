@@ -97,6 +97,10 @@ Route::middleware('admin')->group(function () {
 
     Route::get('dataAnalytics/latest', [AnalyticsController::class,'latest'])
         ->name('dataAnalytics.latest');
+    // NEW: list tickets near a hotspot (for the modal)
+    Route::get('dataAnalytics/hotspotTickets', [AnalyticsController::class,'hotspotTickets'])
+        ->name('dataAnalytics.hotspotTickets');
+    
 
     // On-demand report downloads
     Route::get('reports/download/{format}', [AnalyticsController::class,'download'])
