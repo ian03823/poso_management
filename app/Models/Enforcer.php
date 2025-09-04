@@ -25,6 +25,11 @@ class Enforcer extends Authenticatable
         'ticket_start',
         'ticket_end',
     ];
+    protected $casts = [
+        'failed_attempts' => 'integer',
+        'lockouts_count'  => 'integer',
+        'lockout_until'   => 'datetime',
+    ];
     protected $hidden = [
         'password',
         'defaultPassword',

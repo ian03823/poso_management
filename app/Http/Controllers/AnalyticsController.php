@@ -6,8 +6,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use PhpOffice\PhpWord\TemplateProcessor;
-use App\Exports\SimpleStatsExport;
+use App\Exports\SimpleStatsExport;  
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\SimpleType\Jc;
+use PhpOffice\PhpWord\Shared\Html;
 use Carbon\Carbon;
 
 class AnalyticsController extends Controller
@@ -125,103 +128,163 @@ class AnalyticsController extends Controller
         return [$f, $t];
     }
 
-    public function download($format)
+    public function download(Request $request, $format)
     {
-        // Basic counts
-        $paid   = DB::table('tickets')->where('status_id', 2)->count();
-        $unpaid = DB::table('tickets')->where('status_id', 1)->count();
+        // ---- Parse filters (reuse your helper; if missing, paste the parseDateRange() from earlier) ----
+        [$from, $to] = $this->parseDateRange($request->input('from'), $request->input('to'));
+        $status = strtolower((string)$request->input('status', '')); // '', 'paid', 'unpaid'
+        $violationCodes = collect($request->input('violations', []))
+            ->filter(fn($v) => trim($v) !== '')
+            ->map(fn($v) => strtoupper(trim((string)$v)))
+            ->values();
+
+        $q = DB::table('tickets')->whereBetween('issued_at', [$from, $to]);
+
+        if ($status === 'paid')   $q->where('status_id', 2);
+        if ($status === 'unpaid') $q->where('status_id', 1);
+
+        if ($violationCodes->isNotEmpty()) {
+            $q->where(function($sub) use ($violationCodes) {
+                foreach ($violationCodes as $code) {
+                    $sub->orWhereRaw("FIND_IN_SET(?, REPLACE(tickets.violation_codes,' ',''))", [$code]);
+                }
+            });
+        }
+
+        $paid   = (clone $q)->where('status_id', 2)->count();
+        $unpaid = (clone $q)->where('status_id', 1)->count();
         $total  = $paid + $unpaid;
 
-        // Hotspots by named location (used for Excel + suggestions)
-        $hotspots = DB::table('tickets')
-            ->selectRaw('location AS area, COUNT(*) AS c')
-            ->groupBy('location')
+        // Hotspots by human area (good for tabular reporting)
+        $hotspots = (clone $q)
+            ->selectRaw('COALESCE(location,"Unknown") AS area, COUNT(*) AS c')
+            ->groupBy('area')
             ->orderByDesc('c')
             ->get();
 
-        // --- Time window: current vs previous month
-        $startThis = Carbon::now()->startOfMonth();
-        $endThis   = Carbon::now()->endOfMonth();
-        $startPrev = Carbon::now()->subMonth()->startOfMonth();
-        $endPrev   = Carbon::now()->subMonth()->endOfMonth();
-
-        $countThisMonth = DB::table('tickets')
-            ->whereBetween('issued_at', [$startThis, $endThis])
-            ->count();
-
-        $countPrevMonth = DB::table('tickets')
-            ->whereBetween('issued_at', [$startPrev, $endPrev])
-            ->count();
-
-        $trendPct = ($countPrevMonth > 0)
-            ? round((($countThisMonth - $countPrevMonth) / $countPrevMonth) * 100, 1)
-            : null;
-
-        // Peak day of week this month
-        $peakDay = DB::table('tickets')
-            ->selectRaw('DAYNAME(issued_at) as d, COUNT(*) as c')
-            ->whereBetween('issued_at', [$startThis, $endThis])
-            ->groupBy('d')->orderByDesc('c')->first();
-
-        // Peak hour this month
-        $peakHour = DB::table('tickets')
-            ->selectRaw('HOUR(issued_at) as h, COUNT(*) as c')
-            ->whereBetween('issued_at', [$startThis, $endThis])
-            ->groupBy('h')->orderByDesc('c')->first();
+        // Meta
+        $tz    = 'Asia/Manila';
+        $now   = now()->setTimezone($tz);
+        $cover = $from->format('Y-m-d') . ' to ' . $to->format('Y-m-d');
+        $genOn = $now->format('F d, Y h:i A');
 
         if ($format === 'xlsx') {
-            return Excel::download(
-                new \App\Exports\SimpleStatsExport(compact('paid','unpaid','hotspots')),
-                'POSO Monthly Excel Report.xlsx'
-            );
+            // --- EXCEL (styled) ---
+            $export = new \App\Exports\FormalStatsExport([
+                'paid'    => $paid,
+                'unpaid'  => $unpaid,
+                'total'   => $total,
+                'hotspots'=> $hotspots,
+                'cover'   => $cover,
+                'generated_on' => $genOn,
+            ]);
+            $fname = 'POSO_Analytics_' . $now->format('Ymd_His') . '.xlsx';
+            return Excel::download($export, $fname);
         }
 
-        // --- Build smarter suggestions
-        $lines = [];
+        // --- WORD (header with background, footer, tables) ---
+        $phpWord = new PhpWord();
+        $phpWord->getSettings()->setThemeFontLang(new \PhpOffice\PhpWord\Style\Language(\PhpOffice\PhpWord\Style\Language::EN_US));
+        $phpWord->setDefaultFontName('Calibri');
+        $phpWord->setDefaultFontSize(11);
 
+        $section = $phpWord->addSection([
+            'marginTop'    => 900,
+            'marginBottom' => 900,
+            'marginLeft'   => 1000,
+            'marginRight'  => 1000,
+        ]);
+
+        // Header (green background with white text). Optional logo if present.
+        $header = $section->addHeader();
+        $tableH = $header->addTable(['borderSize'=>0, 'cellMargin'=>80, 'width'=>100*50]);
+        $rowH   = $tableH->addRow();
+        $cellH  = $rowH->addCell(100*50, ['bgColor'=>'1B5E20']); // POSO green
+        $tr     = $cellH->addTextRun(['alignment'=>Jc::CENTER]);
+        // If you placed a logo at resources/reports/logo.png, uncomment:
+        // $cellH->addImage(resource_path('reports/logo.png'), ['height'=>24, 'alignment'=>Jc::CENTER]);
+        $tr->addText('Public Order and Safety Office (POSO)', ['bold'=>true,'color'=>'FFFFFF','size'=>12]);
+        $tr->addText('Digital Ticketing — Analytics Report',  ['color'=>'FFFFFF','size'=>10]);
+
+        // Footer (page x of y)
+        $footer = $section->addFooter();
+        $footer->addPreserveText('Page {PAGE} of {NUMPAGES}', ['size'=>9], ['alignment'=>Jc::CENTER]);
+
+        // Title block
+        $section->addTextBreak(1);
+        $section->addText('Analytics Insights', ['bold'=>true,'size'=>16], ['alignment'=>Jc::CENTER]);
+        $section->addText("Coverage: {$cover}    |    Generated: {$genOn}", ['color'=>'555555'], ['alignment'=>Jc::CENTER]);
+        $section->addTextBreak(1);
+
+        // Metrics table
+        $table = $section->addTable([
+            'alignment' => Jc::CENTER,
+            'cellMargin'=> 80,
+            'borderColor' => 'DDDDDD',
+            'borderSize'  => 6,
+            'width'       => 100*50,
+        ]);
+        $row = $table->addRow();
+        $row->addCell(5000, ['bgColor'=>'F2F2F2'])->addText('Metric', ['bold'=>true]);
+        $row->addCell(5000, ['bgColor'=>'F2F2F2'])->addText('Value',  ['bold'=>true]);
+
+        $table->addRow(); $table->addCell(5000)->addText('Paid Tickets');   $table->addCell(5000)->addText((string)$paid);
+        $table->addRow(); $table->addCell(5000)->addText('Unpaid Tickets'); $table->addCell(5000)->addText((string)$unpaid);
+        $table->addRow(); $table->addCell(5000)->addText('Total Tickets');  $table->addCell(5000)->addText((string)$total);
+
+        $section->addTextBreak(1);
+
+        // Hotspots table (top 10)
+        $section->addText('Top Hotspots (by location)', ['bold'=>true,'size'=>12]);
+        $table2 = $section->addTable([
+            'alignment' => Jc::LEFT,
+            'cellMargin'=> 80,
+            'borderColor' => 'DDDDDD',
+            'borderSize'  => 6,
+            'width'       => 100*50,
+        ]);
+        $r = $table2->addRow();
+        $r->addCell(7000, ['bgColor'=>'F2F2F2'])->addText('Area', ['bold'=>true]);
+        $r->addCell(3000, ['bgColor'=>'F2F2F2'])->addText('Tickets', ['bold'=>true]);
+
+        if ($hotspots->isEmpty()) {
+            $table2->addRow();
+            $table2->addCell(7000)->addText('No geo-tagged tickets in this coverage.');
+            $table2->addCell(3000)->addText('-');
+        } else {
+            foreach ($hotspots->take(10) as $h) {
+                $row = $table2->addRow();
+                $row->addCell(7000)->addText($h->area ?? 'Unknown');
+                $row->addCell(3000)->addText((string)$h->c);
+            }
+        }
+
+        $section->addTextBreak(1);
+
+        // Data-driven suggestions (reuse your smarter logic)
+        $lines = [];
         if ($hotspots->count() > 0) {
             $top = $hotspots->take(3)->map(fn($h) => "{$h->area} ({$h->c})")->implode(', ');
-            $lines[] = "Hotspots this month: {$top}. Prioritize visible patrols and random checkpoints in these areas.";
+            $lines[] = "Hotspots: {$top}. Recommend increased patrols and random checkpoints in these areas.";
         }
-
-        if (!is_null($trendPct)) {
-            $direction = $trendPct > 0 ? 'increased' : ($trendPct < 0 ? 'decreased' : 'remained stable');
-            $lines[] = "Total tickets {$direction} by ".abs($trendPct)." % compared to last month ({$countPrevMonth} → {$countThisMonth}). Adjust deployment accordingly.";
-        }
-
-        if ($peakDay) {
-            $lines[] = "Highest volume day: {$peakDay->d}. Schedule more enforcers and spot checks on {$peakDay->d}s.";
-        }
-
-        if ($peakHour) {
-            $hour = str_pad($peakHour->h, 2, '0', STR_PAD_LEFT) . ":00";
-            $lines[] = "Peak time window: around {$hour}. Intensify monitoring during this hour block.";
-        }
-
         if ($total > 0) {
             $unpaidPct = round(($unpaid / $total) * 100, 1);
-            $lines[] = "Unpaid rate is {$unpaidPct} % ({$unpaid}/{$total}). Consider SMS/email reminders and a 7-day follow-up workflow.";
+            $lines[] = "Unpaid rate is {$unpaidPct}% ({$unpaid}/{$total}). Implement notification reminders and a 7-day follow-up.";
         }
-
-        // Fallback line if somehow empty
         if (empty($lines)) {
-            $lines[] = "Maintain current patrol levels; no significant trends detected this month.";
+            $lines[] = "Maintain current deployment; no significant trends in the selected coverage.";
+        }
+        $section->addText('Recommendations', ['bold'=>true,'size'=>12]);
+        foreach ($lines as $p) {
+            $section->addListItem($p, 0, null, ['listType' => \PhpOffice\PhpWord\Style\ListItem::TYPE_BULLET_FILLED]);
         }
 
-        $suggestions = implode("\n\n", $lines);
+        // Output
+        $fname = 'POSO_Analytics_' . $now->format('Ymd_His') . '.docx';
+        $tmp   = tempnam(sys_get_temp_dir(), 'rpt').'.docx';
+        $phpWord->save($tmp, 'Word2007');
 
-        // Word (.docx)
-        $template = new TemplateProcessor(resource_path('reports/template.docx'));
-        $template->setValue('paid',   $paid);
-        $template->setValue('unpaid', $unpaid);
-        $template->setValue('suggestions', $suggestions);
-
-        $tmpFile = tempnam(sys_get_temp_dir(), 'rpt').'.docx';
-        $template->saveAs($tmpFile);
-
-        return response()
-            ->download($tmpFile, 'POSO Monthly Word Report.docx')
-            ->deleteFileAfterSend();
+        return response()->download($tmp, $fname)->deleteFileAfterSend();
     }
     /**
      * Show the form for creating a new resource.

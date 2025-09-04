@@ -136,7 +136,7 @@ class TicketController extends Controller
 
             return back()
                 ->withInput()
-                ->with('duplicate_error', 'The plate number is already registered under another violator.');
+                 ->with('duplicate_error', 'The plate number is already registered under another violator.');
         }
 
         // possibly create credentials

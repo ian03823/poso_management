@@ -8,11 +8,12 @@ use App\Models\Vehicle;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Violator extends Authenticatable
 {
     //
-    use Notifiable, HasFactory;
+    use Notifiable, HasFactory, SoftDeletes;
     protected $table = "violators";
     protected $primaryKey = 'id';
 
@@ -31,6 +32,11 @@ class Violator extends Authenticatable
     protected $hidden = [
         'password',
         'defaultPassword',
+    ];
+    protected $casts = [
+        'failed_attempts' => 'integer',
+        'lockouts_count'  => 'integer',
+        'lockout_until'   => 'datetime',
     ];
     public function vehicles()
     {

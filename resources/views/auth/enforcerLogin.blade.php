@@ -3,9 +3,6 @@
 
 @section('body')
 <div class="d-flex flex-column min-vh-100 justify-content-center align-items-center login-container">
-  {{-- Animated Logo --}}
-  
-
   {{-- Login Card --}}
   <div class="card login-card shadow">
     <div class="card-body px-4 py-5">
@@ -17,6 +14,25 @@
       @if(session('error'))
         <div class="alert alert-danger text-center">{{ session('error') }}</div>
       @endif
+      {{-- Top-of-form alerts --}}
+      @if ($errors->any())
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          {{ $errors->first() }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      @endif
+
+      @php
+        $remaining = session('lockout_remaining'); // seconds
+      @endphp
+
+      @if ($remaining)
+        <div class="alert alert-warning" role="alert">
+          Too many failed attempts. You can try again in
+          <span id="lockout-timer" class="fw-bold"></span>.
+        </div>
+      @endif
+
 
       {{-- Title --}}
       <h3 class="text-center fw-bold mb-4 text-success login-title">Enforcers Login</h3>
@@ -68,7 +84,7 @@
         </div>
 
         {{-- Submit --}}
-        <button type="submit" class="btn btn-login w-100 py-2 fw-semibold">
+        <button id="loginBtn" type="submit" class="btn btn-login w-100 py-2 fw-semibold">
           <i class="bi bi-box-arrow-in-right me-2"></i>Log in
         </button>
 
@@ -82,10 +98,35 @@
             </ul>
           </div>
         @endif
+        
       </form>
     </div>
   </div>
 </div>
+
+@if (session('lockout_remaining'))
+<script>
+(function(){
+  let remaining = {{ (int) session('lockout_remaining') }};
+  const btn = document.getElementById('loginBtn');
+  const timerEl = document.getElementById('lockout-timer');
+
+  if (btn) btn.disabled = true;
+
+  function fmt(sec){
+    const m = String(Math.floor(sec / 60)).padStart(2,'0');
+    const s = String(sec % 60).padStart(2,'0');
+    return `${m}:${s}`;
+  }
+  (function tick(){
+    if (timerEl) timerEl.textContent = fmt(remaining);
+    if (remaining <= 0) { if (btn) btn.disabled = false; return; }
+    remaining--; setTimeout(tick, 1000);
+  })();
+})();
+</script>
+@endif
+
 
 {{-- Styles & Animations --}}
 <style>
@@ -142,6 +183,12 @@
   }
 </style>
 
+
+
+
+@endsection
+
+@push('scripts')
 {{-- Scripts --}}
 <script>
   function togglePassword() {
@@ -163,4 +210,4 @@
       });
     });
 </script>
-@endsection
+@endpush

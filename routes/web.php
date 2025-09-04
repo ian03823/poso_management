@@ -15,6 +15,7 @@ use App\Http\Controllers\AdminTicketController;
 use App\Http\Controllers\ImpoundedController;
 use App\Http\Controllers\ViolatorTableController;
 use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\ActivityLogController;
 
 
 Route::get('/', function () {
@@ -106,6 +107,9 @@ Route::middleware('admin')->group(function () {
     Route::get('reports/download/{format}', [AnalyticsController::class,'download'])
         ->where('format','xlsx|docx')
         ->name('reports.download');
+
+    Route::get('/superadmin/activity-logs', [ActivityLogController::class, 'index'])
+        ->name('admin.activity-logs.index');
 });
 
 Route::middleware('violator')->group(function () {

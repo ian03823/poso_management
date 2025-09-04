@@ -13,13 +13,29 @@
         <h3 class="text-center fw-bold mb-4 text-success login-title">Violators Login</h3>
       </div>
 
-      {{-- Error Alert --}}
-      @if(session('error'))
-        <div class="alert alert-danger text-center">{{ session('error') }}</div>
+      {{-- Top-of-form alerts --}}
+      @if ($errors->any())
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          {{ $errors->first() }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
       @endif
 
+      @php
+        $remaining = session('lockout_remaining'); // seconds
+      @endphp
+
+      @if ($remaining)
+        <div class="alert alert-warning" role="alert">
+          Too many failed attempts. You can try again in
+          <span id="lockout-timer" class="fw-bold"></span>.
+        </div>
+      @endif
+
+      
+
       {{-- Login Form --}}
-      <form method="POST" action="{{ route('violator.showLogin') }}">
+      <form method="POST" action="{{ route('violator.login') }}">
         @csrf
 
         {{-- Username --}}
@@ -63,25 +79,9 @@
         </div>
 
         {{-- Submit --}}
-        <button
-          type="submit"
-          class="btn btn-success w-100 py-2 fw-semibold mb-3"
-          style="border-radius: 12px;"
-        >
+        <button id="loginBtn" type="submit" class="btn btn-success w-100 py-2 fw-semibold mb-3" style="border-radius: 12px;">
           Log In
         </button>
-
-        {{-- Info & Validation Errors --}}
-        
-          @if($errors->any())
-          <div class="alert alert-info small mb-0">
-            <ul class="mt-2 mb-0 ps-3">
-              @foreach($errors->all() as $error)
-                <li>{{ $error }}</li>
-              @endforeach
-            </ul>
-            </div>
-          @endif
       </form>
 
     </div>
@@ -120,29 +120,45 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      // check a flag in localStorage
-      if (!localStorage.getItem('violatorLoginNoticeShown')) {
-        Swal.fire({
-          icon: 'info',
-          title: 'Notice',
-          text: 'Please use the login credentials provided by POSO Officer.',
-          confirmButtonColor: '#00c853'
-        }).then(() => {
-          // set the flag so it never shows again
-          localStorage.setItem('violatorLoginNoticeShown', 'true');
-        });
+  document.addEventListener('DOMContentLoaded', () => {
+    // one-time notice
+    if (!localStorage.getItem('violatorLoginNoticeShown')) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Notice',
+        text: 'Please use the login credentials provided by POSO Officer.',
+        confirmButtonColor: '#00c853'
+      }).then(() => localStorage.setItem('violatorLoginNoticeShown', 'true'));
+    }
+
+    // lockout countdown (if any)
+    @if (session('lockout_remaining'))
+      let remaining = {{ (int) session('lockout_remaining') }};
+      const btn = document.getElementById('loginBtn');
+      const timerEl = document.getElementById('lockout-timer');
+
+      if (btn) btn.disabled = true;
+
+      function fmt(sec){
+        const m = String(Math.floor(sec / 60)).padStart(2,'0');
+        const s = String(sec % 60).padStart(2,'0');
+        return `${m}:${s}`;
       }
-    });
+      (function tick(){
+        if (timerEl) timerEl.textContent = fmt(remaining);
+        if (remaining <= 0) { if (btn) btn.disabled = false; return; }
+        remaining--; setTimeout(tick, 1000);
+      })();
+    @endif
+  });
+
   function togglePassword() {
     const pwd  = document.getElementById('password');
     const icon = document.getElementById('toggleIcon');
     if (pwd.type === 'password') {
-      pwd.type = 'text';
-      icon.classList.replace('bi-eye-slash','bi-eye');
+      pwd.type = 'text'; icon.classList.replace('bi-eye-slash','bi-eye');
     } else {
-      pwd.type = 'password';
-      icon.classList.replace('bi-eye','bi-eye-slash');
+      pwd.type = 'password'; icon.classList.replace('bi-eye','bi-eye-slash');
     }
   }
 </script>
