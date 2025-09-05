@@ -2,8 +2,12 @@
 
 @section('title', 'POSO Admin Management')
 
+@push('styles')
+  <link rel="stylesheet" href="{{ asset('css/admin-dashboard.css') }}">
+@endpush
+
 @section('content')
-<div class="container-fluid py-4">
+<div id="admin-dashboard" class="container-fluid py-4">
     <!-- Summary Cards -->
     <div class="row g-4 mb-5">
       <div class="col-md-4">
@@ -18,19 +22,6 @@
             </div>
           </div>
         </a>
-      </div>
-      <div class="col-md-4">
-        <a href="{{url('/enforcer') }}" class="text-decoration-none" data-ajax>
-        <div class="card text-white bg-success h-100">
-          <div class="card-body d-flex align-items-center">
-            <i class="bi bi-person-badge display-4 me-3"></i>
-            <div>
-              <h6 class="card-title">Total Active Enforcer</h6>
-              <h2>{{ $enforcerCount }}</h2>
-            </div>
-          </div>
-        </div>
-      </a>
       </div>
       <div class="col-md-4">
         <a href="{{ url('/violatorTable') }}" class="text-decoration-none" data-ajax>

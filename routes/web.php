@@ -21,6 +21,16 @@ use App\Http\Controllers\ActivityLogController;
 Route::get('/', function () {
     return view('welcome');
 });
+
+// quick ping for isReallyOnline()
+Route::get('/ping', fn() => response()->noContent());
+
+// online FormData submit (keeps CSRF)
+Route::post('/enforcerTicket', [TicketController::class, 'store'])->name('ticket.store');
+
+// background sync JSON submit (CSRF exempt)
+Route::post('/pwa/sync/ticket', [TicketController::class, 'storeJson'])->name('ticket.sync');
+
 // Admin login routes
 Route::get('/alogin', [AuthController::class, 'showLogin'])->name('admin.showLogin');
 Route::post('/alogin', [AuthController::class, 'login'])->name('admin.login');

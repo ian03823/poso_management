@@ -9,7 +9,8 @@
     <title>@yield('title')</title>
 
     <!-- PWA manifest and service worker registration -->
-    <link rel="manifest" href="/pwa-manifest.json">
+    <link rel="manifest" href="{{ asset('pwa-manifest.json') }}" crossorigin="use-credentials">
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
     <meta name="theme-color" content="#ffffff">
     <script>
       if ('serviceWorker' in navigator) {

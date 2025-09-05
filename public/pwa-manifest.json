@@ -1,6 +1,7 @@
 {
     "name": "POSO Enforcer PWA",
     "short_name": "POSO",
+    "scope": "/",
     "start_url": "/pwa",
     "id": "/pwa",
     "description": "POSO Enforcer's PWA. Capstone Project 2024-2025.",

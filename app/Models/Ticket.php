@@ -30,7 +30,8 @@ class Ticket extends Model
         'longitude',
         'confiscation_type_id',
         'offline',
-        'admin_id'
+        'admin_id',
+        'client_uuid',
     ];
     protected $appends = [
         'is_impounded',

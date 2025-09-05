@@ -1,8 +1,11 @@
 @extends('components.layout')
 @section('title', 'POSO Admin Management')
+@push('styles')
+  <link rel="stylesheet" href="{{ asset('css/admin-profile.css')}}">
+@endpush
 
 @section('content')
-    <div class="container d-flex justify-content-center align-items-center"
+<div id="admin-profile" class="container d-flex justify-content-center align-items-center"
      style="min-height: calc(100vh - 70px);">
   <div class="card shadow-sm w-100" style="max-width: 500px;">
     <div class="card-header bg-success text-white text-center">

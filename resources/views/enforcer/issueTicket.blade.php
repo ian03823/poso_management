@@ -173,7 +173,12 @@
         </form>
 
         {{-- Pass PHP data into a JS global --}}
-        <script> window.violationGroups = @json($violationGroups->toArray()); </script>
+        <script> 
+          window.violationGroups = @json($violationGroups->toArray()); 
+          window.flagsLookup = @json(
+            $allFlags->mapWithKeys(fn($f)=>[$f->id => ['key'=>$f->key,'label'=>$f->label]])
+          );
+        </script>
       </div>
     </div>
   </div>

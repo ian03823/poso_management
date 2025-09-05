@@ -28,7 +28,7 @@ class ActivityLogController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        return view('admin.activity_logs.index', [
+        return view('admin.logs.activity', [
             'logs' => $logs,
             'filters' => [
                 'action'     => $request->get('action', ''),

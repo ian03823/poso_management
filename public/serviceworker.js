@@ -1,13 +1,16 @@
 var staticCacheName = "pwa-v" + new Date().getTime();
-importScripts('https://unpkg.com/dexie@3.2.2/dist/dexie.js');
+importScripts('https://unpkg.com/dexie@3.2.4/dist/dexie.min.js'); // pin a version
 const db = new Dexie('ticketDB');
-db.version(1).stores({ tickets: '++id, payload' });
+db.version(2).stores({ tickets: '++id,client_uuid' }); // match the page
 
 var filesToCache = [
     '/offline',
+    'pwa',
+    '/',
     '/css/app.css',
     '/js/app.js',
     '/js/id-scan.js',
+    '/js/issueTicket.js',  // <— add this
     '/vendor/html5-qrcode/html5-qrcode.min.js',
     '/vendor/tesseract/tesseract.min.js',
     '/vendor/tesseract/worker.min.js',
@@ -31,9 +34,13 @@ self.addEventListener('sync', event => {
       db.tickets.toArray().then(records =>
         Promise.all(records.map(async rec => {
           try {
-            const resp = await fetch('/enforcerTicket', {
+            const resp = await fetch('/pwa/sync/ticket', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Idempotency-Key': rec.client_uuid || rec.payload?.client_uuid || ''
+              },
               body: JSON.stringify(rec.payload)
             });
             if (resp.ok) {
@@ -47,6 +54,7 @@ self.addEventListener('sync', event => {
     );
   }
 });
+
 // Cache on install
 self.addEventListener("install", event => {
   self.skipWaiting();
@@ -65,32 +73,33 @@ self.addEventListener("install", event => {
   );
 });
 
-// Clear old caches on activation
 self.addEventListener('activate', event => {
-    event.waitUntil(
-        caches.keys().then(cacheNames => {
-            return Promise.all(
-                cacheNames
-                    .filter(cacheName => (cacheName.startsWith("pwa-")))
-                    .filter(cacheName => (cacheName !== staticCacheName))
-                    .map(cacheName => caches.delete(cacheName))
-            );
-        })
-    );
+  event.waitUntil(
+    caches.keys().then(keys => Promise.all(
+      keys.filter(k => k.startsWith('pwa-') && k !== staticCacheName).map(k => caches.delete(k))
+    ))
+  );
+  self.clients.claim(); // <— add this
 });
 
-// Serve from Cache with Network Fallback
-self.addEventListener("fetch", event => {
-
-   if (event.request.method !== 'GET') {
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') {
     event.respondWith(fetch(event.request));
     return;
   }
-    event.respondWith(
+
+  event.respondWith(
     caches.match(event.request).then(cached => {
-      return cached || fetch(event.request).then(response => {
-        // optionally cache the response here...
-        return response;
+      const network = fetch(event.request).then(res => {
+        // optionally: put into cache here
+        return res;
+      });
+
+      // If cached, return it quickly; else try network; if both fail and it's a navigation, show /offline
+      return cached || network.catch(() => {
+        if (event.request.mode === 'navigate') {
+          return caches.match('/offline');
+        }
       });
     })
   );
