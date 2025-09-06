@@ -17,13 +17,13 @@
 
 /* Base */
 html, body{
-  background:#ffffff; /* flat background */
+  background:#ffffff;
   color: var(--ink-900);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ===== Top Navigation (solid color, no gradient) ===== */
+/* ===== Top Navigation ===== */
 .top-nav{
   height: var(--header-h);
   padding:.75rem 1.25rem;
@@ -32,13 +32,12 @@ html, body{
   justify-content:space-between;
   gap:1rem;
   color:#fff;
-  background: var(--poso-green); /* solid */
+  background: var(--poso-green);
   box-shadow: var(--shadow-sm);
   position: sticky;
   top:0;
   z-index:1030;
 }
-
 .top-nav a{ color:#fff; text-decoration:none; }
 .top-nav a:hover{ opacity:.95; }
 #currentDateTime{ opacity:.95; font-weight:600; white-space:nowrap; }
@@ -47,12 +46,10 @@ html, body{
   background: rgba(255,255,255,.12);
   color:#fff;
   border:1px solid rgba(255,255,255,.22);
-  padding:.45rem .8rem;
-  border-radius:999px;
-  font-weight:700;
+  padding:.45rem .8rem; border-radius:999px;
+  font-weight:700; cursor:pointer;
   transition: background .18s ease, transform .18s ease, box-shadow .18s ease;
   box-shadow: 0 2px 6px rgba(0,0,0,.15);
-  cursor:pointer;
 }
 .top-nav form#logoutForm button:hover{
   background: rgba(255,255,255,.2);
@@ -65,16 +62,11 @@ html, body{
 }
 .top-nav .d-flex.gap-3 a:hover{ background: rgba(255,255,255,.18); }
 
-/* ===== Subtle watermark image (desktop only) ===== */
+/* ===== Subtle watermark (desktop only) ===== */
 .half-bg-image{
-  position: fixed;
-  top: var(--header-h);
-  right: 0;
-  width: min(40vw, 480px);
-  opacity: .035;       /* very subtle */
-  pointer-events:none;
-  z-index:0;
-  filter: grayscale(100%) contrast(110%);
+  position: fixed; top: var(--header-h); right: 0;
+  width: min(40vw, 480px); opacity: .035; pointer-events:none;
+  z-index:0; filter: grayscale(100%) contrast(110%);
 }
 .half-bg-image img{ width:100%; height:auto; display:block; }
 @media (max-width: 991.98px){ .half-bg-image{ display:none; } }
@@ -82,60 +74,45 @@ html, body{
 /* ===== Shell: sidebar + content ===== */
 body > .d-flex{
   min-height: calc(100vh - var(--header-h));
-  position: relative;
-  z-index:1;
+  position: relative; z-index:1;
 }
 
-/* ===== Sidebar (flat, bordered) ===== */
+/* ===== Sidebar ===== */
 .sidebar{
-  width: 272px;
-  background:#fff;
-  border-right: 1px solid var(--border);
-  padding: 1rem;
-  position: sticky;
-  top: var(--header-h);
-  height: calc(100vh - var(--header-h));
-  overflow:auto;
+  width: 272px; background:#fff; border-right:1px solid var(--border);
+  padding: 1rem; position: sticky; top: var(--header-h);
+  height: calc(100vh - var(--header-h)); overflow:auto;
 }
-
 .sidebar img{
-  width: 110px;
-  aspect-ratio: 1/1;
-  object-fit: contain;
-  display:block;
-  margin: 0 auto 1rem;
+  width: 110px; aspect-ratio: 1/1; object-fit: contain;
+  display:block; margin: 0 auto 1rem;
 }
-
 .sidebar .nav{ gap:.35rem; }
 
 .sidebar .nav-link{
   display:flex; align-items:center; gap:.75rem;
-  padding:.6rem .7rem;
-  color: var(--ink-700);
-  font-weight:600;
-  border-radius: 10px;
+  padding:.6rem .7rem; color: var(--ink-700);
+  font-weight:600; border-radius: 10px;
   transition: background .15s ease, color .15s ease, transform .15s ease;
 }
 .sidebar .nav-link .bi{ font-size:1.05rem; opacity:.95; }
+.sidebar .nav-link:hover{ background:#f3f4f6; }
 
-.sidebar .nav-link:hover{
-  background:#f3f4f6; /* flat hover */
+/* Active — supports .active and aria-current="page" */
+.sidebar .nav-link.active,
+.sidebar .nav-link[aria-current="page"]{
+  background:#0b8a5d; color:#fff;
 }
-
-.sidebar .nav-link.active{
-  background:#0b8a5d; /* solid active */
-  color:#fff;
-}
+.sidebar .nav-link.active .bi,
+.sidebar .nav-link[aria-current="page"] .bi{ color:#fff; }
 
 /* ===== Main content ===== */
 main.content{
-  flex: 1 1 auto;
-  padding: min(2rem, 4vw);
-  min-width:0;
-  background:#fafafa; /* slight contrast from white sidebar */
+  flex: 1 1 auto; padding: min(2rem, 4vw); min-width:0;
+  background:#fafafa;
 }
 
-/* ===== Cards (flat, soft) ===== */
+/* ===== Cards ===== */
 .card{
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -150,13 +127,11 @@ main.content{
 .card a, .card button{ transition: transform .15s ease, box-shadow .15s ease; }
 .card a:hover, .card button:hover{ transform: translateY(-1px); }
 
-/* ===== Tables (sticky thead) ===== */
+/* ===== Tables ===== */
 .card .table{ margin:0; }
 .card .table thead th{
   position: sticky; top:0; z-index:2;
-  background:#f8fafc; /* flat */
-  color: var(--ink-700);
-  font-weight:700;
+  background:#f8fafc; color: var(--ink-700); font-weight:700;
   box-shadow: inset 0 -1px 0 rgba(0,0,0,.06);
 }
 .card .table tbody tr:hover{ background:#f6f7fb; }
@@ -166,7 +141,7 @@ main.content{
 .text-muted-white{ color: rgba(255,255,255,.9); }
 .round{ border-radius:999px; }
 
-/* ===== Responsive tweaks ===== */
+/* ===== Responsive ===== */
 @media (max-width: 1199.98px){ .sidebar{ width:260px; } }
 @media (max-width: 991.98px){
   #currentDateTime{ display:none; }
@@ -178,7 +153,7 @@ main.content{
   .top-nav form#logoutForm button{ padding:.4rem .7rem; }
 }
 
-/* ===== Nice scrollbars (WebKit) ===== */
+/* ===== Custom scrollbars (WebKit) ===== */
 .sidebar::-webkit-scrollbar,
 .card .card-body.p-0::-webkit-scrollbar{
   width:10px; height:10px;
@@ -191,7 +166,11 @@ main.content{
 .card .card-body.p-0::-webkit-scrollbar-track{
   background:transparent;
 }
+/* Hide sidebar when body has .no-sidebar (AJAX profile page) */
+.no-sidebar .sidebar{ display:none !important; }
+/* Ensure content uses full width when sidebar is hidden */
+.no-sidebar main.content{ width:100%; }
 
-/* ===== If you previously added gradient overrides on cards, neutralize them here (optional) ===== */
+/* Neutralize any accidental gradients on context cards */
 .card.bg-primary{ background-color:#0d6efd !important; background-image:none !important; }
 .card.bg-warning{ background-color:#f59f00 !important; background-image:none !important; }

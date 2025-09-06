@@ -49,6 +49,11 @@ class TicketController extends Controller
         // Fallback (system tasks)
         return [null, 'System', 'System'];
     }
+    public function storeJson(Request $request)
+    {
+        // JSON background sync endpoint (CSRF-exempt)
+        return $this->persistTicket($request);
+    }
     private function persistTicket(Request $req)
     {
         // 1) Idempotency

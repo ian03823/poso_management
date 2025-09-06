@@ -5,7 +5,7 @@
 @endpush
 
 @section('content')
-<div id="admin-profile" class="container d-flex justify-content-center align-items-center"
+<div id="admin-profile" data-hide-sidebar class="container d-flex justify-content-center align-items-center"
      style="min-height: calc(100vh - 70px);">
   <div class="card shadow-sm w-100" style="max-width: 500px;">
     <div class="card-header bg-success text-white text-center">

@@ -17,10 +17,7 @@ db.version(2).stores({ tickets: '++id,client_uuid' }).upgrade(tx =>
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 async function isReallyOnline(timeoutMs = 2000) {
-  // Fast check first
   if (!navigator.onLine) return false;
-
-  // Better check: ping server (add a /ping route on backend)
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -37,9 +34,7 @@ function ensureViolationLookup() {
   if (!window.violationGroups) return {};
   const byCode = {};
   Object.values(window.violationGroups).forEach(list => {
-    (list || []).forEach(v => {
-      byCode[v.violation_code] = v;
-    });
+    (list || []).forEach(v => { byCode[v.violation_code] = v; });
   });
   return byCode;
 }
@@ -53,6 +48,7 @@ function buildConfirmHtmlFromPayload(payload) {
     const fine = v.fine_amount != null ? ` — ₱${parseFloat(v.fine_amount).toFixed(2)}` : '';
     return `<li>${v.violation_name}${fine}</li>`;
   }).join('');
+  const flagsList = (payload.flag_labels || []).map(l => `<li>${l}</li>`).join('');
 
   return `
     <strong>Violator:</strong> ${full || '—'}<br>
@@ -65,8 +61,8 @@ function buildConfirmHtmlFromPayload(payload) {
     <strong>Location:</strong> ${payload.location || '—'}<br>
     <strong>Impounded:</strong> ${payload.is_impounded ? 'Yes' : 'No'}<br>
     <strong>Confiscated:</strong> ${payload.confiscated || '—'}<br>
-    <strong>Violations:</strong>
-    <ul>${violHtml}</ul>
+    <strong>Flags:</strong>${flagsList ? `<ul>${flagsList}</ul>` : ' — '}<br>
+    <strong>Violations:</strong><ul>${violHtml}</ul>
   `;
 }
 
@@ -86,8 +82,7 @@ function getCurrentPositionOnce(opts = { enableHighAccuracy: true, timeout: 7000
 async function ensureGpsFields() {
   const latEl = document.getElementById('latitude');
   const lngEl = document.getElementById('longitude');
-  if (latEl?.value && lngEl?.value) return true; // already set
-
+  if (latEl?.value && lngEl?.value) return true;
   try {
     const pos = await getCurrentPositionOnce();
     latEl.value = pos.coords.latitude;
@@ -108,57 +103,32 @@ async function ensureGpsFields() {
 
 /* ---------------- Network status toasts ---------------- */
 window.addEventListener('offline', () => {
-  Swal.fire({
-    toast: true,
-    icon: 'warning',
-    title: 'You are now offline',
-    text: 'Tickets will be saved locally.',
-    position: 'top-end',
-    timer: 3000,
-    showConfirmButton: false,
-  });
+  Swal.fire({ toast: true, icon: 'warning', title: 'You are now offline', text: 'Tickets will be saved locally.', position: 'top-end', timer: 3000, showConfirmButton: false });
 });
 
 window.addEventListener('online', () => {
-  Swal.fire({
-    toast: true,
-    icon: 'success',
-    title: 'Back online!',
-    text: 'Offline tickets will now sync.',
-    position: 'top-end',
-    timer: 3000,
-    showConfirmButton: false,
-  });
+  Swal.fire({ toast: true, icon: 'success', title: 'Back online!', text: 'Offline tickets will now sync.', position: 'top-end', timer: 3000, showConfirmButton: false });
   if (typeof syncOfflineTickets === 'function') syncOfflineTickets();
 });
 
 /* ---------------- Offline queueing with idempotency ---------------- */
 async function enqueueTicket(payload) {
-  // idempotent: avoid duplicate queue items for same client_uuid
   const exists = await db.tickets.where('client_uuid').equals(payload.client_uuid).first();
-  if (!exists) {
-    await db.tickets.add({ client_uuid: payload.client_uuid, payload, createdAt: Date.now() });
-  }
+  if (!exists) await db.tickets.add({ client_uuid: payload.client_uuid, payload, createdAt: Date.now() });
 
   if ('serviceWorker' in navigator && 'SyncManager' in window) {
     const reg = await navigator.serviceWorker.ready;
     try { await reg.sync.register('sync-tickets'); } catch {}
   }
 
-  await Swal.fire({
-    icon: 'info',
-    title: 'Saved Offline',
-    html: 'Your ticket was recorded locally and will auto-sync when online.',
-    confirmButtonText: 'OK',
-    width: 420
-  });
+  await Swal.fire({ icon: 'info', title: 'Saved Offline', html: 'Your ticket was recorded locally and will auto-sync when online.', confirmButtonText: 'OK', width: 420 });
 }
 
 async function syncOfflineTickets() {
   const all = await db.tickets.orderBy('id').toArray();
   for (const rec of all) {
     try {
-      const res = await fetch('/enforcerTicket', {
+      const res = await fetch('/pwa/sync/ticket', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,11 +137,8 @@ async function syncOfflineTickets() {
         },
         body: JSON.stringify(rec.payload)
       });
-      if (res.ok) {
-        await db.tickets.delete(rec.id);
-      }
+      if (res.ok) await db.tickets.delete(rec.id);
     } catch (e) {
-      // keep it for next time
       console.warn('Sync failed for', rec.id, e);
     }
   }
@@ -179,13 +146,11 @@ async function syncOfflineTickets() {
 
 /* ---------------- Bluetooth printing helpers ---------------- */
 async function bluetoothWrite(characteristic, bytes) {
-  // Write in chunks (20 bytes) with tiny gaps
   for (let i = 0; i < bytes.length; i += 20) {
     await characteristic.writeValue(bytes.slice(i, i + 20));
     await sleep(40);
   }
 }
-
 async function getPrinterCharacteristic() {
   const S = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
   const C = '49535343-8841-43f4-a8d4-ecbe34729bb3';
@@ -194,9 +159,7 @@ async function getPrinterCharacteristic() {
   const svc = await srv.getPrimaryService(S);
   return await svc.getCharacteristic(C);
 }
-
 function buildQrCommand(data) {
-  // ESC/POS QR (Store→Print)
   const storeLen = data.length + 3;
   const pL = storeLen % 256;
   const pH = Math.floor(storeLen / 256);
@@ -207,17 +170,12 @@ function buildQrCommand(data) {
   const QRPrint = '\x1D\x28\x6B\x03\x00\x31\x51\x30';
   return QRModel + QRSize + QRError + QRStore + QRPrint;
 }
-
 async function printServerTicket(p) {
   const ESC = '\x1B', GS = '\x1D', NL = '\x0A';
   const INIT = ESC + '@', FONT_A = ESC + 'M' + '\x00', FONT_B = ESC + 'M' + '\x01';
-
   const ch = await getPrinterCharacteristic();
-
-  // QR first (e.g., portal URL)
   const qrCmd = buildQrCommand('https://poso.gov.ph/t');
   await bluetoothWrite(ch, new TextEncoder().encode(qrCmd));
-
   const lines = (copyLabel) => {
     let t = '';
     t += INIT + FONT_B;
@@ -249,21 +207,16 @@ async function printServerTicket(p) {
     t += 'Signature of Violator' + NL + NL;
     return t;
   };
-
   let txt = lines('ENFORCER') + '- - - - - - - - - - - - - - - -' + NL + NL + '\thttps://poso_management.test' + NL
           + NL + NL + lines('VIOLATOR') + FONT_A + ESC + 'd' + '\x03' + GS + 'V' + '\x00';
-
   await bluetoothWrite(ch, new TextEncoder().encode(txt));
 }
-
 async function printOfflineReceipt(payload) {
   const ESC = '\x1B', GS = '\x1D', NL = '\x0A';
   const INIT = ESC + '@', FONT_B = ESC + 'M' + '\x01', FONT_A = ESC + 'M' + '\x00';
   const ch = await getPrinterCharacteristic();
-
   const full = [payload.first_name, payload.middle_name, payload.last_name].filter(Boolean).join(' ');
   const tempNum = makeOfflineTicketNumber(payload.client_uuid);
-
   let t = '';
   t += INIT + FONT_B;
   t += '*** OFFLINE RECEIPT (Pending Sync) ***' + NL + NL;
@@ -279,11 +232,10 @@ async function printOfflineReceipt(payload) {
   (payload.violations || []).forEach(c => { t += `- ${c}` + NL; });
   t += NL + 'This ticket will be assigned an official number after sync.' + NL + NL;
   t += FONT_A + ESC + 'd' + '\x03' + GS + 'V' + '\x00';
-
   await bluetoothWrite(ch, new TextEncoder().encode(t));
 }
 
-/* ---------------- Category rendering (unchanged) ---------------- */
+/* ---------------- Category rendering ---------------- */
 const selectEl    = document.getElementById('categorySelect');
 const containerEl = document.getElementById('violationsContainer');
 const selected    = new Set();
@@ -295,19 +247,12 @@ function renderCategory() {
     const wrapper = document.createElement('div');
     wrapper.className = 'form-check mb-2';
     wrapper.innerHTML = `
-      <input class="form-check-input"
-             type="checkbox"
-             name="violations[]"
-             id="v-${v.id}"
-             value="${v.violation_code}"
-             ${selected.has(v.violation_code)?'checked':''}>
+      <input class="form-check-input" type="checkbox" name="violations[]" id="v-${v.id}" value="${v.violation_code}" ${selected.has(v.violation_code)?'checked':''}>
       <label class="form-check-label" for="v-${v.id}">
         ${v.violation_name} — ₱${parseFloat(v.fine_amount).toFixed(2)}
       </label>`;
     const chk = wrapper.querySelector('input');
-    chk.addEventListener('change', () => {
-      chk.checked ? selected.add(chk.value) : selected.delete(chk.value);
-    });
+    chk.addEventListener('change', () => { chk.checked ? selected.add(chk.value) : selected.delete(chk.value); });
     containerEl.appendChild(wrapper);
   });
 }
@@ -330,6 +275,21 @@ document.getElementById('ticketForm')?.addEventListener('submit', async function
     }
   });
 
+  // --- normalize names so online & offline match server expectations ---
+  if (payload.license_num) { payload.license_number = payload.license_num; delete payload.license_num; }
+  if (payload.plate_num)   { payload.plate_number   = payload.plate_num;   delete payload.plate_num; }
+  if (payload.confiscation_type_id) {
+    const sel = document.getElementById('confiscation_type_id');
+    const opt = sel?.selectedOptions?.[0];
+    payload.confiscated = opt ? opt.textContent.trim() : '';
+  }
+  if (Array.isArray(payload.flags)) {
+    const keys = payload.flags.map(id => window.flagsLookup?.[id]?.key).filter(Boolean);
+    payload.is_impounded = keys.includes('is_impounded');
+    payload.is_resident  = keys.includes('is_resident');
+    payload.flag_labels  = payload.flags.map(id => window.flagsLookup?.[id]?.label).filter(Boolean);
+  }
+
   // idempotency key
   payload.client_uuid = payload.client_uuid || (crypto?.randomUUID?.() || String(Date.now()) + Math.random());
 
@@ -346,7 +306,7 @@ document.getElementById('ticketForm')?.addEventListener('submit', async function
     confirmButtonText: 'Issue Ticket',
     cancelButtonText: 'Cancel'
   });
-  if (!pre.isConfirmed) return; // ← nothing saved
+  if (!pre.isConfirmed) return;
 
   // Re-check connectivity right before saving
   const online = await isReallyOnline();
@@ -354,16 +314,8 @@ document.getElementById('ticketForm')?.addEventListener('submit', async function
   // If offline → queue & offer printing an offline slip
   if (!online) {
     await enqueueTicket(payload);
-    const askPrint = await Swal.fire({
-      title: 'Print now?',
-      text: 'You are offline. Print an offline receipt for the violator?',
-      showCancelButton: true,
-      confirmButtonText: 'Print',
-      cancelButtonText: 'Skip'
-    });
-    if (askPrint.isConfirmed) {
-      try { await printOfflineReceipt(payload); } catch (e) { console.error(e); }
-    }
+    const askPrint = await Swal.fire({ title: 'Print now?', text: 'You are offline. Print an offline receipt for the violator?', showCancelButton: true, confirmButtonText: 'Print', cancelButtonText: 'Skip' });
+    if (askPrint.isConfirmed) { try { await printOfflineReceipt(payload); } catch (e) { console.error(e); } }
     form.reset();
     return;
   }
@@ -372,13 +324,8 @@ document.getElementById('ticketForm')?.addEventListener('submit', async function
   fd.set('client_uuid', payload.client_uuid);
 
   try {
-    const res = await fetch('/enforcerTicket', {
-      method: 'POST',
-      headers: { 'X-CSRF-TOKEN': form._token.value, 'Accept': 'application/json' },
-      body: fd
-    });
+    const res = await fetch('/enforcerTicket', { method: 'POST', headers: { 'X-CSRF-TOKEN': form._token.value, 'Accept': 'application/json' }, body: fd });
 
-    // If server is unhappy, fall back to offline queue
     if (!res.ok) {
       await enqueueTicket(payload);
       await Swal.fire('Saved Offline', 'Server rejected/failed. Ticket queued for sync.', 'info');
@@ -390,7 +337,6 @@ document.getElementById('ticketForm')?.addEventListener('submit', async function
 
     const p = await res.json(); // server ticket payload (includes ticket_number, etc.)
 
-    // Ask to print (this no longer cancels the save)
     const printAsk = await Swal.fire({
       title: 'Ticket Issued',
       html: `
@@ -404,15 +350,12 @@ document.getElementById('ticketForm')?.addEventListener('submit', async function
       cancelButtonText: 'Skip'
     });
 
-    if (printAsk.isConfirmed) {
-      try { await printServerTicket(p); } catch (e) { console.error(e); }
-    }
+    if (printAsk.isConfirmed) { try { await printServerTicket(p); } catch (e) { console.error(e); } }
 
     await Swal.fire('Success', 'Ticket submitted.', 'success');
     form.reset();
 
   } catch (err) {
-    // Network dropped during POST → queue offline
     console.error(err);
     await enqueueTicket(payload);
     await Swal.fire('Saved Offline', 'Network error. Ticket queued for sync.', 'info');
@@ -422,7 +365,7 @@ document.getElementById('ticketForm')?.addEventListener('submit', async function
   }
 });
 
-/* ---------------- Auto-fill owner name (unchanged) ---------------- */
+/* ---------------- Auto-fill owner name ---------------- */
 const ownerChk = document.getElementById('is_owner');
 const ownerIn  = document.getElementById('owner_name');
 const violFirst = document.getElementById('first_name');

@@ -25,9 +25,6 @@ Route::get('/', function () {
 // quick ping for isReallyOnline()
 Route::get('/ping', fn() => response()->noContent());
 
-// online FormData submit (keeps CSRF)
-Route::post('/enforcerTicket', [TicketController::class, 'store'])->name('ticket.store');
-
 // background sync JSON submit (CSRF exempt)
 Route::post('/pwa/sync/ticket', [TicketController::class, 'storeJson'])->name('ticket.sync');
 
@@ -49,6 +46,9 @@ Route::post('/vlogout', [ViolatorAuthController::class, 'logout'])->name('violat
 
 // Enforcer protected routes
 Route::middleware('enforcer')->group(function () {
+    // PWA start url should serve the Issue Ticket page
+    Route::get('/pwa', [TicketController::class, 'create'])->name('pwa');
+
     Route::resource('enforcerCreate', EnforcerAcc::class);
     Route::resource('enforcerTicket', TicketController::class);
     Route::resource('enf', EnforcerManagementController::class);
@@ -60,7 +60,7 @@ Route::middleware('enforcer')->group(function () {
 
 // Admin protected routes
 Route::middleware('admin')->group(function () {
-    Route::get('/admin', [AdminDashboardController::class,'adminDash'])->name('admin.dashboard');
+    Route::get('/admin/dashboard', [AdminDashboardController::class,'adminDash'])->name('admin.dashboard');
     Route::get('/admin/profile/update', [AdminDashboardController::class,'edit'])->name('admin.profile.edit');
     Route::put('/admin/profile/update', [AdminDashboardController::class,'update'])->name('admin.profile.update');
 
@@ -95,8 +95,8 @@ Route::middleware('admin')->group(function () {
      ->name('ticket.updateStatus');
 
     //Ticket routes
-    Route::post('ticket/{ticket}/status', [AdminTicketController::class, 'updateStatus'])->name('ticket.updateStatus');
     Route::get('ticket/partial', [AdminTicketController::class, 'partial'])->name('ticket.partial');
+    Route::post('ticket/{ticket}/status', [AdminTicketController::class, 'updateStatus'])->name('ticket.updateStatus');
     Route::resource('ticket', AdminTicketController::class);
 
     //Impound Vehicle routes

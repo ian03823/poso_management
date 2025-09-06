@@ -13,9 +13,12 @@
     <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
     <meta name="theme-color" content="#ffffff">
     <script>
-      if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.register('/serviceworker.js');
-      }
+        if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/serviceworker.js')
+            .catch(err => console.error('SW registration failed:', err));
+        });
+        }
     </script>
     <link rel="icon" type="image/png" sizes="32x32"
       href="{{ asset('POSO-Logo.png') }}">

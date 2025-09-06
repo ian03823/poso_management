@@ -33,17 +33,17 @@
             <div class="col-6 col-md-6 form-floating">
               <input type="text" class="form-control" id="first_name" name="first_name"
                      placeholder="First Name" value="{{ $v->first_name ?? old('first_name') }}">
-              <label for="name">First Name</label>
+              <label for="first_name">First Name</label>
             </div>
             <div class="col-6 col-md-6 form-floating">
               <input type="text" class="form-control" id="middle_name" name="middle_name"
                      placeholder="Middle Name" value="{{ $v->middle_name ?? old('middle_name') }}">
-              <label for="name">Middle Name</label>
+              <label for="middle_name">Middle Name</label>
             </div>
             <div class="col-6 col-md-6 form-floating">
               <input type="text" class="form-control" id="last_name" name="last_name"
                      placeholder="Last Name" value="{{ $v->last_name ?? old('last_name') }}">
-              <label for="name">Last Name</label>
+              <label for="last_name">Last Name</label>
             </div>
             {{-- License No. --}}
             <div class="col-6 col-md-6 form-floating">
@@ -254,11 +254,11 @@
         timer: 4000,
         timerProgressBar: true,
       });
-    </>
+    </script>
     @endif
 
   {{-- External scripts --}}
-  <script src="https://cdn.jsdelivr.net/npm/dexie/dist/dexie.min.js"></script>
+  <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="{{ asset('js/issueTicket.js') }}"></script>
   <script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}"></script>
