@@ -52,59 +52,71 @@ class TicketController extends Controller
     public function storeJson(Request $request)
     {
         // JSON background sync endpoint (CSRF-exempt)
-        return $this->persistTicket($request);
+        try {
+            return $this->persistTicket($request);
+        } catch (\Throwable $e) {
+            Log::error('storeJson 500', ['m' => $e->getMessage(), 'f'=>$e->getFile(), 'l'=>$e->getLine()]);
+            return response()->json(['message'=>'Server error while issuing ticket.'], 500);
+        }
     }
     private function persistTicket(Request $req)
     {
-        // 1) Idempotency
-        $uuid = $req->input('client_uuid');
+        // ✅ Relaxed rules to match what you actually send during offline
+        $data = $req->validate([
+            'first_name'     => 'required|string',
+            'last_name'      => 'required|string',
+            'license_number' => 'nullable|string',
+            'plate_number'   => 'nullable|string',
+            'vehicle_type'   => 'required|string',
+            'violations'     => 'array|min:1',
+            'location'       => 'nullable|string',     // was required — loosened
+            'latitude'       => 'nullable|numeric',
+            'longitude'      => 'nullable|numeric',
+            'client_uuid'    => 'nullable|string|max:64', // don’t force uuid()
+            'enforcer_id'    => 'nullable|integer',       // ✅ accept from payload
+        ]);
+
+        // ✅ No-session fallback (offline sync)
+        $enforcerId = auth('enforcer')->id() ?: ($data['enforcer_id'] ?? null);
+        if (!$enforcerId) {
+            // for LOCAL TESTING ONLY: default to first enforcer
+            $enforcerId = Enforcer::value('id'); // null-safe if table empty
+        }
+
+        // idempotency (optional if you pass client_uuid)
+        $uuid = $data['client_uuid'] ?? $req->header('X-Idempotency-Key');
+
         if ($uuid) {
-            $existing = \App\Models\Ticket::where('client_uuid', $uuid)->first();
+            $existing = Ticket::where('client_uuid', $uuid)->first();
             if ($existing) {
                 return response()->json($this->printerPayload($existing), 200);
             }
         }
 
-        // 2) Validate (keep it brief here; match your schema)
-        $data = $req->validate([
-            'first_name' => 'required|string',
-            'last_name'  => 'required|string',
-            'license_number' => 'nullable|string',
-            'plate_number'   => 'nullable|string',
-            'vehicle_type'   => 'required|string',
-            'violations'     => 'array|min:1',
-            'location'       => 'required|string',
-            'latitude'       => 'nullable|numeric',
-            'longitude'      => 'nullable|numeric',
-            'client_uuid'    => 'nullable|uuid',
-        ]);
-
-        // 3) Upsert violator (simplified)
-        $violator = \App\Models\Violator::firstOrCreate(
+        // upsert violator/vehicle (as you already do) …
+        $violator = Violator::firstOrCreate(
             ['license_number' => $data['license_number'] ?? null],
             [
-            'first_name' => $data['first_name'],
-            'middle_name'=> $req->input('middle_name'),
-            'last_name'  => $data['last_name'],
-            'address'    => $req->input('address'),
-            'birthdate'  => $req->input('birthdate'),
+                'first_name'  => $data['first_name'],
+                'middle_name' => $req->input('middle_name'),
+                'last_name'   => $data['last_name'],
+                'address'     => $req->input('address'),
+                'birthdate'   => $req->input('birthdate'),
             ]
         );
 
-        // 4) Vehicle (simplified)
-        $vehicle = \App\Models\Vehicle::firstOrCreate(
+        $vehicle = Vehicle::firstOrCreate(
             ['plate_number' => $data['plate_number'] ?? null],
             [
-            'violator_id' => $violator->id,
-            'vehicle_type'=> $data['vehicle_type'],
-            'is_owner'    => (bool)$req->input('is_owner', true),
-            'owner_name'  => $req->input('owner_name'),
+                'violator_id' => $violator->id,
+                'vehicle_type'=> $data['vehicle_type'],
+                'is_owner'    => (bool)$req->input('is_owner', true),
+                'owner_name'  => $req->input('owner_name'),
             ]
         );
 
-        // 5) Ticket
-        $ticket = DB::transaction(function () use ($req, $violator, $vehicle, $uuid) {
-            $t = \App\Models\Ticket::create([
+        $ticket = DB::transaction(function () use ($req, $violator, $vehicle, $uuid, $enforcerId) {
+            $t = Ticket::create([
                 'violator_id'  => $violator->id,
                 'vehicle_id'   => $vehicle->id,
                 'ticket_number'=> 'SC-' . now()->format('YmdHis') . '-' . mt_rand(100,999),
@@ -112,22 +124,19 @@ class TicketController extends Controller
                 'location'     => $req->input('location'),
                 'latitude'     => $req->input('latitude'),
                 'longitude'    => $req->input('longitude'),
-                'enforcer_id'  => auth('enforcer')->id() ?? null,
+                'enforcer_id'  => $enforcerId,          // ✅ never NULL now
                 'client_uuid'  => $uuid,
-                // map your flags to columns as needed (is_impounded, etc)
                 'is_impounded' => (bool)$req->boolean('is_impounded'),
             ]);
 
-            // Attach violations by violation_code
             $codes = (array)$req->input('violations', []);
             if ($codes) {
-                $viols = \App\Models\Violation::whereIn('violation_code', $codes)->get();
+                $viols = Violation::whereIn('violation_code', $codes)->get();
                 $t->violations()->sync($viols->pluck('id'));
             }
             return $t;
         });
 
-        // 6) (Optional) create violator credentials & return printer payload
         return response()->json($this->printerPayload($ticket), 201);
     }
 
@@ -383,18 +392,21 @@ class TicketController extends Controller
         $violator = $ticket->violator ?? Violator::find($ticket->violator_id);
         $violatorName = $this->violatorFullName($violator);
 
-        // Write the activity log
-        LogActivity::on($ticket)
-            ->by($actor)
-            ->event('ticket.issued')
-            ->withProperties([
-                'ticket_id'   => $ticket->id,
-                'violator_id' => $violator?->id,
-                'violator'    => $violatorName,
-                'actor_role'  => $role,
-            ])
-            ->fromRequest() // captures IP & UserAgent
-            ->log("{$role} {$actorName} issued a ticket (#{$ticket->id}) to {$violatorName}");
+        try {
+            LogActivity::on($ticket)
+                ->by($actor)
+                ->event('ticket.issued')
+                ->withProperties([
+                    'ticket_id'   => $ticket->id,
+                    'violator_id' => $violator?->id,
+                    'violator'    => $violatorName,
+                    'actor_role'  => $role,
+                ])
+                ->fromRequest()
+                ->log("{$role} {$actorName} issued a ticket (#{$ticket->id}) to {$violatorName}");
+        } catch (\Throwable $e) {
+            Log::warning('[ActivityLog skipped] '.$e->getMessage());
+        }
 
 
         // 7) Last apprehended before this ticket

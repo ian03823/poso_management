@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Violation;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class ViolationController extends Controller
 {
@@ -18,38 +19,27 @@ class ViolationController extends Controller
         $categoryFilter = $request->get('category', 'all');
         $search         = $request->get('search','');
 
-        // 2) Base query
         $query = Violation::query();
-    
-        if ($categoryFilter !== 'all') {
-            $query->where('category', $categoryFilter);
-        }
-
-        if (!empty($search)) {
-            $query->where(function($q) use ($search) {
+        if ($categoryFilter !== 'all') $query->where('category', $categoryFilter);
+        if ($search !== '') {
+            $query->where(function($q) use ($search){
                 $q->where('violation_name','like',"%{$search}%")
-                  ->orWhere('violation_code','like',"%{$search}%");
+                ->orWhere('violation_code','like',"%{$search}%");
             });
         }
-    
-        // 3) Paginate and carry category in links
-        $violation = $query
-            ->orderBy('updated_at','desc')
+
+        $violation = $query->orderBy('updated_at','desc')
             ->paginate(5)
-            ->appends([
-                'category' => $categoryFilter,
-                'search' => $search,
-            ]);
+            ->appends(['category'=>$categoryFilter,'search'=>$search]);
 
-        // 5) Full-page: we need the fixed list of categories
-        $categories = Violation::distinct('category')
-            ->orderBy('category')
-            ->pluck('category')
-            ->toArray();
+        $categories = Violation::distinct('category')->orderBy('category')->pluck('category')->toArray();
 
-        return view('admin.violation.violationList', compact(
-            'violation','categoryFilter','categories','search'
-        ));
+        // Return partial on AJAX (smaller payload for table swaps)
+        if ($request->ajax()) {
+            return view('admin.partials.violationTable', compact('violation','categoryFilter','search'));
+        }
+
+        return view('admin.violation.violationList', compact('violation','categoryFilter','categories','search'));
     }
 
     /**
@@ -149,13 +139,20 @@ class ViolationController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(string $id, Request $request)
     {
         //
-        $violation = Violation::findOrfail($id);
-        $violation->delete();
-        
-        return redirect('/violation')->with('success','Violation archived succesfully');
+        // Require admin password for archive (soft-delete)
+        $request->validate(['admin_password' => 'required']);
+        $admin = auth('admin')->user();
+
+        if (!$admin || !Hash::check($request->admin_password, $admin->password)) {
+            return response()->json(['message' => 'Invalid admin password'], 422);
+        }
+
+        $v = Violation::findOrFail($id);
+        $v->delete(); // requires SoftDeletes on model
+        return response()->json(['message' => 'Violation archived'], 200);
     }
     public function partial(Request $request)
     {
@@ -164,24 +161,18 @@ class ViolationController extends Controller
         $search         = $request->get('search','');
 
         $query = Violation::query();
-        if ($categoryFilter!=='all') {
-            $query->where('category',$categoryFilter);
-        }
-        if (!empty($search)) {
-            $query->where(function($q) use ($search) {
+        if ($categoryFilter!=='all') $query->where('category',$categoryFilter);
+        if ($search !== '') {
+            $query->where(function($q) use ($search){
                 $q->where('violation_name','like',"%{$search}%")
-                  ->orWhere('violation_code','like',"%{$search}%");
+                ->orWhere('violation_code','like',"%{$search}%");
             });
         }
-    
-        $violation = $query
-            ->orderBy('updated_at','desc')
-            ->paginate(5)
-            ->appends([
-                'category' => $categoryFilter,
-                'search' => $search,
-            ]);
 
-        return view('admin.partials.violationTable', compact('violation'));
+        $violation = $query->orderBy('updated_at','desc')
+            ->paginate(5)
+            ->appends(['category'=>$categoryFilter,'search'=>$search]);
+
+        return view('admin.partials.violationTable', compact('violation','categoryFilter','search'));
     }
 }

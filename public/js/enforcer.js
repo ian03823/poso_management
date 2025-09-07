@@ -1,247 +1,411 @@
-// public/js/enforcer.js
-(() => {
-      // ── 2) “Back” button on create/edit forms ───────────────────────────────
-        // Confirm‐back with SweetAlert on any <button class="confirm-back" data-back="…">
-        document.body.addEventListener('click', e => {
-        const btn = e.target.closest('button.confirm-back');
-        if (!btn) return;
-        e.preventDefault();
+/* public/js/enforcer.js — delegated bindings so it works after AJAX swaps */
+(function ($) {
+  /* ==============================
+   *          CONSTANTS
+   * ============================== */
+  const csrf =
+    document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-        // highlight any empty inputs
-        const inputs = document.querySelectorAll('#enforcerForm input');
-        const empty  = Array.from(inputs).filter(i => !i.value.trim());
-        empty.forEach(i => i.classList.add('border','border-danger'));
+  /* ==============================
+   *          HELPERS
+   * ============================== */
+  function $(sel, root = document) { return root.querySelector(sel); }
+  function $all(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
 
-        // decide message
-        const swalOpts = empty.length === inputs.length
-            ? { title: 'All fields are empty!', text: 'Fill the form or leave.' }
-            : { title: 'Form not complete!',   text: 'Some fields are empty. Leave anyway?' };
+  function setLoading(on) {
+    const wrap = $('#table-container');
+    if (wrap) wrap.classList.toggle('is-loading', !!on);
+  }
 
-        Swal.fire(Object.assign({
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Yes, leave',
-            cancelButtonText: 'Stay'
-        }, swalOpts)).then(res => {
-            if (!res.isConfirmed) return;
+  function injectTable(html, targetUrlForHistory) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const partial = doc.querySelector('#table-container');
+    const wrap = $('#table-container');
+    if (!wrap) return;
+    wrap.innerHTML = partial ? partial.innerHTML : html;
+    if (targetUrlForHistory) history.pushState({}, '', targetUrlForHistory);
+  }
 
-            const backUrl = btn.dataset.back;
-            if (typeof loadContent === 'function') {
-                loadContent(backUrl);
-            } else {
-                window.location.href = backUrl;
-            }
-        });
-    });
+  function currentQuery() {
+    // read current controls (they may be re-rendered by AJAX)
+    const sortSelect  = $('#enforcerContainer #sort_table');
+    const searchInput = $('#enforcerContainer #search_input');
 
-  // ── 1) Status toggle (Activate / Inactivate) ──────────────────────────
-  document.body.addEventListener('click', e => {
-    const btn = e.target.closest('.status-btn');
-    if (!btn) return;
-    e.preventDefault();
+    const url = new URL(location.href);
+    const show = url.searchParams.get('show') || 'active';
+    const sort_option = (sortSelect?.value) || url.searchParams.get('sort_option') || 'date_desc';
+    const search = (searchInput?.value ?? url.searchParams.get('search') ?? '');
 
-    // SweetAlert password prompt + confirmation
-    Swal.fire({
-      title: btn.textContent.trim() + ' this enforcer?',
-      input: 'password',
-      inputLabel: 'Enter your admin password',
-      inputAttributes: { autocapitalize: 'off', autocorrect: 'off' },
-      showCancelButton: true,
-      confirmButtonText: 'Confirm',
-      preConfirm: pwd => {
-        if (!pwd) Swal.showValidationMessage('Password is required');
-        return pwd;
-      }
-    }).then(result => {
-      if (!result.isConfirmed) return;
+    const q = new URLSearchParams();
+    q.set('show', show);
+    q.set('sort_option', sort_option);
+    if (search) q.set('search', search);
+    return q;
+  }
 
-      // attach admin_password to the form and submit
-      const form = btn.closest('form');
-      let input = form.querySelector('input[name="admin_password"]');
-      if (!input) {
-        input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'admin_password';
-        form.appendChild(input);
-      }
-      input.value = result.value;
-      form.submit();
-    });
+  function loadTable(pushState = true) {
+    const q = currentQuery();
+    const url = '/enforcer?' + q.toString();
+
+    setLoading(true);
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.text())
+      .then(html => injectTable(html, pushState ? url : null))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }
+
+  function navigateAjax(url) {
+    // Use your global a[data-ajax] handler
+    const a = document.createElement('a');
+    a.href = url;
+    a.setAttribute('data-ajax', '');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function secureRandomString(len = 12) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*';
+    let out = '';
+    if (window.crypto?.getRandomValues) {
+      crypto.getRandomValues(new Uint32Array(len)).forEach(n => out += chars[n % chars.length]);
+    } else {
+      for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return out;
+  }
+
+  function pad3(n) {
+    n = Math.max(0, Math.min(999, Number(n) || 0));
+    return n.toString().padStart(3, '0');
+  }
+  function incBadge(badge) {
+    const num = parseInt(badge, 10);
+    if (Number.isNaN(num)) return badge || '';
+    const len = (badge || '').length || 3;
+    return (num + 1).toString().padStart(len, '0');
+  }
+
+  /* ==============================
+   *       GLOBAL (DELEGATED) UI
+   * ============================== */
+
+  // Search button
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#enforcerContainer #search_btn')) {
+      e.preventDefault();
+      loadTable(true);
+    }
   });
 
-
-
-
-  // ── 3) Edit-Enforcer modal population & submission ──────────────────────
-  document.addEventListener('show.bs.modal', event => {
-    if (event.target.id !== 'editModal') return;
-    const btn  = event.relatedTarget;
-    const form = document.getElementById('editEnforcerForm');
-    if (!btn || !form) return;
-
-    form.action = `/enforcer/${btn.dataset.id}`;   // make sure this matches your route
-
-    const map = { badge:'badge_num', fname:'fname', mname:'mname', lname:'lname', phone:'phone' };
-    Object.entries(map).forEach(([k,f]) => {
-      const val = btn.getAttribute(`data-${k}`) || '';
-      const input = form.querySelector(`#edit_${f}`) || form.querySelector(`[name="${f}"]`);
-      if (input) input.value = val;
-    });
-
-    window.generatePassword = inputId => {
-      const rnd = Math.floor(100 + Math.random()*900);
-      const el  = document.getElementById(inputId);
-      if (el) el.value = `posoenforcer_${rnd}`;
-    };
+  // Search input (Enter)
+  document.addEventListener('keydown', (e) => {
+    const el = e.target;
+    if (el && el.matches('#enforcerContainer #search_input') && e.key === 'Enter') {
+      e.preventDefault();
+      loadTable(true);
+    }
   });
 
-  document.body.addEventListener('submit', async e => {
-    const form = e.target;
-    if (form.id !== 'editEnforcerForm') return;
+  // Sort select
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.matches('#enforcerContainer #sort_table')) {
+      loadTable(true);
+    }
+  });
+
+  // Pagination links
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('#enforcerContainer .pagination a');
+    if (!a) return;
     e.preventDefault();
+    const url = a.href;
+    setLoading(true);
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.text())
+      .then(html => injectTable(html, url))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  });
 
-    const modalEl = document.getElementById('editModal');
-    const instance = bootstrap.Modal.getInstance(modalEl);
+  // History (back/forward) on the list page
+  window.addEventListener('popstate', () => {
+    // if table exists, reload it
+    if ($('#enforcerContainer')) loadTable(false);
+  });
 
-    // clear previous errors
-    form.querySelectorAll('.is-invalid').forEach(i => i.classList.remove('is-invalid'));
-    form.querySelectorAll('.invalid-feedback').forEach(fb => fb.remove());
+  /* ==============================
+   *       EDIT MODAL (delegated)
+   * ============================== */
 
-    try {
-      const resp = await fetch(form.action, {
-        method: 'POST',
-        headers: {
-          'X-Requested-With':'XMLHttpRequest',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-        },
-        body: new FormData(form)
-      });
-      const json = await resp.json();
+  // Ensure #editModal lives under <body> when it appears
+  document.addEventListener('show.bs.modal', (ev) => {
+    const modalEl = ev.target;
+    if (modalEl.id !== 'editModal') return;
 
-      const title = json.raw_password
-        ? `New password: ${json.raw_password}`
-        : 'Updated successfully';
-
-      await Swal.fire({ toast:true, position:'top-end', icon:'success', title, showConfirmButton:false, timer:3000 });
-    } catch (err) {
-      if (err instanceof Object && err.errors) {
-        for (let [field, msgs] of Object.entries(err.errors)) {
-          const input = form.querySelector(`[name="${field}"]`);
-          if (!input) continue;
-          input.classList.add('is-invalid');
-          let fb = document.createElement('div');
-          fb.classList.add('invalid-feedback');
-          fb.textContent = msgs[0];
-          input.after(fb);
-        }
-      } else {
-        Swal.fire({ icon:'error', title:'Update failed', text: err.message||err });
-      }
+    // Move under body to avoid stacking-context traps
+    if (modalEl.parentElement !== document.body) {
+      document.body.appendChild(modalEl);
     }
 
-    instance.hide();
-    modalEl.addEventListener('hidden.bs.modal', () => {
-      instance.dispose();
-      document.querySelectorAll('.modal-backdrop').forEach(x=>x.remove());
-      if (typeof loadContent === 'function') loadContent(window.location.pathname);
-      else window.location.reload();
-    }, { once:true });
+    // Clear any loader that could block
+    $('#table-container')?.classList.remove('is-loading');
+
+    // Prefill from the triggering button
+    const btn = ev.relatedTarget;
+    if (!btn) return;
+
+    const form = $('#editEnforcerForm');
+    const id   = btn.getAttribute('data-id');
+    const url  = btn.getAttribute('data-url') || `/enforcer/${id}`;
+    if (form) form.setAttribute('action', url);
+
+    const setVal = (sel, val) => { const el = $(sel); if (el) el.value = val || ''; };
+
+    setVal('#edit_badge_num',     btn.getAttribute('data-badge'));
+    setVal('#edit_fname',         btn.getAttribute('data-fname'));
+    setVal('#edit_mname',         btn.getAttribute('data-mname'));
+    setVal('#edit_lname',         btn.getAttribute('data-lname'));
+    setVal('#edit_phone',         btn.getAttribute('data-phone'));
+    setVal('#edit_ticket_start',  btn.getAttribute('data-ticket-start'));
+    setVal('#edit_ticket_end',    btn.getAttribute('data-ticket-end'));
+    setVal('#edit_password',      '');
   });
 
+  document.addEventListener('shown.bs.modal', (ev) => {
+    const modalEl = ev.target;
+    if (modalEl.id !== 'editModal') return;
 
-  // ── 4) SPA navigation + table reload (search/sort/pagination) ──────────
-  (function($){
-    const container      = $('#enforcerContainer');
-    const tableContainer = $('#table-container');
-    const partialRoute   = '/enforcer/partial';
+    // Remove duplicate backdrops if any
+    const backs = $all('.modal-backdrop');
+    backs.forEach((bd, i) => { if (i < backs.length - 1) bd.remove(); });
 
-    // — any <a data-ajax> becomes an AJAX page swap
-    $(document).on('click','a[data-ajax]', function(e){
-      e.preventDefault();
-      const url = $(this).attr('href');
-      $.get(url, html => {
-        container.html(html);
-        history.pushState(null,'',url);
+    const topBackdrop = $('.modal-backdrop');
+    if (topBackdrop) topBackdrop.style.zIndex = '1990';
+    modalEl.style.zIndex = '2000';
+  });
+
+  document.addEventListener('hidden.bs.modal', (ev) => {
+    if (ev.target.id !== 'editModal') return;
+    $all('.modal-backdrop').forEach(bd => bd.remove());
+  });
+
+  // Generate password (works for both edit and add if IDs match)
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('#btnGenPass, #btnGenPwd');
+    if (!btn) return;
+    const target = $('#edit_password') || $('#password');
+    if (target) target.value = secureRandomString(12);
+  });
+
+  // Submit Edit (AJAX)
+  document.addEventListener('submit', (e) => {
+    const form = e.target;
+    if (!form || form.id !== 'editEnforcerForm') return;
+
+    e.preventDefault();
+    const action = form.getAttribute('action');
+    const fd = new FormData(form);
+    fd.set('_method', 'PUT');
+
+    fetch(action, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+      body: fd
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text() || 'Update failed');
+        return r.json().catch(() => ({}));
+      })
+      .then((data) => {
+        const modal = bootstrap.Modal.getInstance($('#editModal'));
+        modal?.hide();
+
+        if (data?.raw_password) {
+          Swal.fire({
+            icon: 'success',
+            title: 'Password Reset',
+            html: `<div class="text-start" style="font-size:.95rem">
+                     <div><strong>New Password:</strong> ${data.raw_password}</div>
+                     <small class="text-muted">Provide this to the enforcer.</small>
+                   </div>`,
+            timer: 2000
+          });
+        } else {
+          Swal.fire({ icon: 'success', title: 'Updated', timer: 1200, showConfirmButton: false });
+        }
+
+        loadTable(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        Swal.fire({ icon: 'error', title: 'Update failed', text: 'Please check your inputs.' });
       });
+  });
+
+  /* ==========================================
+   * ACTIVATE / INACTIVATE (AJAX + admin pwd)
+   * ========================================== */
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('#enforcerContainer .status-btn');
+    if (!btn) return;
+
+    const action = btn.getAttribute('data-action');
+    const method = (btn.getAttribute('data-method') || 'POST').toUpperCase();
+
+    const { isConfirmed, value: adminPwd } = await Swal.fire({
+      title: method === 'DELETE' ? 'Confirm Inactivate' : 'Confirm Activate',
+      text: 'Please enter the admin password to proceed.',
+      input: 'password',
+      inputAttributes: { autocapitalize: 'off', autocomplete: 'current-password', maxlength: 128 },
+      showCancelButton: true,
+      confirmButtonText: 'Confirm',
+      cancelButtonText: 'Cancel',
+      preConfirm: (val) => {
+        if (!val) { Swal.showValidationMessage('Admin password is required'); return false; }
+        return val;
+      }
     });
 
-    // — popstate (Back/Forward buttons)
-    window.addEventListener('popstate', () => {
-      const url = location.pathname + location.search;
-      $.get(url, html => container.html(html));
-    });
-    history.replaceState(null,'',location.pathname+location.search);
+    if (!isConfirmed) return;
 
-    // — form submit for Create
-    $(document).on('submit','#enforcerForm', function(e){
-      e.preventDefault();
-      const $f = $(this);
-      $.post($f.attr('action'), $f.serialize(), tableHtml => {
-        Swal.fire({
-          icon: 'success',
-          title: 'Enforcer added!',
-          text: 'Add another?',
-          showCancelButton: true,
-          confirmButtonText: 'Yes',
-          cancelButtonText: 'No'
-        }).then(res => {
-          if (res.isConfirmed) $(`a[href$="/enforcer/create"]`).click();
-          else {
-            tableContainer.html(tableHtml);
-            history.pushState(null,'','/enforcer');
+    const fd = new FormData();
+    if (method !== 'POST') fd.set('_method', method);
+    fd.set('admin_password', adminPwd);
+
+    setLoading(true);
+    try {
+      const res = await fetch(action, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+        body: fd
+      });
+
+      if (!res.ok) {
+        let msg = 'Action failed.';
+        try { const data = await res.json(); msg = data.message || msg; }
+        catch { msg = await res.text() || msg; }
+        await Swal.fire({ icon: 'error', title: 'Error', text: msg });
+        return;
+      }
+
+      await Swal.fire({
+        icon: 'success',
+        title: method === 'DELETE' ? 'Enforcer Inactivated' : 'Enforcer Activated',
+        timer: 1200, showConfirmButton: false
+      });
+
+      loadTable(false);
+    } catch (err) {
+      console.error(err);
+      await Swal.fire({ icon: 'error', title: 'Network Error', text: 'Please try again.' });
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  /* ==============================
+   *       ADD PAGE BEHAVIOR
+   * ============================== */
+
+  // Confirm Back (works after AJAX swaps)
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.confirm-back');
+    if (!btn) return;
+
+    const url = btn.dataset.back || '/enforcer';
+    const { isConfirmed } = await Swal.fire({
+      title: 'Leave this page?',
+      text: 'Your inputs will be discarded.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, go back',
+      cancelButtonText: 'Stay'
+    });
+    if (!isConfirmed) return;
+
+    navigateAjax(url);
+  });
+
+  // Submit Add form (delegated)
+  document.addEventListener('submit', async (e) => {
+    const form = e.target;
+    if (!form || form.id !== 'enforcerForm') return;
+
+    e.preventDefault();
+    const action = form.getAttribute('action');
+    const fd = new FormData(form);
+
+    // show small overlay if present
+    const overlay = $('.form-card .loading-overlay');
+    if (overlay) overlay.style.display = 'flex';
+
+    try {
+      const res = await fetch(action, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+        body: fd
+      });
+
+      if (!res.ok) {
+        let msg = 'Failed to add enforcer.';
+        try {
+          const data = await res.json();
+          msg = data.message || (data.errors ? Object.values(data.errors).flat().join('\n') : msg);
+        } catch { msg = (await res.text()) || msg; }
+        await Swal.fire({ icon: 'error', title: 'Error', text: msg });
+        return;
+      }
+
+      const data = await res.json(); // { success:true, raw_password:"..." }
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Enforcer Added',
+        html: data.raw_password
+          ? `<div class="text-start" style="font-size:.95rem">
+               <div><strong>Temporary Password:</strong> ${data.raw_password}</div>
+               <small class="text-muted">Give this to the enforcer; they can change it later.</small>
+             </div>`
+          : 'Enforcer was added successfully.',
+        showCancelButton: true,
+        confirmButtonText: 'Add another',
+        cancelButtonText: 'Go to list'
+      }).then(({ isConfirmed }) => {
+        if (isConfirmed) {
+          // Reset + advance badge/ticket + fresh password
+          form.reset();
+
+          const badgeEl = $('#badge_num');
+          const startEl = $('#ticket_start');
+          const endEl   = $('#ticket_end');
+
+          if (badgeEl?.value) badgeEl.value = incBadge(badgeEl.value);
+
+          if (startEl && endEl) {
+            const prevEnd   = parseInt(endEl.value, 10) || 0;
+            const nextStart = Math.min(999, prevEnd + 1);
+            const nextEnd   = Math.min(999, nextStart + 99);
+            startEl.value = pad3(nextStart);
+            endEl.value   = pad3(nextEnd);
           }
-        });
-      }).fail(xhr => {
-        const errs = (xhr.status===422 && xhr.responseJSON.errors)
-                   ? xhr.responseJSON.errors
-                   : { general:['Something went wrong'] };
-        let list = '<ul class="text-start">';
-        $.each(errs,(k,v)=> list+=`<li>${v[0]||v}</li>`);
-        list += '</ul>';
-        Swal.fire({ icon:'error', title:'Error', html:list });
+
+          const pwdEl = $('#password');
+          if (pwdEl) pwdEl.value = secureRandomString(12);
+          $('#fname')?.focus();
+
+        } else {
+          navigateAjax('/enforcer');
+        }
       });
-    });
 
-    // — table loader
-    window.loadTable = (page='1', push=true) => {
-      const sort   = $('#sort_table').val()     || 'date_desc';
-      const search = ($('#search_input').val()||'').trim();
-      $.ajax({
-        url: partialRoute,
-        data: { sort_option: sort, search, page },
-        headers: { 'X-Requested-With':'XMLHttpRequest' },
-        success(html) {
-          tableContainer.html(html);
-          if (push) {
-            const p = new URLSearchParams();
-            if (sort!=='date_desc') p.set('sort_option', sort);
-            if (search!=='')       p.set('search', search);
-            if (page!=='1')        p.set('page', page);
-            history.pushState(null,'',`${window.location.pathname}?${p}`);
-          }
-        },
-        error(err) { console.error('Enforcer table load error', err); }
-      });
-    };
+    } catch (err) {
+      console.error(err);
+      await Swal.fire({ icon: 'error', title: 'Network Error', text: 'Please try again.' });
+    } finally {
+      if (overlay) overlay.style.display = 'none';
+    }
+  });
 
-    // — initial load & controls
-    $(function(){
-      const params = new URLSearchParams(window.location.search);
-      $('#sort_table').val(params.get('sort_option')||'date_desc');
-      $('#search_input').val(params.get('search')     ||'');
-      loadTable(params.get('page')||'1', false);
-    });
-    $(document).on('change','#sort_table', () => loadTable('1'));
-    $(document).on('click','#search_btn', () => loadTable('1'));
-    $(document).on('keypress','#search_input', e => {
-      if (e.which===13) { e.preventDefault(); loadTable('1'); }
-    });
-    $(document).on('click','#table-container .pagination a', function(e){
-      e.preventDefault();
-      const pg = new URL(this.href).searchParams.get('page')||'1';
-      loadTable(pg);
-    });
-
-  })(jQuery);
-
-})();
+})(window.jQuery || (() => { throw new Error('jQuery required'); })());

@@ -1,4 +1,5 @@
 var staticCacheName = "pwa-v" + new Date().getTime();
+const ORIGIN = self.location.origin || 'https://poso_management.test';
 
 importScripts('https://unpkg.com/dexie@3.2.4/dist/dexie.min.js');
 const db = new Dexie('ticketDB');
@@ -35,8 +36,9 @@ self.addEventListener('sync', event => {
       db.tickets.toArray().then(records =>
         Promise.all(records.map(async rec => {
           try {
-            const resp = await fetch('/pwa/sync/ticket', {
+            const resp = await fetch(`${ORIGIN}/pwa/sync/ticket`, {
               method: 'POST',
+              credentials: 'include',
               headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
@@ -84,8 +86,9 @@ self.addEventListener('activate', event => {
 
 // Cache-first with offline fallback for navigations
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') {
-    event.respondWith(fetch(event.request));
+  const { request } = event;
+  if (request.method !== 'GET') {
+    event.respondWith(fetch(request, { credentials: 'include' }));
     return;
   }
   event.respondWith(

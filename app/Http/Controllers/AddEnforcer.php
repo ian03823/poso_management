@@ -56,8 +56,12 @@ class AddEnforcer extends Controller
               'show'        => $show,
             ]);
 
-        // Full page
-        return view('admin.enforcer', compact('enforcer','sortOption','search', 'show'));
+        //  if ($request->ajax()) {
+        //     // Return only the table for AJAX pagination
+        //     return view('admin.partials.enforcerTable', compact('enforcer','sortOption','search','show'));
+        // }
+
+        return view('admin.enforcer', compact('enforcer','sortOption','search','show'));
 
     }
 
@@ -102,35 +106,28 @@ class AddEnforcer extends Controller
     {
         //
         $data = $request->validate([
-            'badge_num' => 'required|string|max:4',
-            'fname' => 'required|string|min:2|max:20',
-            'mname' => 'nullable|string|min:3|max:20',
-            'lname' => 'required|string|min:3|max:20',
-            'phone' => 'required|digits:11',
-            'password' => 'required|string|max:16',
-            'ticket_start'  => 'required|digits:3|numeric|min:1|max:999',
-            'ticket_end'    => 'required|digits:3|numeric|gte:ticket_start|max:999',
+            'badge_num'    => 'required|string|max:4',
+            'fname'        => 'required|string|min:2|max:20',
+            'mname'        => 'nullable|string|min:1|max:20',
+            'lname'        => 'required|string|min:2|max:20',
+            'phone'        => 'required|digits:11',
+            'password'     => 'required|string|min:8|max:20',
+            'ticket_start' => 'required|digits:3|numeric|min:1|max:999',
+            'ticket_end'   => 'required|digits:3|numeric|gte:ticket_start|max:999',
         ]);
-        $badge_num = Enforcer::where('badge_num', $data['badge_num'])->exists();
-        if ($badge_num) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Badge number already exists',
-            ], 422);
+
+        if (Enforcer::where('badge_num', $data['badge_num'])->exists()) {
+            return response()->json(['success'=>false,'message'=>'Badge number already exists'], 422);
         }
+
         $raw = $data['password'];
-        $data['password']         = Hash::make($raw);
+        $data['password']        = Hash::make($raw);
         $data['defaultPassword'] = Hash::make($raw);
+
         Enforcer::create($data);
-        
 
-        $enforcer = Enforcer::orderBy('updated_at','desc')->paginate(5);
-
-        return response()->json([
-            'success'      => true,
-            'raw_password' => $raw,
-            'html'         => view('admin.partials.enforcerTable', compact('enforcer'))->render(),
-        ], 201);
+        // Return minimal success (your front-end already reloads the table)
+        return response()->json(['success'=>true, 'raw_password'=>$raw], 201);
     }
 
     /**
@@ -159,54 +156,78 @@ class AddEnforcer extends Controller
     public function update(Request $request, string $id)
     {
         //
-        $e = Enforcer::findOrFail($id);
+        $e = Enforcer::withTrashed()->findOrFail($id);
 
         $data = $request->validate([
-            'badge_num' => 'nullable|string|min:2|max:3',
-            'fname' => 'nullable|min:3',
-            'mname' => 'nullable',
-            'lname' => 'required|min:3',
-            'phone' => 'nullable|digits:11',
-            'password' => 'nullable|string|min:8|max:20',
+            'badge_num'    => 'nullable|string|max:4',
+            'fname'        => 'nullable|string|min:2|max:20',
+            'mname'        => 'nullable|string|min:1|max:20',
+            'lname'        => 'nullable|string|min:2|max:20',
+            'phone'        => 'nullable|digits:11',
+            'ticket_start' => 'nullable|digits:3|numeric|min:1|max:999',
+            'ticket_end'   => 'nullable|digits:3|numeric|gte:ticket_start|max:999',
+            'password'     => 'nullable|string|min:8|max:20',
         ]);
+
+        // Unique badge if provided
+        if (!empty($data['badge_num'])) {
+            $exists = Enforcer::withTrashed()
+                ->where('badge_num', $data['badge_num'])
+                ->where('id', '!=', $e->id)
+                ->exists();
+            if ($exists) {
+                return response()->json(['success'=>false,'message'=>'Badge number already exists'], 422);
+            }
+        }
+
         $resp = ['success'=>true,'message'=>'Enforcer updated'];
 
         if (!empty($data['password'])) {
-            // admin reset via JS-generated value or manual
             $raw = $data['password'];
-            $data['password']         = Hash::make($raw);
+            $data['password']        = Hash::make($raw);
             $data['defaultPassword'] = Hash::make($raw);
-            $resp['raw_password']     = $raw;
-            $resp['message']          = 'Password reset & updated';
+            $resp['raw_password']    = $raw;
+            $resp['message']         = 'Password reset & updated';
         } else {
-            unset($data['password'],$data['defaultPassword']);
+            unset($data['password'], $data['defaultPassword']);
         }
+
         $e->update($data);
 
-        return response()->json($resp,200);
+        return response()->json($resp, 200);
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(string $id, Request $request)
     {
         //
-        $enforcer = Enforcer::findOrfail($id);
-        $enforcer->delete();
-        return redirect('/enforcer')->with('success','Client Deleted Succesfully');
-    }
-    public function restore(string $id)
-    {
-        // find even trashed records
-        $e = Enforcer::withTrashed()->findOrFail($id);
+        $request->validate(['admin_password' => 'required']);
+        $admin = auth('admin')->user(); // your custom admin guard
 
-        // “undelete” it
+        if (!$admin || !Hash::check($request->admin_password, $admin->password)) {
+            return response()->json(['message' => 'Invalid admin password'], 422);
+        }
+
+        $enforcer = Enforcer::findOrFail($id);
+        $enforcer->delete();
+
+        return response()->json(['message' => 'Enforcer inactivated'], 200);
+    }
+    public function restore(string $id, Request $request)
+    {
+        $request->validate(['admin_password' => 'required']);
+        $admin = auth('admin')->user();
+
+        if (!$admin || !Hash::check($request->admin_password, $admin->password)) {
+            return response()->json(['message' => 'Invalid admin password'], 422);
+        }
+
+        $e = Enforcer::withTrashed()->findOrFail($id);
         $e->restore();
 
-        // go back (preserves your ?show=inactive or ?show=active)
-        return redirect()->back()
-                        ->with('success','Enforcer has been re-activated.');
+        return response()->json(['message' => 'Enforcer activated'], 200);
     }
 
     public function partial(Request $request)

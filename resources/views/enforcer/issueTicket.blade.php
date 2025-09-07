@@ -2,33 +2,43 @@
 
 @section('title', 'POSO Enforcer Management')
 
+@push('styles')
+  <link rel="stylesheet" href="{{ asset('css/enforcer-issueTicket.css') }}">
+@endpush
+
 @section('body')
-  <style>
-    /* Ensure page is scrollable */
-    html, body {
-      overflow: auto !important;
-      height: auto !important;
-    }
-  </style>
-  @php
-    $allFlags = \App\Models\Flag::whereIn('key',['is_resident','is_impounded'])->get();
-    $old      = old('flags', []);
-  @endphp
 
-  @php $v = $violator; @endphp
+{{-- ✅ Include the stylesheet --}}
+{{-- If you use Vite --}}
 
-  <div class="container py-4">
-    {{-- Page Title --}}
-    <h1 class="h4 text-center mb-4">Traffic Citation Ticket</h1>
-    <button type="button" class="btn btn-outline-success mb-3" data-bs-toggle="modal" data-bs-target="#scanIdModal" id="openScanId">
-      <i class="bi bi-camera"></i> Scan ID
-    </button>
+{{-- Or, if you placed it in public/css --}}
+{{-- <link rel="stylesheet" href="{{ asset('css/issueTicket.css') }}"> --}}
+
+@php
+  $allFlags = \App\Models\Flag::whereIn('key',['is_resident','is_impounded'])->get();
+  $old      = old('flags', []);
+  $v        = $violator;
+@endphp
+
+<div class="issue-page">
+  <div class="container py-3">
+    {{-- Sticky page topbar --}}
+    <div class="page-topbar rounded-3 px-2">
+      <h1 class="page-title">Traffic Citation Ticket</h1>
+      <button type="button" class="btn btn-outline-success ms-auto" data-bs-toggle="modal" data-bs-target="#scanIdModal" id="openScanId">
+        <i class="bi bi-camera me-1"></i> Scan ID
+      </button>
+    </div>
+
     {{-- Form Card --}}
-    <div class="card mx-auto shadow-sm rounded-3 ticket-card" style="max-width: 800px;">
-      <div class="card-body p-3 p-sm-4">
+    <div class="card ticket-card mx-auto mt-3">
+      <div class="card-body">
         <form id="ticketForm" action="/enforcerTicket" method="POST">
           @csrf
+
           <div class="row g-3">
+            <input type="hidden" id="enforcer_id" name="enforcer_id" value="{{ auth('enforcer')->id() }}">
+
             {{-- Name --}}
             <div class="col-6 col-md-6 form-floating">
               <input type="text" class="form-control" id="first_name" name="first_name"
@@ -45,6 +55,7 @@
                      placeholder="Last Name" value="{{ $v->last_name ?? old('last_name') }}">
               <label for="last_name">Last Name</label>
             </div>
+
             {{-- License No. --}}
             <div class="col-6 col-md-6 form-floating">
               <input type="text" class="form-control" id="license_num" name="license_num"
@@ -52,37 +63,40 @@
                      value="{{ $v->license_number ?? old('license_num') }}">
               <label for="license_num">License No.</label>
             </div>
+
             {{-- Address --}}
             <div class="col-12 col-md-6 form-floating">
-              <textarea class="form-control" id="address" name="address"
-                        placeholder="Full address" style="height: 3rem">{{ $v->address ?? old('address') }}</textarea>
+              <textarea class="form-control" id="address" name="address" placeholder="Full address">{{ $v->address ?? old('address') }}</textarea>
               <label for="address">Address</label>
             </div>
+
             {{-- Birthdate --}}
             <div class="col-6 col-md-3 form-floating">
               <input type="date" class="form-control" id="birthdate" name="birthdate"
                      placeholder="Birthdate" value="{{ $v->birthdate ?? old('birthdate') }}">
               <label for="birthdate">Birthdate</label>
             </div>
+
             {{-- Plate No. --}}
             <div class="col-6 col-md-3 form-floating">
               <input type="text" class="form-control" id="plate_num" name="plate_num"
                      placeholder="Plate number" autocomplete="off" value="{{ old('plate_num') }}">
               <label for="plate_num">Plate No.</label>
             </div>
+
             {{-- Confiscated --}}
             <div class="col-12 col-md-6 form-floating">
               <select class="form-select" id="confiscation_type_id" name="confiscation_type_id">
                 <option value="" disabled {{ old('confiscation_type_id')?'':'selected' }}>Choose…</option>
                 @foreach(\App\Models\ConfiscationType::all() as $type)
-                  <option value="{{ $type->id }}"
-                          {{ old('confiscation_type_id') == $type->id ? 'selected' : '' }}>
+                  <option value="{{ $type->id }}" {{ old('confiscation_type_id') == $type->id ? 'selected' : '' }}>
                     {{ $type->name }}
                   </option>
                 @endforeach
               </select>
               <label for="confiscation_type_id">Confiscated</label>
             </div>
+
             {{-- Vehicle Type --}}
             <div class="col-12 col-md-6 form-floating">
               <select class="form-select" id="vehicle_type" name="vehicle_type" required>
@@ -93,19 +107,15 @@
               </select>
               <label for="vehicle_type">Vehicle Type</label>
             </div>
-            {{-- Owner & Resident --}}
-            <div class="col-12 col-md-6 d-flex justify-content-evenly align-items-center">
+
+            {{-- Owner & Flags --}}
+            <div class="col-12 col-md-6 d-flex justify-content-between align-items-center">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="is_owner" name="is_owner" value="1" checked>
                 <label class="form-check-label" for="is_owner">Violator is owner</label>
               </div>
-              <!-- <div class="form-check">
-                <input type="hidden" name="is_resident" value="0">
-                <input class="form-check-input" type="checkbox" id="is_resident" name="is_resident" value="1"
-                       {{ old('is_resident', true) ? 'checked' : '' }}>
-                <label class="form-check-label" for="is_resident">Resident</label>
-              </div> -->
             </div>
+
             {{-- Owner Name --}}
             <div class="col-12 col-md-6 form-floating">
               <input type="text" class="form-control" id="owner_name" name="owner_name"
@@ -115,50 +125,36 @@
           </div>
 
           {{-- Violations --}}
-          <div class="mt-4">
-            <h5 class="mb-2">Select Violations</h5>
-            <div class="border rounded p-3">
-              <div class="form-floating mb-3">
-                <select class="form-select" id="categorySelect" aria-label="Select violation category">
-                  <option value="" disabled selected>Choose category…</option>
-                  @foreach($violationGroups->keys() as $category)
-                    <option value="{{ $category }}">{{ $category }}</option>
-                  @endforeach
-                </select>
-                <label for="categorySelect">Category</label>
-              </div>
-              <div id="violationsContainer" class="px-1 overflow-auto" style="max-height:250px;"></div>
+          <h5 class="section-title mt-3">Select Violations</h5>
+          <div class="border-0">
+            <div class="form-floating mb-3">
+              <select class="form-select" id="categorySelect" aria-label="Select violation category">
+                <option value="" disabled selected>Choose category…</option>
+                @foreach($violationGroups->keys() as $category)
+                  <option value="{{ $category }}">{{ $category }}</option>
+                @endforeach
+              </select>
+              <label for="categorySelect">Category</label>
             </div>
+            <div id="violationsContainer" class="violations-box"></div>
           </div>
 
-          {{-- Impounded & Location --}}
-          <div class="row g-3 mt-3">
-            <!-- <div class="col-12 col-md-6 d-flex align-items-center">
-              <div class="form-check">
-                <input type="hidden" name="is_impounded" value="0">
-                <input class="form-check-input" type="checkbox" id="is_impounded" name="is_impounded" value="1"
-                       {{ old('is_impounded', false) ? 'checked' : '' }}>
-                <label class="form-check-label" for="is_impounded">Vehicle Impounded</label>
+          {{-- Flags & Location --}}
+          <div class="row g-3 mt-2">
+            <div class="col-12">
+              <div class="flags-row">
+                @foreach($allFlags as $flag)
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="{{ $flag->key }}" name="flags[]" value="{{ $flag->id }}"
+                           {{ in_array($flag->id, $old) ? 'checked' : '' }}>
+                    <label class="form-check-label" for="{{ $flag->key }}">{{ $flag->label }}</label>
+                  </div>
+                @endforeach
               </div>
-            </div> -->
-            @foreach($allFlags as $flag)
-              <div class="form-check">
-                <input 
-                  class="form-check-input" 
-                  type="checkbox" 
-                  id="{{ $flag->key }}" 
-                  name="flags[]" 
-                  value="{{ $flag->id }}"
-                  {{ in_array($flag->id, $old) ? 'checked' : '' }}
-                >
-                <label class="form-check-label" for="{{ $flag->key }}">
-                  {{ $flag->label }}
-                </label>
-              </div>
-            @endforeach
+            </div>
+
             <div class="col-12 col-md-6 form-floating">
-              <input type="text" class="form-control" id="location" name="location"
-                     placeholder="e.g. Brgy, Sitio" required>
+              <input type="text" class="form-control" id="location" name="location" placeholder="e.g. Brgy, Sitio" required>
               <label for="location">Location of Apprehension</label>
             </div>
           </div>
@@ -166,28 +162,24 @@
           <input type="hidden" name="latitude" id="latitude">
           <input type="hidden" name="longitude" id="longitude">
 
-          {{-- Submit --}}
-          <div class="mt-4">
-            <button type="submit" class="btn btn-primary w-100 btn-lg">Save &amp; Print</button>
+          {{-- Sticky Submit --}}
+          <div class="form-actions">
+            <button type="submit" class="btn btn-success w-100 btn-lg">Save &amp; Print</button>
           </div>
         </form>
 
-        {{-- Pass PHP data into a JS global --}}
-        <script> 
-          window.violationGroups = @json($violationGroups->toArray()); 
-          window.flagsLookup = @json(
-            $allFlags->mapWithKeys(fn($f)=>[$f->id => ['key'=>$f->key,'label'=>$f->label]])
-          );
+        {{-- JS Globals --}}
+        <script>
+          window.violationGroups = @json($violationGroups->toArray());
+          window.flagsLookup = @json($allFlags->mapWithKeys(fn($f)=>[$f->id => ['key'=>$f->key,'label'=>$f->label]]));
         </script>
       </div>
     </div>
   </div>
+</div>
 
-
-  
-
-
-  <div class="modal fade" id="scanIdModal" tabindex="-1" aria-labelledby="scanIdModalLabel" aria-hidden="true">
+{{-- Scan ID Modal (layout-only changes: camera box + responsive) --}}
+<div class="modal fade" id="scanIdModal" tabindex="-1" aria-labelledby="scanIdModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
     <div class="modal-content">
       <div class="modal-header">
@@ -196,7 +188,6 @@
       </div>
 
       <div class="modal-body">
-        <!-- Tabs: QR (default) and OCR fallback -->
         <ul class="nav nav-pills mb-3" id="scanTab" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="tab-qr" data-bs-toggle="pill" data-bs-target="#pane-qr" type="button" role="tab">QR Scan</button>
@@ -207,10 +198,10 @@
         </ul>
 
         <div class="tab-content">
-          <!-- QR MODE -->
+          {{-- QR MODE --}}
           <div class="tab-pane fade show active" id="pane-qr" role="tabpanel" aria-labelledby="tab-qr">
-            <div class="rounded border p-2">
-              <div id="qr-reader" style="width:100%; max-width:420px; margin:auto;"></div>
+            <div class="camera-box">
+              <div id="qr-reader"></div>
             </div>
             <div class="d-flex gap-2 mt-3">
               <button class="btn btn-secondary" id="qr-stop">Stop</button>
@@ -218,10 +209,12 @@
             </div>
           </div>
 
-          <!-- OCR MODE -->
+          {{-- OCR MODE --}}
           <div class="tab-pane fade" id="pane-ocr" role="tabpanel" aria-labelledby="tab-ocr">
-            <div class="rounded border p-2">
-              <video id="ocr-video" playsinline autoplay muted style="width:100%; max-width:420px;"></video>
+            <div class="camera-box">
+              <div class="ratio ratio-4x3">
+                <video id="ocr-video" playsinline autoplay muted></video>
+              </div>
               <canvas id="ocr-canvas" class="d-none"></canvas>
             </div>
             <div class="d-flex gap-2 mt-3 align-items-center">
@@ -240,30 +233,28 @@
   </div>
 </div>
 
-    @if(session('duplicate_error'))
-      <script>Swal.fire({
-        icon: 'warning',
-        title: 'Oops—Duplicate Entry!',
-        text: "{{ session('duplicate_error') }}",
-        confirmButtonText: 'Understood',
-        confirmButtonColor: '#d33',
-        background: '#fff5f5',
-        color: '#611a15',
-        width: 400,
-        showCloseButton: true,
-        timer: 4000,
-        timerProgressBar: true,
-      });
-    </script>
-    @endif
+@if(session('duplicate_error'))
+  <script>Swal.fire({
+    icon: 'warning',
+    title: 'Oops—Duplicate Entry!',
+    text: "{{ session('duplicate_error') }}",
+    confirmButtonText: 'Understood',
+    confirmButtonColor: '#d33',
+    background: '#fff5f5',
+    color: '#611a15',
+    width: 400,
+    showCloseButton: true,
+    timer: 4000,
+    timerProgressBar: true,
+  });</script>
+@endif
 
-  {{-- External scripts --}}
-  <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script src="{{ asset('js/issueTicket.js') }}"></script>
-  <script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}"></script>
-  <script src="{{ asset('vendor/tesseract/tesseract.min.js') }}"></script>
-  <script src="{{ asset('js/id-scan.js') }}"></script>
-
+{{-- External scripts (unchanged) --}}
+<script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
+<script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ asset('js/issueTicket.js') }}"></script>
+<script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}"></script>
+<script src="{{ asset('vendor/tesseract/tesseract.min.js') }}"></script>
+<script src="{{ asset('js/id-scan.js') }}"></script>
 
 @endsection

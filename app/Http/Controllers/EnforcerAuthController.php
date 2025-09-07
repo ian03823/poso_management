@@ -6,8 +6,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Enforcer;
-use Illuminate\Validation\ValidationData;
-use Illuminate\Validation\ValidationException;
 
 class EnforcerAuthController extends Controller
 {
@@ -15,6 +13,40 @@ class EnforcerAuthController extends Controller
     public function showLogin()
     {
         return view("auth.enforcerLogin");
+    }
+    //
+    /** Detect if the submitted password is still the default */
+    private function isUsingDefaultPassword(Enforcer $user, string $input): bool
+    {
+        // Support ANY of these (use what you actually have)
+        // If you mark them explicitly
+        if (($user->mustChangePassword ?? false) || ($user->must_change_password ?? false)) {
+            return true;
+        }
+
+        // If a default is still recorded, always force change
+        if (!is_null($user->defaultPassword) || !is_null($user->defaultPasswordHash)) {
+            return true;
+        }
+
+        // --- Optional fallback checks (only if you REALLY need them) ---
+
+        // If you sometimes store the *hash* in defaultPassword by mistake,
+        // try to detect and verify it as a bcrypt hash:
+        $plain = $user->defaultPassword ?? null;
+        if (is_string($plain) && strlen($plain) === 60 && str_starts_with($plain, '$2y$')) {
+            if (\Illuminate\Support\Facades\Hash::check($input, $plain)) {
+                return true;
+            }
+        }
+
+        // If you intentionally store a separate hash:
+        $hash = $user->defaultPasswordHash ?? null;
+        if ($hash && \Illuminate\Support\Facades\Hash::check($input, $hash)) {
+            return true;
+        }
+
+        return false;
     }
     //
     public function login(Request $request)
@@ -29,49 +61,46 @@ class EnforcerAuthController extends Controller
         $useExpBackoff = filter_var(env('AUTH_LOCKOUT_EXP_BACKOFF', false), FILTER_VALIDATE_BOOL);
         $maxLockMins   = (int) env('AUTH_LOCKOUT_MAX_MINUTES', 1440);
 
-        // Find by badge number (include soft-deleted to show proper message)
-        $user = \App\Models\Enforcer::withTrashed()
-            ->where('badge_num', $credentials['badge_num'])
-            ->first();
+        $user = Enforcer::withTrashed()->where('badge_num', $credentials['badge_num'])->first();
 
         if (! $user) {
-            return back()->withErrors([
-                'badge_num' => 'Invalid badge number or password.',
-            ])->withInput();
+            return back()->withErrors(['badge_num' => 'Invalid badge number or password.'])->withInput();
         }
 
         if (method_exists($user, 'trashed') && $user->trashed()) {
-            return back()->withErrors([
-                'badge_num' => 'Your account is deactivated. Please contact the Admin or go to Admin Office.',
-            ])->withInput();
+            return back()->withErrors(['badge_num' => 'Your account is deactivated. Please contact the Admin or go to Admin Office.'])->withInput();
         }
 
-        // If currently locked, block and show remaining time
         if ($user->lockout_until && now()->lt($user->lockout_until)) {
             $remaining = now()->diffInSeconds($user->lockout_until);
-            return back()
-                ->withErrors(['badge_num' => 'Account temporarily locked. Try again later.'])
-                ->with('lockout_remaining', $remaining)
-                ->withInput();
+            return back()->withErrors(['badge_num' => 'Account temporarily locked. Try again later.'])
+                         ->with('lockout_remaining', $remaining)
+                         ->withInput();
         }
 
-        // Check password directly against the found user
-        $passwordOk = \Illuminate\Support\Facades\Hash::check($credentials['password'], $user->password);
-
-        if ($passwordOk) {
-            // Success → reset counters/lock
+        // Validate password against stored hash
+        if (Hash::check($credentials['password'], $user->password)) {
+            // Reset counters
             $user->failed_attempts = 0;
             $user->lockout_until   = null;
             $user->lockouts_count  = 0;
             $user->save();
 
-            \Illuminate\Support\Facades\Auth::guard('enforcer')->login($user, $request->boolean('remember'));
+            // Log them in
+            Auth::guard('enforcer')->login($user, $request->boolean('remember'));
             $request->session()->regenerate();
+
+            // If they used the default, force a password change
+            if ($this->isUsingDefaultPassword($user, $credentials['password'])) {
+                $request->session()->put('force_pwd_change', true);
+                return redirect()->route('enforcer.password.edit')
+                    ->with('error', 'Default password detected. Please change your password before continuing.');
+            }
 
             return redirect()->intended('/enforcerTicket');
         }
 
-        // Wrong password → increment and possibly lock
+        // Wrong password logic (unchanged)
         $user->failed_attempts = (int) $user->failed_attempts + 1;
 
         if ($user->failed_attempts >= $maxAttempts) {
@@ -82,7 +111,7 @@ class EnforcerAuthController extends Controller
 
             $user->lockout_until   = now()->addMinutes($lockMinutes);
             $user->lockouts_count  = (int) $user->lockouts_count + 1;
-            $user->failed_attempts = 0; // reset streak after locking
+            $user->failed_attempts = 0;
             $user->save();
 
             return back()
@@ -115,17 +144,28 @@ class EnforcerAuthController extends Controller
             'password_confirmation' => 'required|string|min:8',
         ]);
 
-        $enforcer = Auth::guard('enforcer')->user();
+        $enforcer = Enforcer::find(Auth::guard('enforcer')->id());
 
-        // 1) Store the new “real” password
+        // 1) Save new password
         $enforcer->password = Hash::make($request->password);
 
-        // 2) Clear the default_password so it no longer matches
-        $enforcer->defaultPassword = null;
+        // ✅ Clear all “default” markers (camelCase first; snake_case fallback if present)
+        if (isset($enforcer->defaultPassword))     $enforcer->defaultPassword     = null;
+        if (isset($enforcer->defaultPasswordHash)) $enforcer->defaultPasswordHash = null;
+        if (isset($enforcer->mustChangePassword))  $enforcer->mustChangePassword  = false;
+
+        if (isset($enforcer->default_password))       $enforcer->default_password = null;
+        if (isset($enforcer->default_password_hash))  $enforcer->default_password_hash = null;
+        if (isset($enforcer->must_change_password))   $enforcer->must_change_password = false;
+
+        if (property_exists($enforcer, 'password_changed_at') || isset($enforcer->password_changed_at)) {
+            $enforcer->password_changed_at = now();
+        }
 
         $enforcer->save();
 
-        // 3) Log them out so they must log in again
+        // 3) Clear session flag and log out
+        $request->session()->forget('force_pwd_change');
         Auth::guard('enforcer')->logout();
 
         return redirect()

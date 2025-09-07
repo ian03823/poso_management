@@ -16,17 +16,19 @@ use App\Http\Controllers\ImpoundedController;
 use App\Http\Controllers\ViolatorTableController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\LocalTestTicketController;
 
 
 Route::get('/', function () {
     return view('welcome');
 });
 
-// quick ping for isReallyOnline()
+/* health check used by isReallyOnline() */
 Route::get('/ping', fn() => response()->noContent());
 
 // background sync JSON submit (CSRF exempt)
 Route::post('/pwa/sync/ticket', [TicketController::class, 'storeJson'])->name('ticket.sync');
+
 
 // Admin login routes
 Route::get('/alogin', [AuthController::class, 'showLogin'])->name('admin.showLogin');
@@ -48,7 +50,6 @@ Route::post('/vlogout', [ViolatorAuthController::class, 'logout'])->name('violat
 Route::middleware('enforcer')->group(function () {
     // PWA start url should serve the Issue Ticket page
     Route::get('/pwa', [TicketController::class, 'create'])->name('pwa');
-
     Route::resource('enforcerCreate', EnforcerAcc::class);
     Route::resource('enforcerTicket', TicketController::class);
     Route::resource('enf', EnforcerManagementController::class);

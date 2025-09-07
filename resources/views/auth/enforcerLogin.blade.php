@@ -1,41 +1,57 @@
 @extends('components.app')
 @section('title', 'POSO Digital Ticket')
 
+@push('styles')
+  <link rel="stylesheet" href="{{ asset('css/enforcer-login.css')}}">
+@endpush
+
 @section('body')
-<div class="d-flex flex-column min-vh-100 justify-content-center align-items-center login-container">
+
+{{-- Include the stylesheet --}}
+{{-- @vite('resources/css/enforcer-login.css') --}}
+{{-- Or, if you placed it in /public/css --}}
+{{-- <link rel="stylesheet" href="{{ asset('css/enforcer-login.css') }}"> --}}
+
+@php
+  $isError   = session('error') || $errors->any();
+  $remaining = session('lockout_remaining'); // seconds
+@endphp
+
+<div class="auth-page">
   {{-- Login Card --}}
-  <div class="card login-card shadow">
+  <div class="card auth-card shadow {{ $isError ? 'is-error' : '' }} {{ $remaining ? 'lockout' : '' }}">
     <div class="card-body px-4 py-5">
-        <div class="text-center mb-4">
-    <i class="bi bi-receipt-cutoff display-1 text-success icon-bounce"></i>
-  </div>
+
+      <div class="badge-icon mb-2">
+        <i class="bi bi-receipt-cutoff display-1 text-success icon-bounce"></i>
+      </div>
 
       {{-- Error Message --}}
       @if(session('error'))
-        <div class="alert alert-danger text-center">{{ session('error') }}</div>
+        <div class="alert alert-danger text-center mb-3">{{ session('error') }}</div>
       @endif
-      {{-- Top-of-form alerts --}}
+
+      {{-- Top-of-form validation --}}
       @if ($errors->any())
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
           {{ $errors->first() }}
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
       @endif
 
-      @php
-        $remaining = session('lockout_remaining'); // seconds
-      @endphp
-
+      {{-- Lockout notice --}}
       @if ($remaining)
-        <div class="alert alert-warning" role="alert">
-          Too many failed attempts. You can try again in
-          <span id="lockout-timer" class="fw-bold"></span>.
+        <div class="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
+          <i class="bi bi-hourglass-split"></i>
+          <div>
+            Too many failed attempts. You can try again in
+            <span id="lockout-timer" class="fw-bold"></span>.
+          </div>
         </div>
       @endif
 
-
       {{-- Title --}}
-      <h3 class="text-center fw-bold mb-4 text-success login-title">Enforcers Login</h3>
+      <h3 class="auth-title">Enforcers Login</h3>
 
       {{-- Form --}}
       <form method="POST" action="{{ route('enforcer.login') }}">
@@ -76,10 +92,10 @@
               class="btn btn-outline-secondary"
               onclick="togglePassword()"
               tabindex="-1"
+              aria-label="Toggle password visibility"
             >
               <i class="bi bi-eye-slash" id="toggleIcon"></i>
             </button>
-
           </div>
         </div>
 
@@ -88,8 +104,8 @@
           <i class="bi bi-box-arrow-in-right me-2"></i>Log in
         </button>
 
-        {{-- Validation Errors --}}
-        @if($errors->any())
+        {{-- Full error list (optional) --}}
+        {{-- @if($errors->any())
           <div class="mt-3 px-3 py-2 rounded border border-danger bg-light text-danger">
             <ul class="list-unstyled mb-0">
               @foreach($errors->all() as $error)
@@ -97,117 +113,43 @@
               @endforeach
             </ul>
           </div>
-        @endif
-        
+        @endif --}}
+
       </form>
     </div>
   </div>
 </div>
 
-@if (session('lockout_remaining'))
+{{-- Lockout countdown --}}
+@if ($remaining)
 <script>
 (function(){
-  let remaining = {{ (int) session('lockout_remaining') }};
+  let remaining = {{ (int) $remaining }};
   const btn = document.getElementById('loginBtn');
   const timerEl = document.getElementById('lockout-timer');
-
   if (btn) btn.disabled = true;
-
-  function fmt(sec){
-    const m = String(Math.floor(sec / 60)).padStart(2,'0');
-    const s = String(sec % 60).padStart(2,'0');
-    return `${m}:${s}`;
-  }
+  function fmt(sec){ const m=String(Math.floor(sec/60)).padStart(2,'0'); const s=String(sec%60).padStart(2,'0'); return `${m}:${s}`; }
   (function tick(){
     if (timerEl) timerEl.textContent = fmt(remaining);
-    if (remaining <= 0) { if (btn) btn.disabled = false; return; }
+    if (remaining <= 0){ if (btn) btn.disabled = false; return; }
     remaining--; setTimeout(tick, 1000);
   })();
 })();
 </script>
 @endif
 
-
-{{-- Styles & Animations --}}
-<style>
-  .login-container {
-    background-color: #017C3F;
-  }
-
-  .login-card {
-    width: 90%;
-    max-width: 400px;
-    border-radius: 12px;
-    border: none;
-    opacity: 0;
-    animation: fadeInUp 0.8s ease-out forwards;
-  }
-
-  .login-title {
-    opacity: 0;
-    animation: fadeIn 0.8s 0.2s forwards;
-  }
-
-  @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(30px); }
-    to   { opacity: 1; transform: translateY(0);     }
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-  }
-  @keyframes bounce {
-    0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-    40% { transform: translateY(-15px); }
-    60% { transform: translateY(-7px); }
-  }
-  .icon-bounce {
-    animation: bounce 2s infinite;
-  }
-  .form-control:focus {
-    box-shadow: 0 0 0 0.2rem rgba(0,200,83,0.25);
-    border-color: #00c853;
-  }
-  .btn-login {
-    background-color: #00c853;
-    color: #fff;
-    border-radius: 8px;
-    transition: transform 0.2s;
-  }
-  .btn-login:hover {
-    transform: scale(1.05);
-  }
-  .form-control.is-invalid {
-    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
-    border-color: #dc3545 !important;
-  }
-</style>
-
-
-
-
-@endsection
-
 @push('scripts')
-{{-- Scripts --}}
 <script>
   function togglePassword() {
     const pwd = document.getElementById('password');
     const icon = document.getElementById('toggleIcon');
-    if (pwd.type === 'password') {
-      pwd.type = 'text';
-      icon.classList.replace('bi-eye-slash', 'bi-eye');
-    } else {
-      pwd.type = 'password';
-      icon.classList.replace('bi-eye', 'bi-eye-slash');
-    }
+    if (pwd.type === 'password') { pwd.type = 'text'; icon.classList.replace('bi-eye-slash', 'bi-eye'); }
+    else { pwd.type = 'password'; icon.classList.replace('bi-eye', 'bi-eye-slash'); }
   }
   // remove the red glow on typing
-  document.querySelectorAll('#badge_num, #password')
-    .forEach(input => {
-      input.addEventListener('input', () => {
-        input.classList.remove('is-invalid');
-      });
-    });
+  document.querySelectorAll('#badge_num, #password').forEach(el=>{
+    el.addEventListener('input',()=> el.classList.remove('is-invalid'));
+  });
 </script>
 @endpush
+@endsection

@@ -1,37 +1,42 @@
 <div class="table-responsive">
-  <table class="table table-bordered table-hover">
+  <table class="table table-hover align-middle enforcer-table">
     <thead class="table-light">
       <tr>
         <th class="text-center">Badge</th>
         <th class="text-center">First Name</th>
-        <th class="text-center">Middle Name</th>
+        <th class="text-center col-md-only">Middle Name</th>
         <th class="text-center">Last Name</th>
-        <th class="text-center">Phone</th>
-        <th class="text-center">Ticket Range</th>
+        <th class="text-center col-md-only">Phone</th>
+        <th class="text-center col-md-only">Ticket Range</th>
         <th class="text-center">Actions</th>
       </tr>
     </thead>
     <tbody>
       @forelse($enforcer as $e)
         <tr class="{{ $e->trashed() ? 'table-secondary' : '' }}">
-          <td>{{ $e->badge_num }}</td>
-          <td>{{ $e->fname }}</td>
-          <td>{{ $e->mname }}</td>
-          <td>{{ $e->lname }}</td>
-          <td>{{ $e->phone }}</td>
-          <td>{{ $e->ticket_start }} - {{ $e->ticket_end }}</td>
-          <td class="text-center">
-            {{-- Edit always --}}
+          <td class="text-center">{{ $e->badge_num }}</td>
+          <td class="text-center">{{ $e->fname }}</td>
+          <td class="text-center col-md-only">{{ $e->mname }}</td>
+          <td class="text-center">{{ $e->lname }}</td>
+          <td class="text-center col-md-only">{{ $e->phone }}</td>
+          <td class="text-center col-md-only">{{ $e->ticket_start }} - {{ $e->ticket_end }}</td>
+          <td class="text-center table-actions">
             <a href="#"
                class="btn btn-warning btn-sm edit-btn"
                data-bs-toggle="modal"
                data-bs-target="#editModal"
                data-id="{{ $e->id }}"
-               {{-- …other data-attributes… --}}
+               data-url="{{ route('enforcer.update', $e) }}"
+               data-badge="{{ $e->badge_num }}"
+               data-fname="{{ $e->fname }}"
+               data-mname="{{ $e->mname }}"
+               data-lname="{{ $e->lname }}"
+               data-phone="{{ $e->phone }}"
+               data-ticket-start="{{ $e->ticket_start }}"
+               data-ticket-end="{{ $e->ticket_end }}"
             >Edit</a>
 
             @if(!$e->trashed())
-              {{-- Deactivate --}}
               <form action="{{ route('enforcer.destroy',$e) }}" method="POST" class="d-inline">
                 @csrf @method('DELETE')
                 <button type="button"
@@ -42,7 +47,6 @@
                 </button>
               </form>
             @else
-              {{-- Activate --}}
               <form action="{{ route('enforcer.restore',$e) }}" method="POST" class="d-inline">
                 @csrf
                 <button type="button"
@@ -64,6 +68,6 @@
   </table>
 
   <div class="d-flex justify-content-center mt-3">
-    {{ $enforcer->links() }}
+    {{ $enforcer->appends(['show'=>$show,'sort_option'=>$sortOption,'search'=>$search])->links() }}
   </div>
 </div>

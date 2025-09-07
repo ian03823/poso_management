@@ -5,20 +5,19 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Middleware;
 
-class VerifyCsrfToken
+class VerifyCsrfToken extends Middleware
 {
-    /**
-     * Handle an incoming request.
+     /**
+     * URIs that should be excluded from CSRF verification.
+     * Use paths without a leading slash. Wildcards allowed.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @var array<int, string>
      */
-    public function handle(Request $request, Closure $next): Response
-    {
-        return $next($request);
-    }
     protected $except = [
-        '/pwa/sync/ticket',
+        'pwa/sync/ticket',   // background sync endpoint hit by your SW
+        // 'pwa/sync/*',     // (optional) if you’ll add more sync endpoints
     ];
     
 }
