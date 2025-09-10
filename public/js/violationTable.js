@@ -105,6 +105,7 @@
     if (!hasTable) loadPage(page, /*push=*/false);
   }
   $(initPage);
+  document.addEventListener('DOMContentLoaded', initPage);
   document.addEventListener('page:loaded', initPage);
 
   // ---- filters
@@ -168,7 +169,6 @@
         const name = document.getElementById('swal-name').value.trim();
         const fine = document.getElementById('swal-fine').value.trim();
         const cat  = document.getElementById('swal-cat').value.trim();
-        const desc = document.getElementById('swal-desc').value.trim();
 
         if (!code || !name) {
           Swal.showValidationMessage('Code and Name are required.');
@@ -179,7 +179,6 @@
         if (name !== init.name) payload.violation_name = name;
         if (fine !== '' && String(fine) !== String(init.fine)) payload.fine_amount = fine;
         if (cat !== init.category) payload.category = cat;
-        if (desc !== (init.desc || '')) payload.description = desc;
         if (Object.keys(payload).length === 0) {
           Swal.showValidationMessage('No changes detected.');
           return false;

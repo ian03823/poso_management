@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="{{ asset('css/admin-ticketTable.css') }}">
   <link rel="stylesheet" href="{{ asset('css/admin-violationTable.css') }}">
   <link rel="stylesheet" href="{{ asset('css/admin-enforcerTable.css') }}">
+  <link rel="stylesheet" href="{{ asset('css/admin-violatorTable.css') }}">
   @stack('styles')
 </head>
 <body>
@@ -165,6 +166,7 @@
   {{-- Page js (delegated handlers; pagination; resolve flow) --}}
   <script src="{{ asset('js/impoundedVehicle.js') }}"></script>
   <script src="{{ asset('js/violationTable.js') }}"></script>
+  <script defer src="{{ asset('js/violatorPage.js') }}"></script>
 
   @stack('modals')
   @stack('scripts')

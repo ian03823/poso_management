@@ -1,18 +1,11 @@
-<div class="container-fluid py-4" id="form-container">
-  <div class="page-head">
+<div class="container-fluid py-4">
     <h2>Add Enforcer</h2>
-    <button type="button"
-            class="btn btn-outline-secondary confirm-back"
-            data-back="{{ url('/enforcer') }}"
-            data-ajax>
+    <a href="{{url('/enforcer')}}" data-ajax
+      class="btn btn-outline-secondary confirm-back">
       <i class="bi bi-arrow-left"></i> Back
-    </button>
-  </div>
+    </a>
 
-  <div class="card form-card mx-auto position-relative">
-    <div class="card-header">
-      New Enforcer Details
-    </div>
+  <div class="card mx-auto shadow">
 
     <form id="addEnforcerForm" action="{{ route('enforcer.store') }}" method="POST">
       @csrf

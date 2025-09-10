@@ -122,7 +122,7 @@ Route::middleware('admin')->group(function () {
         ->name('admin.activity-logs.index');
 });
 
-Route::middleware('violator')->group(function () {
+Route::middleware('auth')->group(function () {
     Route::get('/vdash', [ViolatorManagementController::class,'violatorDash'])->name('violator.dashboard');
     Route::get('/violator/password/change', [ViolatorAuthController::class, 'showChangePasswordForm'])->name('violator.password.change');
     Route::post('/violator/password/change', [ViolatorAuthController::class, 'changePassword'])->name('violator.password.update');
