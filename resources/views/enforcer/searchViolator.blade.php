@@ -1,5 +1,5 @@
 @extends('components.app')
-@section('title', 'Search Violator')
+@section('title', 'POSO Digital Ticket - Search Violator')
 @section('body')
 <div class="container-fluid p-3">
     <form method="GET" action="{{ route('enforcerTicket.index') }}" class="mb-3">

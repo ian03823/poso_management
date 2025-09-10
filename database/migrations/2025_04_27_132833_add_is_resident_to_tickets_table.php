@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('tickets', function (Blueprint $table) {
             //
-            $table->boolean('is_resident')->default(false)->after('status');
+            $table->boolean('is_resident')->default(false);
         });
     }
 

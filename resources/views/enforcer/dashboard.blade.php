@@ -1,6 +1,6 @@
 @extends('components.app')
 
-@section('title', 'POSO Enforcer Management')
+@section('title', 'POSO Digital Ticket - Dashboard')
 
 @section('body')
 <div class="container-fluid bg-light min-vh-100 p-3">

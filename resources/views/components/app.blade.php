@@ -95,11 +95,18 @@
     @yield('body')
   </main>
 
-  <!-- Bootstrap Icons -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-  <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11" defer></script>
+  <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js" defer></script>
 
+  <!-- Vendor libs used by other scripts -->
+  <script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}" defer></script>
+  <script src="{{ asset('vendor/tesseract/tesseract.min.js') }}" defer></script>
+
+  <!-- Your scripts (issueTicket last so everything above is ready) -->
+  <script src="{{ asset('js/id-scan.js') }}" defer></script>
+  <script src="{{ asset('js/issueTicket.js') }}" defer></script>
+  
   @stack('modals')
   @stack('scripts')
 </body>

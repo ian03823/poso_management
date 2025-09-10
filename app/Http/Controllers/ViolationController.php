@@ -7,6 +7,7 @@ use App\Models\Violation;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class ViolationController extends Controller
 {
@@ -16,30 +17,33 @@ class ViolationController extends Controller
     public function index(Request $request)
     {
         //
-        $categoryFilter = $request->get('category', 'all');
-        $search         = $request->get('search','');
+        $category = $request->get('category', 'all');
+        $search   = $request->get('search', '');
 
-        $query = Violation::query();
-        if ($categoryFilter !== 'all') $query->where('category', $categoryFilter);
+        $q = Violation::query();
+        if ($category !== 'all') {
+            $q->where('category', $category);
+        }
         if ($search !== '') {
-            $query->where(function($q) use ($search){
-                $q->where('violation_name','like',"%{$search}%")
-                ->orWhere('violation_code','like',"%{$search}%");
+            $q->where(function ($w) use ($search) {
+                $w->where('violation_code', 'like', "%{$search}%")
+                ->orWhere('violation_name', 'like', "%{$search}%");
             });
         }
 
-        $violation = $query->orderBy('updated_at','desc')
-            ->paginate(5)
-            ->appends(['category'=>$categoryFilter,'search'=>$search]);
+        // IMPORTANT: variable name is $violation (singular) to match your partial
+        $violation = $q->orderBy('violation_code')
+                    ->paginate(5)
+                    ->appends(['category' => $category, 'search' => $search]);
 
-        $categories = Violation::distinct('category')->orderBy('category')->pluck('category')->toArray();
+        $categories = Violation::select('category')->distinct()->orderBy('category')->pluck('category');
 
-        // Return partial on AJAX (smaller payload for table swaps)
-        if ($request->ajax()) {
-            return view('admin.partials.violationTable', compact('violation','categoryFilter','search'));
-        }
-
-        return view('admin.violation.violationList', compact('violation','categoryFilter','categories','search'));
+        return view('admin.violation.violationList', [
+            'violation'      => $violation,
+            'categories'     => $categories,
+            'categoryFilter' => $category,
+            'search'         => $search,
+        ]);
     }
 
     /**
@@ -49,19 +53,17 @@ class ViolationController extends Controller
     {
         //
        $lastViolation = Violation::where('violation_code', 'like', 'V%')
-        ->orderByDesc(DB::raw('CAST(SUBSTRING(violation_code, 2) AS UNSIGNED)'))
-        ->first();
+            ->orderByDesc(DB::raw('CAST(SUBSTRING(violation_code, 2) AS UNSIGNED)'))
+            ->first();
 
-        if ($lastViolation) {
-            $lastNumber = (int)substr($lastViolation->violation_code, 1); // remove 'V'
-            $nextViolation = 'V' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
-        } else {
-            $nextViolation = 'V001';
-        }
+        $nextViolation = $lastViolation
+            ? 'V' . str_pad(((int)substr($lastViolation->violation_code, 1)) + 1, 3, '0', STR_PAD_LEFT)
+            : 'V001';
+
         if ($request->ajax()) {
             return view('admin.partials.addViolation', compact('nextViolation'));
         }
-        return view('admin.violation.addViolation');
+        return view('admin.violation.addViolation', compact('nextViolation'));
     }
 
     /**
@@ -70,29 +72,28 @@ class ViolationController extends Controller
     public function store(Request $request)
     {
         //
-        $request->validate([
-            'violation_code' => 'required|string|unique:violations',
-            'violation_name' => 'required|string|unique:violations',
+        $data = $request->validate([
+            'violation_code' => [
+                'required', 'string', 'max:20',
+                Rule::unique('violations', 'violation_code')->whereNull('deleted_at'),
+            ],
+            'violation_name' => [
+                'required', 'string', 'max:255',
+                Rule::unique('violations', 'violation_name')->whereNull('deleted_at'),
+            ],
             'fine_amount' => 'required|numeric|min:0',
             'description' => 'nullable|string',
-            'category' => 'required|string',
+            'category'    => 'required|string|max:100',
         ]);
-    
-        Violation::create([
-            'violation_code' => $request->violation_code,
-            'violation_name' => $request->violation_name,
-            'fine_amount' => $request->fine_amount,
-            'description' => $request->description,
-            'category' => $request->category, // Ensure category is saved
-        ]);
-    
-        if ($request->ajax()) {
-            $violation = Violation::paginate(5);
-            return view('admin.partials.addViolation', compact('violations'))
-                   ->with('success','Violation added successfully');
-        }
-        return redirect('/violation')
-        ->with('success','Violation added successfully');
+
+        $v = Violation::create($data);
+
+        // SPA: return JSON so the table JS can simply reload the partial
+        return response()->json([
+            'success' => true,
+            'message' => 'Violation added successfully.',
+            'violation' => $v,
+        ], 201);
     }
 
     /**
@@ -108,8 +109,7 @@ class ViolationController extends Controller
      */
     public function edit(string $id)
     {
-        $violation = Violation::find($id);
-        return view('admin.')->with('violation', $violation);
+        abort(404);
     }
 
     /**
@@ -120,29 +120,34 @@ class ViolationController extends Controller
         $v = Violation::findOrFail($id);
 
         $data = $request->validate([
-            'violation_code' => 'nullable|string|min:2|max:3',
-            'violation_name' => 'nullable|min:3',
-            'fine_amount' => 'nullable|min:0|numeric',
-            'category' => 'nullable|string',
-
+            // your codes like "V001" are 4 chars—so don’t cap at 3
+            'violation_code' => [
+                'sometimes', 'string', 'max:20',
+                Rule::unique('violations', 'violation_code')->ignore($v->id)->whereNull('deleted_at'),
+            ],
+            'violation_name' => [
+                'sometimes', 'string', 'max:255',
+                Rule::unique('violations', 'violation_name')->ignore($v->id)->whereNull('deleted_at'),
+            ],
+            'fine_amount' => 'sometimes|numeric|min:0',
+            'category'    => 'sometimes|string|max:100',
+            'description' => 'sometimes|nullable|string',
         ]);
 
         $v->update($data);
 
         return response()->json([
-            'success' => true,
-            'message' => 'Violation Updated Successfully',
-            'violation'=> $v
-        ], 200);
+            'success'   => true,
+            'message'   => 'Violation updated successfully.',
+            'violation' => $v
+        ]);
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id, Request $request)
+    public function destroy(Request $request, Violation $violation)
     {
-        //
-        // Require admin password for archive (soft-delete)
         $request->validate(['admin_password' => 'required']);
         $admin = auth('admin')->user();
 
@@ -150,29 +155,42 @@ class ViolationController extends Controller
             return response()->json(['message' => 'Invalid admin password'], 422);
         }
 
-        $v = Violation::findOrFail($id);
-        $v->delete(); // requires SoftDeletes on model
+        // if already archived (double click / stale row), return OK
+        if (method_exists($violation, 'trashed') && $violation->trashed()) {
+            return response()->json(['message' => 'Already archived'], 200);
+        }
+
+        $violation->delete(); // requires SoftDeletes on model
         return response()->json(['message' => 'Violation archived'], 200);
     }
     public function partial(Request $request)
     {
         //
-        $categoryFilter = $request->get('category','all');
-        $search         = $request->get('search','');
+        $category = $request->get('category', 'all');
+        $search   = $request->get('search', '');
 
-        $query = Violation::query();
-        if ($categoryFilter!=='all') $query->where('category',$categoryFilter);
+        $q = Violation::query();
+        if ($category !== 'all') $q->where('category', $category);
         if ($search !== '') {
-            $query->where(function($q) use ($search){
-                $q->where('violation_name','like',"%{$search}%")
-                ->orWhere('violation_code','like',"%{$search}%");
+            $q->where(function ($w) use ($search) {
+                $w->where('violation_code', 'like', "%{$search}%")
+                  ->orWhere('violation_name', 'like', "%{$search}%");
             });
         }
 
-        $violation = $query->orderBy('updated_at','desc')
+        $violation = $q->orderBy('violation_code')
             ->paginate(5)
-            ->appends(['category'=>$categoryFilter,'search'=>$search]);
+            ->appends(['category' => $category, 'search' => $search]);
 
-        return view('admin.partials.violationTable', compact('violation','categoryFilter','search'));
+        return view('admin.partials.violationTable', [
+            'violation'      => $violation,
+            'categoryFilter' => $category,
+            'search'         => $search,
+        ]);
+    }
+     /** Small JSON endpoint used if you prefer fetching fresh data before edit */
+    public function json(Violation $violation)
+    {
+        return response()->json($violation);
     }
 }

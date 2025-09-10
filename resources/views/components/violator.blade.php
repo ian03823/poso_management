@@ -18,21 +18,21 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://kit.fontawesome.com/7922e0fdab.js" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="{{ asset('css/violator-layout.css') }}">
 </head>
 
 <body>
-
-    <header class="top-nav py-3 d-flex justify-content-between align-items-center">
-        <div class="fw-bold text-white">POSO Digital Ticket</div>
-      
-        @auth('violator')
-          <form method="POST" action="{{ route('violator.logout') }}">
-              @csrf
-              <button type="submit" class="btn btn-danger"><i class="fa-solid fa-right-from-bracket me-2"></i></button>
-            </form>
-        @endauth
-      </header>
-      
+  <header class="top-nav d-flex justify-content-between align-items-center">
+    <div class="fw-bold">POSO Digital Ticket</div>
+    @auth('violator')
+      <form method="POST" action="{{ route('violator.logout') }}">
+        @csrf
+        <button type="submit" class="btn btn-sm btn-danger">
+          <i class="fa-solid fa-right-from-bracket me-1"></i> Logout
+        </button>
+      </form>
+    @endauth
+  </header>
       @auth('violator')
         <!-- Logout form -->
         {{-- <!-- offcanvas panel -->
@@ -60,7 +60,6 @@
 
         @stack('scripts')
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-        
         <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </body>
 </html>

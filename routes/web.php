@@ -74,7 +74,6 @@ Route::middleware('admin')->group(function () {
     //Violation routes
     Route::get('/violation/partial', [ViolationController::class,'partial'])->name('violation.partial');
     Route::resource('violation', ViolationController::class); 
-    
     Route::get('violation/{violation}/json', [ViolationController::class, 'json'])
      ->name('violation.json');
 

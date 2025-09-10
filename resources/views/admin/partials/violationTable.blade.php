@@ -19,28 +19,28 @@
             <span class="badge-cat">{{ $v->category }}</span>
           </td>
           <td class="text-center table-actions">
-            <a href="#"
+
+            {{-- EDIT via SweetAlert (no modal) --}}
+            <button type="button"
                class="btn btn-warning btn-sm edit-btn"
-               data-bs-toggle="modal"
-               data-bs-target="#editModal"
                data-id="{{ $v->id }}"
-               data-url="{{ route('violation.update',$v) }}"
+               data-url="{{ route('violation.update', $v) }}"
                data-code="{{ $v->violation_code }}"
                data-name="{{ $v->violation_name }}"
                data-fine="{{ $v->fine_amount }}"
-               data-category="{{ $v->category }}">
+               data-category="{{ $v->category }}"
+               data-desc="{{ $v->description }}">
               Edit
-            </a>
+            </button>
 
-            <form action="{{ route('violation.destroy', $v->id) }}" method="POST" class="d-inline">
-              @csrf @method('DELETE')
-              <button type="button"
-                      class="btn btn-danger btn-sm archive-btn"
-                      data-name="{{ $v->violation_name }}"
-                      data-action="{{ route('violation.destroy', $v->id) }}">
-                <i class="bi bi-archive"></i> Archive
-              </button>
-            </form>
+            {{-- ARCHIVE via admin password (the form wrapper is not needed) --}}
+            <button type="button"
+                    class="btn btn-danger btn-sm archive-btn"
+                    data-name="{{ $v->violation_name }}"
+                    data-action="{{ route('violation.destroy', $v->id) }}">
+              <i class="bi bi-archive"></i> Archive
+            </button>
+
           </td>
         </tr>
       @empty
@@ -51,7 +51,7 @@
     </tbody>
   </table>
 
-  <div class="mt-3 justify-content-center d-flex position-sticky">
+  <div class="mt-3 justify-content-center d-flex">
     {{ $violation->appends(['category'=>$categoryFilter ?? request('category'),'search'=>$search ?? request('search')])->links() }}
   </div>
 </div>

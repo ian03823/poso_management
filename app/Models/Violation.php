@@ -9,8 +9,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Violation extends Model
 {
 
-    use HasFactory;
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
     protected $primaryKey = 'violation_code';
     public $incrementing = false;
     protected $keyType = 'string';
@@ -24,6 +23,9 @@ class Violation extends Model
         'penalty_points', 
         'description', 
         'category'
+    ];
+    protected $casts = [
+        'fine_amount' => 'float',
     ];
 
 }

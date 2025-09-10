@@ -1,6 +1,6 @@
 @extends('components.app')
 
-@section('title', 'POSO Enforcer Management')
+@section('title', 'POSO Digital Ticket - Cite Ticket')
 
 @push('styles')
   <link rel="stylesheet" href="{{ asset('css/enforcer-issueTicket.css') }}">
@@ -249,12 +249,13 @@
   });</script>
 @endif
 
+@endsection
+
+@push('scripts')
 {{-- External scripts (unchanged) --}}
-<script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
-<script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+{{-- <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
 <script src="{{ asset('js/issueTicket.js') }}"></script>
 <script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}"></script>
 <script src="{{ asset('vendor/tesseract/tesseract.min.js') }}"></script>
-<script src="{{ asset('js/id-scan.js') }}"></script>
-
-@endsection
+<script src="{{ asset('js/id-scan.js') }}"></script> --}}
+@endpush

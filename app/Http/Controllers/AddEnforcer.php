@@ -95,7 +95,7 @@ class AddEnforcer extends Controller
         }
 
         // Full page view with layout
-        return view('admin.addenforcer', compact('nextStart', 'nextEnd'));
+        return view('admin.addenforcer', compact('nextStart', 'nextEnd', 'nextBadgeNum'));
     }
 
 
@@ -164,8 +164,8 @@ class AddEnforcer extends Controller
             'mname'        => 'nullable|string|min:1|max:20',
             'lname'        => 'nullable|string|min:2|max:20',
             'phone'        => 'nullable|digits:11',
-            'ticket_start' => 'nullable|digits:3|numeric|min:1|max:999',
-            'ticket_end'   => 'nullable|digits:3|numeric|gte:ticket_start|max:999',
+            'ticket_start' => 'nullable',
+            'ticket_end'   => 'nullable',
             'password'     => 'nullable|string|min:8|max:20',
         ]);
 
@@ -261,9 +261,10 @@ class AddEnforcer extends Controller
             ->appends([
               'sort_option' => $sortOption,
               'search'      => $search,
+              'show'       => $show,
             ]);
 
         // Only the table
-        return view('admin.partials.enforcerTable', compact('enforcer','sortOption','search'));
+        return view('admin.partials.enforcerTable', compact('enforcer','sortOption','search', 'show'));
     }
 }

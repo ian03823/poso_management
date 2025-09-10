@@ -1,126 +1,68 @@
-/* ajax.js — SPA-like navigation for #app-body with active nav + spinner loader */
-(() => {
-  const CONTAINER_SEL = '#app-body';
-  const NAV_LINK_SEL  = '.sidebar .nav-link';
-  const AJAX_LINK_SEL = 'a[data-ajax]:not([data-no-ajax])';
+// public/js/ajax.js
+;(function(){
+  const contentEl = document.getElementById('app-body');
+  const overlay   = document.getElementById('ajaxLoading');
 
-  const container = document.querySelector(CONTAINER_SEL);
-  if (!container) return;
+  function showLoading(on){ if(overlay) overlay.classList.toggle('d-none', !on); }
 
-  /* ---------- loader overlay (spinner) ---------- */
-  const loader = document.createElement('div');
-  loader.id = 'page-loader';
-  loader.setAttribute('aria-hidden', 'true');
-  loader.innerHTML = `
-    <div class="loader-box" role="status" aria-live="polite" aria-label="Loading">
-      <div class="spinner"></div>
-      <div class="loader-text">Loading…</div>
-    </div>
-  `;
-  loader.style.display = 'none';
-  document.body.appendChild(loader);
-  const showLoader = () => (loader.style.display = 'grid');
-  const hideLoader = () => (loader.style.display = 'none');
-
-  function normalizePath(u) {
-    try { return new URL(u, location.origin).pathname.replace(/\/+$/, '') || '/'; }
-    catch { return '/'; }
-  }
-
-  function setActiveFromURL() {
-    const path = normalizePath(location.pathname);
-    let best = null, bestLen = -1;
-    document.querySelectorAll(NAV_LINK_SEL).forEach(a => {
-      const href = a.getAttribute('href') || a.href || '';
-      if (!href) return;
-      const hrefPath = normalizePath(href);
-      if (path === hrefPath || (path.startsWith(hrefPath) && hrefPath.length > bestLen)) {
-        best = a; bestLen = hrefPath.length;
-      }
+  // highlight active link in sidebar
+  function markActive(url){
+    document.querySelectorAll('.sidebar .nav-link').forEach(a=>{
+      const same = a.href === (location.origin + url.replace(location.origin,''));
+      a.classList.toggle('active', same);
     });
-    document.querySelectorAll(`${NAV_LINK_SEL}.active,[aria-current="page"]`)
-      .forEach(a => { a.classList.remove('active'); a.removeAttribute('aria-current'); });
-    if (best) { best.classList.add('active'); best.setAttribute('aria-current','page'); }
   }
 
-  function applyLayoutFlags() {
-    // If the new content includes the marker, hide the sidebar
-    const hide = !!container.querySelector('[data-hide-sidebar]');
-    document.body.classList.toggle('no-sidebar', hide);
-  }
-
-  async function executeScripts(scope) {
-    const scripts = Array.from(scope.querySelectorAll('script'));
-    for (const s of scripts) {
-      const n = document.createElement('script');
-      for (const { name, value } of Array.from(s.attributes)) n.setAttribute(name, value);
-      if (s.src) {
-        const already = Array.from(document.scripts).some(tag => tag.src === s.src);
-        if (already) continue;
-        await new Promise((res, rej) => {
-          n.onload = res; n.onerror = rej; n.async = false; n.src = s.src; document.head.appendChild(n);
-        }).catch(()=>{});
-      } else {
-        n.textContent = s.textContent; document.head.appendChild(n);
-        setTimeout(() => n.remove(), 0);
-      }
-    }
-  }
-
-  async function ajaxNavigate(url, { push=true, replace=false } = {}) {
-    showLoader();
-    try {
-      const res  = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' }, credentials: 'same-origin' });
+  async function loadContent(url, push=true){
+    try{
+      showLoading(true);
+      const res  = await fetch(url, { headers: { 'X-Requested-With':'XMLHttpRequest' }});
       const html = await res.text();
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-      const newMain = doc.querySelector(CONTAINER_SEL);
-      if (!newMain) { location.href = url; return; }
+      const doc  = new DOMParser().parseFromString(html, 'text/html');
+      const fresh= doc.querySelector('#app-body') || doc.body;
 
-      container.innerHTML = newMain.innerHTML;
+      contentEl.innerHTML = fresh.innerHTML;
 
-      const titleEl = doc.querySelector('title');
-      if (titleEl) document.title = titleEl.textContent;
+      const title = doc.querySelector('title')?.textContent?.trim();
+      if (title) document.title = title;
+      if (push) history.pushState({}, '', url);
 
-      if (replace) history.replaceState({ url }, '', url);
-      else if (push) history.pushState({ url }, '', url);
+      markActive(url);
+      window.scrollTo({ top: 0, behavior: 'instant' });
 
-      setActiveFromURL();
-      applyLayoutFlags(); // 👈 toggle sidebar based on marker
-
-      container.scrollTo({ top: 0, behavior: 'instant' });
-      const firstHeading = container.querySelector('h1,h2,h3,[role="heading"]');
-      if (firstHeading) { firstHeading.tabIndex = -1; firstHeading.focus({ preventScroll: true }); }
-
-      await executeScripts(container);
-      document.dispatchEvent(new CustomEvent('page:loaded', { detail:{ url } }));
-    } catch (e) {
-      location.href = url;
-    } finally {
-      hideLoader();
+      // Let page scripts (e.g., ticketTable.js) react after swap
+      document.dispatchEvent(new CustomEvent('page:loaded', { detail: { url } }));
+    }catch(err){
+      console.error(err);
+      if (window.Swal) Swal.fire('Error','Failed to load page.','error');
+    }finally{
+      showLoading(false);
     }
   }
 
-  document.addEventListener('click', e => {
-    const a = e.target.closest(`${NAV_LINK_SEL}, ${AJAX_LINK_SEL}`);
+  // Intercept only links that have data-ajax (or links inside sidebar)
+  document.addEventListener('click', e=>{
+    const a = e.target.closest('a');
     if (!a) return;
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target === '_blank') return;
-    if (a.hasAttribute('data-no-ajax')) return;
 
-    const href = a.getAttribute('href') || a.href;
-    if (!href || href.startsWith('#')) return;
+    if (a.hasAttribute('data-no-ajax')) return; // let normal submit happen
+    if (!a.hasAttribute('data-ajax') && !a.closest('.sidebar')) return;
+
+    // make sidebar links SPA by default
+    if (!a.hasAttribute('data-ajax') && a.closest('.sidebar')) {
+      a.setAttribute('data-ajax','');
+    }
 
     e.preventDefault();
-    ajaxNavigate(href, { push:true });
+    loadContent(a.getAttribute('href'), true);
   });
 
-  window.addEventListener('popstate', e => {
-    const url = (e.state && e.state.url) ? e.state.url : location.href;
-    ajaxNavigate(url, { replace:true });
-  });
+  // Back/forward
+  window.addEventListener('popstate', ()=> loadContent(location.pathname + location.search, false));
 
-  // Initial pass (in case first page already has the marker)
-  document.addEventListener('DOMContentLoaded', () => {
-    setActiveFromURL();
-    applyLayoutFlags();
+  // Initial boot
+  document.addEventListener('DOMContentLoaded', ()=>{
+    markActive(location.pathname + location.search);
+    document.dispatchEvent(new CustomEvent('page:loaded', { detail: { url: location.pathname + location.search }}));
   });
 })();

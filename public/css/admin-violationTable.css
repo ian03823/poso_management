@@ -1,5 +1,14 @@
 /* ===== Violation List — Styling ===== */
 #violations-page { position: relative; }
+/* small overlay for violation page partial loads */
+#vioLoading.loading-overlay {
+  position: absolute; inset: 0;
+  display: none;            /* toggled by JS */
+  align-items: center; justify-content: center;
+  background: rgba(255,255,255,.65);
+  z-index: 30;
+}
+
 
 /* toolbar */
 .vio-toolbar{
@@ -15,7 +24,7 @@
 
 /* table */
 .vio-table thead th{
-  position:sticky; top:0; z-index:1; background:#f8fafc;
+  position: relative; top:0; z-index:1; background:#f8fafc;
   font-weight:600; color:#334155;
 }
 .vio-table tbody tr{ transition:background-color .15s ease; }
@@ -43,12 +52,9 @@
 }
 @keyframes spin{ to{ transform:rotate(360deg); } }
 
-/* keep Bootstrap modal above any custom overlays */
-:root{ --z-app-overlay:1500; --z-bs-backdrop:1990; --z-bs-modal:2000; }
-.modal-backdrop{ z-index:var(--z-bs-backdrop) !important; }
-.modal,.modal.show{ z-index:var(--z-bs-modal) !important; }
 
 /* responsive trimming */
 @media (max-width:768px){
   .col-md-only{ display:none !important; }
 }
+

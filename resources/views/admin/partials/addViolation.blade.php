@@ -2,18 +2,24 @@
     <!-- Back Button -->
     <h2 class="mb-3">Add Violation</h2>
     <div class="mb-4">
-        <button type="button"
+        {{-- <button type="button"
                 class="btn btn-outline-secondary"
                 id="previousBtn"
                 data-back="{{ url('/violation') }}">
                 <i class="bi bi-arrow-left"></i> Back
-        </button>
+        </button> --}}
+        <a href="/violation"
+          data-ajax
+          class="btn btn-outline-secondary"
+          id="previousBtn">
+          <i class="bi bi-arrow-left"></i>Back
+        </a>
     </div>
   
     <!-- Violation Form Card -->
     <div class="card mx-auto shadow" style="max-width: 800px;">
   
-      <form action="{{ url('/violation') }}" method="POST" id="enforcerForm">
+      <form action="{{ url('/violation') }}" method="POST" id="violationForm">
         @csrf
         <div class="card-body">
           @if(session('success'))
@@ -34,7 +40,7 @@
               <label for="violation_code" class="form-label">Violation Code</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-hash"></i></span>
-                <input type="text" id="violation_code" name="violation_code" class="form-control" value="{{ old('violation_code', $nextViolation ?? '') }}" readonly>
+                <input type="text" id="violation_code" name="violation_code" class="form-control" value="{{ old('violation_code', $nextViolation ?? '') }}">
               </div>
             </div>
   
@@ -77,9 +83,5 @@
         </div>
       </form>
 
-      <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-        <script src="{{ asset('js/sweetalert.js') }}"></script>
-        <!-- AJAX navigation loader -->
-        <script src="{{ asset('js/ajax.js') }}"></script>
     </div>
   </div>

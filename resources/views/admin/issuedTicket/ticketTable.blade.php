@@ -1,27 +1,27 @@
 @extends('components.layout')
-@section('title', 'POSO Admin Management')
+@section('title', 'POSO Admin Management - Issued Tickets')
 
-@push('styles')
-  <link rel="stylesheet" href="{{ asset('css/admin-ticketTable.css') }}">
-@endpush
 
 @section('content')
 
-<div class="container-fluid mt-4 position-relative" id="ticketContainer">
+<div class="container-fluid mt-4" id="ticketContainer"
+  data-page="ticket"
+  data-paid-status-id="{{ \App\Models\TicketStatus::where('name','paid')->value('id') }}"
+  data-status-update-url="{{ url('ticket') }}"
+  data-ticket-partial-url="{{ route('ticket.partial') }}">
 
-  {{-- Loading overlay --}}
-  <div class="loading-overlay" id="ticketLoading">
+  {{-- local loader used by ticketTable.js during partial refreshes --}}
+  <div class="loading-overlay" id="ticketLoading" style="display:none;">
     <div class="spinner-border" role="status" aria-hidden="true"></div>
   </div>
 
   {{-- Header / Toolbar --}}
-  <div class="toolbar mb-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+  <div class="mb-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
     <div>
       <h2 class="mb-1 d-flex align-items-center gap-2">
-        <i class="bi bi-clipboard2-check-fill"></i>
-        All Issued Tickets
+        Recently Issued Tickets
       </h2>
-      <div class="subtitle small">Recently created • Manage & update statuses</div>
+
     </div>
 
     <div class="d-flex align-items-center gap-2">
@@ -52,68 +52,10 @@
       @include('admin.partials.ticketTable')
     </div>
   </div>
+
+  @php
+    $paidStatusId = \App\Models\TicketStatus::where('name','paid')->value('id');
+  @endphp
+
 </div>
-
-@php
-  $paidStatusId = \App\Models\TicketStatus::where('name','paid')->value('id');
-@endphp
-
-<script>
-  window.PAID_STATUS_ID    = @json($paidStatusId);
-  window.STATUS_UPDATE_URL = "{{ url('ticket') }}"; // base /ticket
-  window.ticketPartialUrl  = @json(route('ticket.partial')); // for partial reload
-</script>
-@push('modals')
-    {{-- Reference-Number Modal --}}
-<div class="modal fade" id="ticketRefModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <form id="ticketRefForm" class="modal-content">
-      @csrf
-      <input type="hidden" id="ref_ticket_id" name="ticket_id">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-hash me-2"></i>Enter Reference Number</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="refCancel"></button>
-      </div>
-      <div class="modal-body">
-        <input type="text" id="reference_number" name="reference_number" class="form-control" placeholder="Reference #" required>
-        <div class="form-text">Required when marking a ticket as <strong>Paid</strong>.</div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="refCancel2">Cancel</button>
-        <button type="submit" class="btn btn-success">Continue</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-{{-- Admin-Password Modal --}}
-<div class="modal fade" id="ticketPwdModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <form id="ticketPwdForm" class="modal-content">
-      @csrf
-      <input type="hidden" id="pwd_ticket_id" name="ticket_id">
-      <input type="hidden" id="pwd_new_status" name="status_id">
-      <input type="hidden" id="pwd_reference_number" name="reference_number">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-shield-lock me-2"></i>Admin Password Required</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="pwdCancel"></button>
-      </div>
-      <div class="modal-body">
-        <label for="admin_password" class="form-label">Password</label>
-        <input type="password" id="admin_password" name="admin_password" class="form-control" required>
-        <div class="invalid-feedback" id="pwdError" style="display:none;"></div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="pwdCancel2">Cancel</button>
-        <button type="submit" class="btn btn-primary" id="pwdSubmitBtn">Confirm</button>
-      </div>
-    </form>
-  </div>
-</div>
-@endpush
-
 @endsection
-
-@push('scripts')
-  <script src="{{ asset('js/ticketTable.js') }}"></script>
-@endpush

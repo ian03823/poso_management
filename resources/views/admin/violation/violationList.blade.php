@@ -1,12 +1,18 @@
 @extends('components.layout')
-@section('title', 'POSO Admin Management')
-
-@push('styles')
-  <link rel="stylesheet" href="{{ asset('css/admin-violationTable.css') }}">
-@endpush  
+@section('title', 'POSO Admin Management - Violation List')
 
 @section('content')
-<div class="container-fluid mt-4" id="violations-page">
+<div
+  data-page="violation"
+  class="container-fluid mt-4"
+  id="violations-page"
+  data-partial-url="{{ route('violation.partial') }}"
+>
+  {{-- local loader for partial refreshes --}}
+  <div id="vioLoading" class="loading-overlay" style="display:none;">
+    <div class="spinner-border" role="status" aria-hidden="true"></div>
+  </div>
+
   <div class="d-flex align-items-center justify-content-between mb-3">
     <h2 class="m-0">Violation List</h2>
     <a href="{{ route('violation.create') }}" class="btn btn-success" data-ajax>
@@ -49,14 +55,9 @@
     </div>
   </div>
 
+  {{-- IMPORTANT: move the modal inline (not @push) so it exists after SPA swaps --}}
+  {{-- @include('admin.modals.editViolation') --}}
+  
+
 </div>
-@endsection 
-
-@push('modals')
-  @include('admin.modals.editViolation')
-@endpush
-
-@push('scripts')
-  <script>window.violationPartialUrl = "{{ route('violation.partial') }}";</script>
-  <script src="{{ asset('js/violationTable.js') }}"></script>
-@endpush
+@endsection

@@ -1,4 +1,4 @@
-<div class="modal fade" id="editModal" tabindex="-1">
+<div class="modal fade" id="editModaL" tabindex="-1">
   <div class="modal-dialog">
     <form id="editEnforcerForm" method="POST" action="">
       @csrf

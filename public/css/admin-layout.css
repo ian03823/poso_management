@@ -79,7 +79,8 @@ body > .d-flex{
 
 /* ===== Sidebar ===== */
 .sidebar{
-  width: 272px; background:#fff; border-right:1px solid var(--border);
+  width: 272px; 
+  background:#fff; border-right:1px solid var(--border);
   padding: 1rem; position: sticky; top: var(--header-h);
   height: calc(100vh - var(--header-h)); overflow:auto;
 }
@@ -90,9 +91,13 @@ body > .d-flex{
 .sidebar .nav{ gap:.35rem; }
 
 .sidebar .nav-link{
-  display:flex; align-items:center; gap:.75rem;
-  padding:.6rem .7rem; color: var(--ink-700);
-  font-weight:600; border-radius: 10px;
+  display:flex; 
+  align-items:center; 
+  gap: 1rem;
+  
+  color: var(--ink-700);
+  font-weight:600; 
+  border-radius: 10px;
   transition: background .15s ease, color .15s ease, transform .15s ease;
 }
 .sidebar .nav-link .bi{ font-size:1.05rem; opacity:.95; }
@@ -107,10 +112,7 @@ body > .d-flex{
 .sidebar .nav-link[aria-current="page"] .bi{ color:#fff; }
 
 /* ===== Main content ===== */
-main.content{
-  flex: 1 1 auto; padding: min(2rem, 4vw); min-width:0;
-  background:#fafafa;
-}
+
 
 /* ===== Cards ===== */
 .card{
@@ -169,8 +171,77 @@ main.content{
 /* Hide sidebar when body has .no-sidebar (AJAX profile page) */
 .no-sidebar .sidebar{ display:none !important; }
 /* Ensure content uses full width when sidebar is hidden */
-.no-sidebar main.content{ width:100%; }
+.no-sidebar #app-body{ width:100%; }
 
 /* Neutralize any accidental gradients on context cards */
 .card.bg-primary{ background-color:#0d6efd !important; background-image:none !important; }
 .card.bg-warning{ background-color:#f59f00 !important; background-image:none !important; }
+
+/* full-page overlay used by ajax.js */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,.6);
+  display: grid;
+  place-items: center;
+  z-index: 2000;
+}
+/* === NEW: Content area now targets #app-body (since <main> was removed) === */
+#app-body{
+  flex: 1 1 auto;
+  min-width: 0;                 /* fixes overflow with long tables/cards */
+  background: #fafafa;
+  padding: clamp(1rem, 2vw + .5rem, 2rem);
+}
+
+/* Give consistent vertical rhythm to common first-level children */
+#app-body > .container,
+#app-body > .container-fluid,
+#app-body > .row,
+#app-body > .card,
+#app-body > section {
+  margin-bottom: 1rem;
+}
+
+/* Tables inside content: prevent overflow on small screens */
+#app-body .table{
+  width: 100%;
+}
+#app-body .table th,
+#app-body .table td{
+  word-break: break-word;
+  vertical-align: middle;
+}
+
+/* When profile page hides the sidebar, let content span full width */
+.no-sidebar #app-body{
+  width: 100%;
+}
+
+/* Shell tweaks when sidebar collapses (mobile) */
+@media (max-width: 767.98px){
+  body > .d-flex{ display: block; }    /* no leftover flex spacing */
+  .sidebar{ display: none !important; }/* hard-hide just in case */
+  #app-body{ padding: 1rem; }          /* tighter padding on phones */
+}
+
+/* Slightly bigger padding on wider screens */
+@media (min-width: 992px){
+  #app-body{ padding: 2rem; }
+}
+
+/* Optional: keep cards/tables comfortable inside a scrollable area */
+.card .card-body.p-0{
+  max-height: 70vh;
+  overflow: auto;
+}
+
+/* Keep media responsive inside content */
+#app-body img,
+#app-body svg,
+#app-body video,
+#app-body canvas,
+#app-body iframe{
+  max-width: 100%;
+  height: auto;
+}

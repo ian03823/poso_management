@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 @import "bootstrap/dist/css/bootstrap.min.css";
 @import "bootstrap-icons/font/bootstrap-icons.css";
+@import "Swal from 'sweetalert2'";
+@import 'sweetalert2/dist/sweetalert2.min.css';
 @source "../views";
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
@@ -8,101 +10,3 @@
 @source "../**/*.blade.php";
 @source "../**/*.js";
 @source "../**/*.vue";
-
-
-body {
-    overflow: hidden;
-    margin: 0;
-    padding: 0;
-}   
-.top-nav {
-    background-color: #1B5E20;
-    padding: 0.75rem 3rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    color: white;
-}
-
-.sidebar {
-    background-color: #fff;
-    min-width: 300px;
-    min-height: 100vh;
-    border-right: 1px solid #ddd;
-    padding: 1rem;
-}
-
-.sidebar img {
-    width: 120px;
-    display: block;
-    margin: 0 auto 1rem;
-}
-
-
-.sidebar .nav-link {
-    color: #222;
-    font-weight: 500;
-    margin: 0.3rem 0;   
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 0.75rem;
-    border-radius: 8px;
-    transition: background-color 0.2s;
-}
-
-.sidebar .nav-link:hover {
-    background-color: #36e339;
-    border-radius: 8px;
-}
-
-
-.content {
-    flex-grow: 1;
-    padding: 1.5rem;
-    overflow-y: auto;
-}
-.main-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1.5rem;
-    max-height: calc(100vh - 64px); /* Adjusts height minus the header */
-}
-
-.form-container {
-    background: white;
-    border: 1px solid black;
-    border-radius: 8px;
-    padding: 1.5rem;
-    width: 100%;
-    max-width: 600px; /* Adjust based on your preference */
-    margin: auto;
-}
-.required-field {
-    transition: border 0.3s ease-in-out;
-}
-.required-field:focus {
-    outline: none;
-    border: 2px solid blue;
-}
-.half-bg-image {
-    position: fixed;
-    top: 10%;
-    left: 60%;                 /* or right: 0; for the right half */
-    width: 50vw;             /* half the viewport width */
-    height: 100vh;           /* full viewport height */
-    opacity: 0.2;            /* adjust between 0 (invisible) and 1 (fully opaque) */
-    pointer-events: none;    /* so it doesn’t block clicks on other elements */
-    z-index: -1;             /* send it behind your page content */
-  }
-
-  .table-fixed {
-    table-layout: fixed;
-    width: 100%;
-  }
-  .table-fixed th,
-  .table-fixed td {
-    /* if you want equal widths: */
-    width: 20%;
-  }

@@ -1,13 +1,10 @@
 @extends('components.layout')
 @section('title', 'POSO Admin Management')
 
-@push('styles')
-  <link rel="stylesheet" href="{{ asset('css/admin-enforcerEdit.css') }}">
-@endpush
-
 @section('content')
-
-<div class="container-fluid mt-4" id="enforcerContainer">
+<div class="container-fluid mt-4" id="enforcerContainer"
+  data-partial-url="{{ route('enforcer.partial') }}"
+  data-page="enforcers">
   <div class="mb-3 d-flex align-items-center justify-content-between">
     <h2 class="m-0">Enforcer List</h2>
     @if($show==='inactive')
@@ -51,17 +48,8 @@
     </div>
   </form>
 
-  <div id="table-container">
+  <div id="enfo-card">
     @include('admin.partials.enforcerTable')
   </div>
 </div>
 @endsection
-@push('modals')
-  @include('admin.modals.editEnforcer')
-@endpush
-
-@push('scripts')
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  <script src="{{ asset('js/enforcer.js') }}"></script>
-@endpush
-  

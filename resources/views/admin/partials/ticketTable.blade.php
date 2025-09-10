@@ -4,12 +4,12 @@
   <thead class="small text-uppercase">
     <tr>
       <th class="text-center" style="width:110px;">Ticket #</th>
-      <th style="min-width:160px;">Enforcer</th>
-      <th style="min-width:220px;">Violator</th>
-      <th style="min-width:260px;">Violation(s)</th>
-      <th style="min-width:180px;">Location</th>
-      <th style="min-width:160px;">Issued At</th>
-      <th style="width:190px;">Status</th>
+      <th>Enforcer</th>
+      <th>Violator</th>
+      <th>Violation(s)</th>
+      <th>Location</th>
+      <th class="col-issued">Issued At</th>
+      <th class="col-status text-center">Status</th>
     </tr>
   </thead>
   <tbody>
@@ -23,7 +23,7 @@
       <td>{{ $t->issued_at->format('Y-m-d H:i') }}</td>
       <td>
         <select
-          class="form-select form-select-sm status-select"
+          class="form-select status-select"
           data-ticket-id="{{ $t->id }}"
           data-current-status-id="{{ $t->status_id }}"
         >

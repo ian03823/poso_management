@@ -1,13 +1,4 @@
-@extends('components.layout')
-@section('title', 'POSO Admin Management')
-
-@push('styles')
-  <link rel="stylesheet" href="{{ asset('css/admin-addEnforcer.css') }}">
-@endpush
-
-@section('content')
 <div class="container-fluid py-4" id="form-container">
-
   <div class="page-head">
     <h2>Add Enforcer</h2>
     <button type="button"
@@ -23,7 +14,7 @@
       New Enforcer Details
     </div>
 
-    <form id="enforcerForm" action="{{ route('enforcer.store') }}" method="POST" novalidate>
+    <form id="addEnforcerForm" action="{{ route('enforcer.store') }}" method="POST">
       @csrf
       <div class="card-body">
         <div class="row g-3">
@@ -33,7 +24,7 @@
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
               <input type="text" id="badge_num" name="badge_num" class="form-control"
-                     maxlength="3" value="{{ old('badge_num', $nextBadgeNum ?? '') }}" readonly>
+                     maxlength="3" value="{{ old('badge_num', $nextBadgeNum ?? '') }}">
             </div>
           </div>
 
@@ -114,5 +105,3 @@
     </form>
   </div>
 </div>
-@endsection
-

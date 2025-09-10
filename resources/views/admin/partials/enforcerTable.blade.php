@@ -3,9 +3,7 @@
     <thead class="table-light">
       <tr>
         <th class="text-center">Badge</th>
-        <th class="text-center">First Name</th>
-        <th class="text-center col-md-only">Middle Name</th>
-        <th class="text-center">Last Name</th>
+        <th class="text-center">Full Name</th>
         <th class="text-center col-md-only">Phone</th>
         <th class="text-center col-md-only">Ticket Range</th>
         <th class="text-center">Actions</th>
@@ -15,16 +13,13 @@
       @forelse($enforcer as $e)
         <tr class="{{ $e->trashed() ? 'table-secondary' : '' }}">
           <td class="text-center">{{ $e->badge_num }}</td>
-          <td class="text-center">{{ $e->fname }}</td>
-          <td class="text-center col-md-only">{{ $e->mname }}</td>
-          <td class="text-center">{{ $e->lname }}</td>
+          <td class="text-center">{{ $e->lname }}, {{ $e->fname }} {{ $e->mname }}</td>
           <td class="text-center col-md-only">{{ $e->phone }}</td>
           <td class="text-center col-md-only">{{ $e->ticket_start }} - {{ $e->ticket_end }}</td>
           <td class="text-center table-actions">
             <a href="#"
-               class="btn btn-warning btn-sm edit-btn"
+               class="btn btn-warning btn-sm editBtn"
                data-bs-toggle="modal"
-               data-bs-target="#editModal"
                data-id="{{ $e->id }}"
                data-url="{{ route('enforcer.update', $e) }}"
                data-badge="{{ $e->badge_num }}"

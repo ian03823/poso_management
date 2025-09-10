@@ -6,16 +6,18 @@
   <title>@yield('title')</title>
 
   <!-- Bootstrap + Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  
   <script src="https://kit.fontawesome.com/7922e0fdab.js" crossorigin="anonymous"></script>
 
   <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('POSO-Logo.png') }}">
   @vite(['resources/css/app.css', 'resources/js/app.js'])
 
   {{-- Minimalist admin layout CSS --}}
-  <link rel="stylesheet" href="{{ asset('css/admin-layout.css') }}?v={{ filemtime(public_path('css/admin-layout.css')) }}">
-
+  <link rel="stylesheet" href="{{ asset('css/admin-layout.css')}}">
+  <link rel="stylesheet" href="{{ asset('css/admin-dashboard.css') }}">
+  <link rel="stylesheet" href="{{ asset('css/admin-ticketTable.css') }}">
+  <link rel="stylesheet" href="{{ asset('css/admin-violationTable.css') }}">
+  <link rel="stylesheet" href="{{ asset('css/admin-enforcerTable.css') }}">
   @stack('styles')
 </head>
 <body>
@@ -23,16 +25,22 @@
   <!-- Top Navigation -->
   <header class="top-nav">
     <div class="fw-bold fs-5">
-      <a href="/admin/dashboard" class="text-white" style="text-decoration:none">POSO Admin Management</a>
+      <a href="/admin/dashboard" class="text-white" style="text-decoration:none" data-ajax>POSO Admin Management</a>
     </div>
 
     @auth('admin')
       <div class="text-muted-white fw-medium"><span id="currentDateTime">—</span></div>
 
       <div class="d-flex gap-3 align-items-center">
-        <a href="{{ route('admin.profile.edit') }}" class="text-white" style="text-decoration:none" data-ajax>
-          <i class="fa-solid fa-id-badge"></i>&nbsp;Profile
-        </a>
+        <div class="btn-group">
+          <button type="button" class="btn btn-success " data-bs-toggle="dropdown" aria-expanded="false">
+            Settings
+          </button>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item text-black" data-ajax href="{{ route('admin.profile.edit') }}">Profile</a></li>
+            <li><a class="dropdown-item text-black" href="#">Activity Log</a></li>
+          </ul>
+        </div>
 
         <form id="logoutForm" method="POST" action="{{ route('admin.logout') }}" data-no-ajax>
           @csrf
@@ -56,37 +64,37 @@
         <img src="{{ asset('images/icons/POSO-Logo.png') }}" alt="POSO Logo">
         <ul class="nav flex-column">
           <li class="nav-item">
-            <a href="/admin/dashboard" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
+            <a data-ajax href="/admin/dashboard" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
               <i class="bi bi-columns-gap me-3"></i><span>Dashboard</span>
             </a>
           </li>
           <li class="nav-item">
-            <a href="/ticket" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
+            <a data-ajax href="/ticket" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
               <i class="bi bi-receipt-cutoff me-3"></i><span>Ticket</span>
             </a>
           </li>
           <li class="nav-item">
-            <a href="/violation" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
+            <a data-ajax data-ajax href="/violation" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
               <i class="bi bi-list-check me-3"></i><span>Violation List</span>
             </a>
           </li>
           <li class="nav-item">
-            <a href="/enforcer" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
+            <a data-ajax href="/enforcer" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
               <i class="bi bi-person-badge me-3"></i><span>Enforcer List</span>
             </a>
           </li>
           <li class="nav-item">
-            <a href="/violatorTable" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
+            <a data-ajax href="/violatorTable" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
               <i class="bi bi-person-vcard me-3"></i><span>Violator List</span>
             </a>
           </li>
           <li class="nav-item">
-            <a href="/dataAnalytics" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
+            <a data-ajax href="/dataAnalytics" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
               <i class="bi bi-graph-up me-3"></i><span>Data Analytics</span>
             </a>
           </li>
           <li class="nav-item">
-            <a href="/impoundedVehicle" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
+            <a data-ajax href="/impoundedVehicle" class="nav-link d-flex align-items-center justify-content-start gap-2 w-100">
               <i class="bi bi-car-front me-3 fs-5"></i><span>Impounded Vehicle</span>
             </a>
           </li>
@@ -128,17 +136,20 @@
         });
       </script>
     @endauth
+    <div id="app-body">
+        @yield('content')
+    </div>
 
-    <!-- Main Content -->
-    <main class="content" id="app-body">
-      @yield('content')
-    </main>
+    <div id="ajaxLoading" class="loading-overlay d-none">
+      <div class="spinner-border" role="status"></div>
+    </div>
   </div>
+
 
   {{-- Vendor + app scripts --}}
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link href="https://unpkg.com/leaflet/dist/leaflet.css" rel="stylesheet"/>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -149,9 +160,13 @@
   <script src="{{ asset('js/ajax.js') }}"></script>
 
   <script src="{{ asset('js/analytics.js') }}"></script>
-  <script src="{{ asset('js/enforcer.js') }}" defer></script>
+  <script src="{{ asset('js/enforcer.js') }}"></script>
   <script src="{{ asset('js/ticketTable.js') }}" defer></script>
-    @stack('modals')
+  {{-- Page js (delegated handlers; pagination; resolve flow) --}}
+  <script src="{{ asset('js/impoundedVehicle.js') }}"></script>
+  <script src="{{ asset('js/violationTable.js') }}"></script>
+
+  @stack('modals')
   @stack('scripts')
 </body>
 </html>

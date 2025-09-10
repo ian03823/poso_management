@@ -1,32 +1,46 @@
-<div class="table-responsive">
-    <table class="table table-striped table-bordered" id="releasedTable">
-        <thead class="table-light text-center">
-        <tr>
-            <th>Ticket No.</th>
-            <th>Reference No.</th>
-            <th>Released At</th>
+<div class="card shadow-sm border-0">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="releasedTable">
+        <thead class="table-light sticky-top">
+          <tr class="text-center">
+            <th style="width: 120px;">Ticket No.</th>
+            <th style="width: 140px;">Reference No.</th>
+            <th style="width: 180px;">Released At</th>
             <th>Violator</th>
-            <th>Vehicle Type</th>
-            <th>Plate No.</th>
-        </tr>
+            <th>Vehicle</th>
+            <th style="width: 130px;">Plate No.</th>
+            <th>Location</th>
+          </tr>
         </thead>
         <tbody>
-            @forelse($releasedTickets as $ticket)
-              <tr id="released-{{ $ticket->id }}">
-                <td>{{ $ticket->ticket_number }}</td>
-                <td>{{ $ticket->releasedVehicle->reference_number }}</td>
-                <td>{{ $ticket->releasedVehicle->released_at->format('d M Y, H:i') }}</td>
-                <td>{{ $ticket->violator->first_name }} {{ $ticket->violator->middle_name }} {{ $ticket->violator->last_name }}</td>
-                <td>{{ $ticket->vehicle->vehicle_type }}</td>
-                <td>{{ $ticket->vehicle->plate_number }}</td>
-              </tr>
-            @empty
-              <tr><td colspan="5" class="text-center">No released vehicle(s) yet.</td></tr>
-            @endforelse
+          @forelse($releasedTickets as $t)
+            <tr>
+              <td class="text-center fw-semibold">{{ $t->ticket_number }}</td>
+              <td class="text-center">
+                <span class="badge text-bg-success">{{ $t->releasedVehicle->reference_number }}</span>
+              </td>
+              <td class="text-center">
+                {{ optional($t->releasedVehicle->released_at)->format('d M Y, H:i') }}
+              </td>
+              <td>{{ trim(($t->violator->first_name ?? '').' '.($t->violator->middle_name ?? '').' '.($t->violator->last_name ?? '')) }}</td>
+              <td>
+                <span class="badge text-bg-secondary">{{ $t->vehicle->vehicle_type }}</span>
+              </td>
+              <td class="text-center">
+                <span class="badge text-bg-dark">{{ $t->vehicle->plate_number }}</span>
+              </td>
+              <td class="text-truncate" style="max-width: 240px;" title="{{ $t->location }}">
+                {{ $t->location }}
+              </td>
+            </tr>
+          @empty
+            <tr class="released-empty">
+              <td colspan="7" class="text-center text-muted py-4">No released vehicle(s) yet.</td>
+            </tr>
+          @endforelse
         </tbody>
-    </table>
-</div>
-
-  <div class="d-flex justify-content-center">
-    {{ $tickets->links('pagination::bootstrap-5') }}
+      </table>
+    </div>
   </div>
+</div>
