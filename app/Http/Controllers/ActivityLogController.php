@@ -25,7 +25,7 @@ class ActivityLogController extends Controller
             ->dateTo($request->get('date_to'))
             ->search($request->get('q'))
             ->latest('created_at')
-            ->paginate(15)
+            ->paginate(5)
             ->withQueryString();
 
         return view('admin.logs.activity', [

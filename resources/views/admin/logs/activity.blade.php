@@ -1,8 +1,8 @@
 @extends('components.layout')
-@section('title', 'Activity Logs')
+@section('title', 'POSO Admin Management - Activity Logs')
 
 @section('content')
-<div class="container py-4">
+<div class="container py-4" data-page="logs-activity">
   <h1 class="h4 mb-3">Activity Logs</h1>
 
   <form class="row g-2 mb-3" method="GET">
@@ -42,7 +42,7 @@
         <table class="table table-sm table-hover mb-0 align-middle">
           <thead class="table-light">
             <tr>
-              <th style="width: 180px;">Date/Time</th>
+              <th>Date/Time</th>
               <th>Action</th>
               <th>Actor</th>
               <th>Subject</th>
@@ -57,7 +57,7 @@
               $subject = $log->subject;
               $actorLabel = class_basename($log->actor_type); // Admin/Enforcer
               $subjectLabel = class_basename($log->subject_type);
-              $created = $log->created_at->timezone('Asia/Manila')->format('Y-m-d H:i:s');
+              $created = $log->created_at->timezone('Asia/Manila')->format('d M Y, H:i');
               $actorName = '';
               if ($actor) {
                 if ($actorLabel === 'Enforcer') {
@@ -68,7 +68,7 @@
               }
             @endphp
             <tr>
-              <td><span class="text-muted">{{ $created }}</span></td>
+              <td><span>{{ $created }}</span></td>
               <td><span class="badge text-bg-success">{{ $log->action }}</span></td>
               <td>
                 <div class="small">

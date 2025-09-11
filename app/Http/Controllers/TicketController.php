@@ -311,7 +311,7 @@ class TicketController extends Controller
             $violator->username = 'user'.rand(1000,9999);
         
             // generate an 8-char password
-            $rawPwd = Str::random(8);
+            $rawPwd = 'violator'.rand(1000,9999); // default
         
             // set the default password
             $violator->defaultPassword = Hash::make($rawPwd);
@@ -386,28 +386,31 @@ class TicketController extends Controller
                          ->all();
         $ticket->violations()->sync($violationIds);
         // Get actor/role/name
+        // actor/role/name
         [$actor, $role, $actorName] = $this->buildActor();
 
-        // Get violator model (depending on how you linked it)
-        $violator = $ticket->violator ?? Violator::find($ticket->violator_id);
+        // violator
+        $violator     = $ticket->violator ?? \App\Models\Violator::find($ticket->violator_id);
         $violatorName = $this->violatorFullName($violator);
 
-        try {
-            LogActivity::on($ticket)
-                ->by($actor)
-                ->event('ticket.issued')
-                ->withProperties([
-                    'ticket_id'   => $ticket->id,
-                    'violator_id' => $violator?->id,
-                    'violator'    => $violatorName,
-                    'actor_role'  => $role,
-                ])
-                ->fromRequest()
-                ->log("{$role} {$actorName} issued a ticket (#{$ticket->id}) to {$violatorName}");
-        } catch (\Throwable $e) {
-            Log::warning('[ActivityLog skipped] '.$e->getMessage());
-        }
-
+        // log only after final commit
+        DB::afterCommit(function () use ($ticket, $violator, $violatorName, $actor, $role, $actorName) {
+            try {
+                LogActivity::on($ticket)
+                    ->by($actor)
+                    ->event('ticket.issued')
+                    ->withProperties([
+                        'ticket_id'   => $ticket->id,
+                        'violator_id' => $violator?->id,
+                        'violator'    => $violatorName,
+                        'actor_role'  => $role,
+                    ])
+                    ->fromRequest()
+                    ->log("{$role} {$actorName} issued a ticket (#{$ticket->id}) to {$violatorName}");
+            } catch (\Throwable $e) {
+                Log::warning('[ActivityLog skipped] '.$e->getMessage());
+            }
+        });
 
         // 7) Last apprehended before this ticket
         $prev = Ticket::where('violator_id',$violator->id)

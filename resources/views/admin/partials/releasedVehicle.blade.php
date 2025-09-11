@@ -25,10 +25,10 @@
               </td>
               <td>{{ trim(($t->violator->first_name ?? '').' '.($t->violator->middle_name ?? '').' '.($t->violator->last_name ?? '')) }}</td>
               <td>
-                <span class="badge text-bg-secondary">{{ $t->vehicle->vehicle_type }}</span>
+                <span class="badge text-bg-secondary">{{ $t->vehicle->vehicle_type ?? ''}}</span>
               </td>
               <td class="text-center">
-                <span class="badge text-bg-dark">{{ $t->vehicle->plate_number }}</span>
+                <span class="badge text-bg-dark">{{ $t->vehicle->plate_number ?? ''}}</span>
               </td>
               <td class="text-truncate" style="max-width: 240px;" title="{{ $t->location }}">
                 {{ $t->location }}

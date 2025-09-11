@@ -67,6 +67,8 @@ Route::middleware('admin')->group(function () {
     Route::get('/admin/profile/update', [AdminDashboardController::class,'edit'])->name('admin.profile.edit');
     Route::put('/admin/profile/update', [AdminDashboardController::class,'update'])->name('admin.profile.update');
 
+
+
     //Issue Ticket 
     Route::get('/admin/tickets/create', [AdminTicketController::class, 'create'])
         ->name('admin.tickets.create');
@@ -114,6 +116,8 @@ Route::middleware('admin')->group(function () {
     Route::get('dataAnalytics/hotspotTickets', [AnalyticsController::class,'hotspotTickets'])
         ->name('dataAnalytics.hotspotTickets');
     
+    //ANALYTICS ROUTE
+    Route::get('/logs/activity', [ActivityLogController::class, 'index'])->name('logs.activity');
 
     // On-demand report downloads
     Route::get('reports/download/{format}', [AnalyticsController::class,'download'])

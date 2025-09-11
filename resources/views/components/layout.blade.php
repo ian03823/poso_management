@@ -39,7 +39,7 @@
           </button>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item text-black" data-ajax href="{{ route('admin.profile.edit') }}">Profile</a></li>
-            <li><a class="dropdown-item text-black" href="#">Activity Log</a></li>
+            <li><a class="dropdown-item text-black" data-ajax href="{{route('logs.activity')}}">Activity Log</a></li>
           </ul>
         </div>
 

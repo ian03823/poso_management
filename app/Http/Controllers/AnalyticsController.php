@@ -21,7 +21,19 @@ class AnalyticsController extends Controller
     public function index()
     {
         //
-        return view('admin.analytics.index');
+        
+        $latestTicket = \App\Models\Ticket::latest()->first();
+        $defaultLat   = $latestTicket->latitude  ?? 15.9285;
+        $defaultLng   = $latestTicket->longitude ?? 120.3487;
+
+        // limit options for UI
+        $violationOptions = \App\Models\Violation::select('id','violation_name')
+            ->orderBy('violation_name')
+            ->limit(12)
+            ->get();
+
+        // Important: pass to the blade, no inline <script> needed
+        return view('admin.analytics.index', compact('defaultLat','defaultLng','violationOptions'));
     }
     public function latest(Request $request)
     {

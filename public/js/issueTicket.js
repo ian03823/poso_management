@@ -100,18 +100,23 @@ if (window.__ISSUE_TICKET_WIRED__) {
 
   // -------- Sync function --------
   async function syncOfflineTickets() {
-    const all = await window.ticketsDB.tickets.toArray();
-    for (const rec of all) {
-      try {
+  const all = await window.ticketsDB.tickets.toArray();
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content
+            || document.querySelector('input[name="_token"]')?.value;
+  for (const rec of all) {
+    try {
         const res = await fetch('/enforcerTicket', {
           method: 'POST',
-          headers: {'Content-Type':'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {})
+          },
           body: JSON.stringify(rec.payload)
         });
         if (res.ok) await window.ticketsDB.tickets.delete(rec.id);
-      } catch(e) {
-        console.error('Sync failed for', rec.id, e);
-      }
+      } catch (e) { console.error('Sync failed for', rec.id, e); }
     }
   }
 

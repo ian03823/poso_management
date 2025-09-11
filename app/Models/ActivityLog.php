@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class ActivityLog extends Model
 {
@@ -17,8 +18,13 @@ class ActivityLog extends Model
         'properties' => 'array',
     ];
 
-    public function actor()  { return $this->morphTo(); }
-    public function subject(){ return $this->morphTo(); }
+    public function actor(): MorphTo { 
+        return $this->morphTo(__FUNCTION__, 'actor_type', 'actor_id');
+    }
+    public function subject(): MorphTo
+    {   
+        return $this->morphTo(); 
+    }
 
     // Small helpers / scopes
     public function scopeAction($q, $action) {
@@ -33,11 +39,15 @@ class ActivityLog extends Model
     public function scopeDateTo($q, $to) {
         return $to ? $q->whereDate('created_at', '<=', $to) : $q;
     }
-    public function scopeSearch($q, $term) {
+    public function scopeSearch($q, ?string $term)
+    {
         if (!$term) return $q;
-        return $q->where(function($qq) use ($term) {
-            $qq->where('description', 'like', "%{$term}%")
-               ->orWhere('action', 'like', "%{$term}%");
+
+        return $q->where(function ($qq) use ($term) {
+            $qq->where('action', 'like', "%{$term}%")
+               ->orWhere('description', 'like', "%{$term}%")
+               ->orWhere('ip', 'like', "%{$term}%")
+               ->orWhere('user_agent', 'like', "%{$term}%");
         });
     }
 }
