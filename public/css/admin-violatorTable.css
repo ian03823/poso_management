@@ -26,9 +26,10 @@
 
 /* Table look */
 .vtr-table{ margin:0; width:100%; table-layout:auto; }
-.vtr-table thead th{
+.vtr-table thead th, .violatorDetails thead th{
   position: static;               /* no sticky here to avoid overlap */
-  top:auto; z-index:auto;
+  top:auto; 
+  z-index:auto;
   background: var(--muted);
   color: var(--ink-700);
   font-weight: 700;

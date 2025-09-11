@@ -381,6 +381,120 @@ if (window.__ISSUE_TICKET_WIRED__) {
         Swal.fire('Error', err.message || err, 'error');
       }
     });
+  // -------- License number duplicate check (SweetAlert notice) --------
+  (function () {
+    const licEl = document.getElementById('license_num');
+    if (!licEl) return;
+
+    async function checkLicenseDuplicate() {
+      const license = (licEl.value || '').trim();
+      if (!license) return;
+      if (!navigator.onLine) return; // skip when offline
+
+      try {
+        const url = `/violators/check-license?license=${encodeURIComponent(license)}`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) return;
+
+        const info = await res.json(); // { exists, id, name }
+        if (!info.exists) return;
+
+        // If a violator is preloaded, don't warn if it's the same one
+        const currentIdEl = document.getElementById('current_violator_id');
+        const samePerson =
+          currentIdEl && String(info.id) === String(currentIdEl.value);
+
+        if (!samePerson) {
+          await Swal.fire({
+            icon: 'warning',
+            title: 'License already registered',
+            html: `This license number belongs to <b>${info.name}</b>.`,
+            confirmButtonText: 'OK',
+            width: 420
+          });
+        }
+      } catch (e) {
+        console.warn('[checkLicenseDuplicate] failed:', e);
+      }
+    }
+
+    document.addEventListener('focusout', (e) => {
+      if (e.target && e.target.id === 'license_num') {
+        const license = (e.target.value || '').trim();
+        warnIfRegistered(license);
+      }
+    });
+  })();
+/* ====== PASTE THIS BLOCK HERE (just above Auto-fill owner name) ====== */
+  (function () {
+    const licEl = document.getElementById('license_num');
+    if (!licEl) return;
+
+    const first  = document.getElementById('first_name');
+    const middle = document.getElementById('middle_name');
+    const last   = document.getElementById('last_name');
+
+    let warnedFor = null;
+
+    function typedFullName() {
+      return [first?.value, middle?.value, last?.value]
+        .map(v => (v || '').trim())
+        .filter(Boolean)
+        .join(' ');
+    }
+
+    async function warnIfRegistered(license) {
+      if (!license || !navigator.onLine) return false;
+
+      const form = document.getElementById('ticketForm');
+      const base = form?.dataset?.checkLicenseUrl || '/violators/check-license';
+      const url  = `${base}?license=${encodeURIComponent(license)}`;
+
+      try {
+        const res = await fetch(url, {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'
+        });
+        if (!res.ok) return false;
+
+        const info = await res.json(); // { exists, id, name }
+        if (!info.exists) return false;
+
+        if (warnedFor === license) return true;
+        warnedFor = license;
+
+        const typed = typedFullName() || '<i>(no name typed yet)</i>';
+        await Swal.fire({
+          icon: 'warning',
+          title: 'License number already registered',
+          html: `This license is registered to <b>${info.name}</b>.<br><br>
+                 <small>You typed: <b>${typed}</b></small>`,
+          confirmButtonText: 'OK',
+          width: 460
+        });
+        return true;
+      } catch (e) {
+        console.warn('[check-license] failed:', e);
+        return false;
+      }
+    }
+
+    // Warn when leaving the license field
+    licEl.addEventListener('blur', () => {
+      const license = (licEl.value || '').trim();
+      warnIfRegistered(license);
+    });
+
+    // Also warn once on submit if blur was skipped (doesn't block)
+    const form = document.getElementById('ticketForm');
+    form?.addEventListener('submit', () => {
+      const license = (licEl.value || '').trim();
+      if (license && navigator.onLine) {
+        if (warnedFor !== license) warnIfRegistered(license);
+      }
+    });
+  })();
+  /* ==================== END OF NEW BLOCK ==================== */
 
   // -------- Auto-fill owner name --------
   const ownerChk = document.getElementById('is_owner');

@@ -53,6 +53,8 @@ Route::middleware('enforcer')->group(function () {
     Route::resource('enforcerCreate', EnforcerAcc::class);
     Route::resource('enforcerTicket', TicketController::class);
     Route::resource('enf', EnforcerManagementController::class);
+    Route::get('/violators/check-license', [TicketController::class, 'checkLicense'])
+        ->name('violators.checkLicense');
     Route::get('violators/suggestions', [TicketController::class, 'suggestions'])->name('enforcer.violators.suggestions');
     Route::get('violators/{id}', [TicketController::class, 'show'])->name('enforcer.violators.show');
     Route::get('enforcer/change/password', [EnforcerAuthController::class, 'showChangePassword'])->name('enforcer.password.edit');

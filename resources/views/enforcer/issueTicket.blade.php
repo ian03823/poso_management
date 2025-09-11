@@ -33,9 +33,11 @@
     {{-- Form Card --}}
     <div class="card ticket-card mx-auto mt-3">
       <div class="card-body">
-        <form id="ticketForm" action="/enforcerTicket" method="POST">
+        <form id="ticketForm" action="/enforcerTicket" method="POST" data-check-license-url="{{ route('violators.checkLicense') }}">
           @csrf
-
+          @if(isset($v) && $v?->id)
+            <input type="hidden" id="current_violator_id" value="{{ $v->id }}">
+          @endif
           <div class="row g-3">
             <input type="hidden" id="enforcer_id" name="enforcer_id" value="{{ auth('enforcer')->id() }}">
 

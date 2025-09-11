@@ -3,13 +3,19 @@
 @section('content')
 @php
   $paidStatusId = \App\Models\TicketStatus::where('name','paid')->value('id');
+  $paidId      = \App\Models\TicketStatus::where('name','paid')->value('id');
+  $pendingId   = \App\Models\TicketStatus::where('name','pending')->value('id');
+  $unpaidId    = \App\Models\TicketStatus::where('name','unpaid')->value('id');
+  $cancelledId = \App\Models\TicketStatus::where('name','cancelled')->value('id');
 @endphp
 <div  class="container-fluid mt-4"
       id="violatorPage"
       data-page="violator"
-      data-partial-url="{{ route('violatorTable.partial') }}"
       data-status-url="{{ url('paid') }}"
-      data-paid-id="{{ $paidStatusId }}">
+      data-paid-id="{{ $paidId }}"
+      data-pending-id="{{ $pendingId }}"
+      data-unpaid-id="{{ $unpaidId }}"
+      data-cancelled-id="{{ $cancelledId }}">
     <h2 class="mb-3">Violator List</h2>
 
     <form id="filterForm" onsubmit="return false;" class="row g-2 mb-4">
@@ -48,5 +54,19 @@
         @include('admin.partials.violatorTable')
     </div>
 
+    <!-- KEEP ONLY THIS MODAL (history/details) -->
+    <div class="modal fade" id="violatorModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Violator Details</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="violatorModalBody">
+            <!-- loaded via AJAX -->
+          </div>
+        </div>
+      </div>
+    </div>
 </div>
 @endsection

@@ -245,3 +245,37 @@ body > .d-flex{
   max-width: 100%;
   height: auto;
 }
+/* Make sticky header work in the Violator history modal */
+#violatorModal .modal-dialog-scrollable .modal-body {
+  overflow-y: auto;             /* modal body is the vertical scroller */
+}
+
+/* Important: let the modal body be the vertical scroll container.
+   Bootstrap's .table-responsive sets overflow-x:auto; which turns it
+   into a "scroll container" and breaks sticky on vertical scroll.
+   This restores vertical flow so sticky locks to the modal body. */
+#violatorModalBody .table-responsive {
+  overflow-y: visible !important;
+}
+
+/* Stick the header to the top of the modal body */
+#violatorModalBody .table thead th {
+  position: sticky;
+  top: 0;                       /* top of the modal body */
+  z-index: 2;                   /* above table rows */
+  background: #fff;             /* solid bg so text stays readable */
+  background-clip: padding-box; /* avoid double border effect */
+}
+
+:root { --z-bs-backdrop:1990; --z-bs-modal:2000; --z-swal:3000; }
+.modal-backdrop { z-index: var(--z-bs-backdrop) !important; }
+.modal, .modal.show { z-index: var(--z-bs-modal) !important; }
+.swal2-container { z-index: var(--z-swal) !important; }
+
+/* If you use toast position, cover those containers too (optional) */
+.swal2-container.swal2-top-end,
+.swal2-container.swal2-top-start,
+.swal2-container.swal2-top,
+.swal2-container.swal2-center {
+  z-index: var(--z-swal) !important;
+}

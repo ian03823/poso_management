@@ -425,6 +425,15 @@ class TicketController extends Controller
                                          'name'   => $v->violation_name,
                                          'fine'   => $v->fine_amount,
                                      ]);
+        // >>> NEW: prefer what the enforcer typed for display ONLY (do not change DB)
+        $violatorDisplay = [
+            'first_name'     => $d['first_name']  ?? $violator->first_name,
+            'middle_name'    => $d['middle_name'] ?? $violator->middle_name,
+            'last_name'      => $d['last_name']   ?? $violator->last_name,
+            'address'        => $d['address']     ?? $violator->address,
+            'birthdate'      => $d['birthdate']   ?? $violator->birthdate,
+            'license_number' => $violator->license_number, // keep canonical license
+        ];                             
 
         return response()->json([
             'ticket' => [
@@ -444,14 +453,7 @@ class TicketController extends Controller
                                 .' '.auth()->guard('enforcer')->user()->lname,
                 'badge_num' => auth()->guard('enforcer')->user()->badge_num,
             ],
-            'violator' => [
-                'first_name'    => $violator->first_name,
-                'middle_name'   => $violator->middle_name,
-                'last_name'     => $violator->last_name,
-                'address'        => $violator->address,
-                'birthdate'      => $violator->birthdate,
-                'license_number'=> $violator->license_number,
-            ],
+            'violator'   => $violatorDisplay,
             'vehicle' => [
                 'plate_number' => $vehicle->plate_number,
                 'vehicle_type' => $vehicle->vehicle_type,
@@ -463,6 +465,26 @@ class TicketController extends Controller
         ]);
     
     }
+    public function checkLicense(Request $request)
+    {
+        $license = trim((string)$request->query('license', ''));
+        if ($license === '') {
+            return response()->json(['exists' => false]);
+        }
+
+        $v = Violator::where('license_number', $license)->first();
+        if (! $v) {
+            return response()->json(['exists' => false]);
+        }
+
+        return response()->json([
+            'exists' => true,
+            'id'     => $v->id,
+            'name'   => $this->violatorFullName($v),
+        ]);
+    }
+
+
 
     /**
      * Display the specified resource.

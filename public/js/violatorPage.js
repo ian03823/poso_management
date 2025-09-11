@@ -1,41 +1,70 @@
-/* public/js/violator.js — SPA table + SweetAlert details + Paid/password prompts */
+/* public/js/violator.js — SPA list, Bootstrap modal for history, SweetAlert prompts for Paid/Admin */
 (function ($) {
   if (window.__violatorBound) return;
   window.__violatorBound = true;
 
-  // ---------- helpers ----------
   const csrf = $('meta[name="csrf-token"]').attr('content') || '';
 
-  function $page() { return document.getElementById('violatorPage'); }
-  function cfg() {
-    const p = $page();
+  /* ======== CONFIG ======== */
+    function cfg() {
+    const p = document.getElementById('violatorPage');
     return {
-      partialUrl:  p?.dataset.partialUrl || '/violatorTable/partial',
-      statusUrl:   p?.dataset.statusUrl  || '/paid',
-      paidId:      Number(p?.dataset.paidId || 0),
+        partialUrl:  p?.dataset.partialUrl || '/violatorTable/partial',
+        statusUrl:   p?.dataset.statusUrl  || '/paid',  // base, we'll append /{id}/status
+        paidId:      Number(p?.dataset.paidId || 0),
+        pendingId:   Number(p?.dataset.pendingId || 0),
+        unpaidId:    Number(p?.dataset.unpaidId || 0),
+        cancelledId: Number(p?.dataset.cancelledId || 0),
+        csrf:        document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+    };
+    }
+  // Hide the violator modal while running a SweetAlert to avoid focus trap.
+    async function withModalHidden(run) {
+    const modalEl = document.getElementById('violatorModal');
+    let modal = bootstrap.Modal.getInstance(modalEl);
+    if (!modal) modal = new bootstrap.Modal(modalEl, { backdrop: true, focus: true });
+
+    // Hide and wait until fully hidden so focus trap is released
+    const waitHidden = new Promise(resolve => {
+        const once = () => { modalEl.removeEventListener('hidden.bs.modal', once); resolve(); };
+        modalEl.addEventListener('hidden.bs.modal', once, { once: true });
+    });
+    modal.hide();
+    await waitHidden;
+
+    try {
+        return await run();     // run SweetAlert (or anything)
+    } finally {
+        modal.show();           // restore modal afterwards
+    }
+    }
+
+
+  // ---------- SPA list ----------
+  function getParamsFromUI() {
+    return {
+      sort_option:  $('#sort_table').val()   || 'date_desc',
+      vehicle_type: $('#vehicle_type').val() || 'all',
+      search:       $('#search_input').val() || '',
     };
   }
-
-  function getParams() {
-    const url = new URL(location.href);
-    const q = {
-      sort_option:  $('#sort_table').val()   ?? url.searchParams.get('sort_option')  ?? 'date_desc',
-      vehicle_type: $('#vehicle_type').val() ?? url.searchParams.get('vehicle_type') ?? 'all',
-      search:       $('#search_input').val() ?? url.searchParams.get('search')       ?? '',
-      page:         url.searchParams.get('page') || '1'
+  function getParamsFromURL() {
+    const u = new URL(location.href);
+    return {
+      sort_option:  u.searchParams.get('sort_option')  || 'date_desc',
+      vehicle_type: u.searchParams.get('vehicle_type') || 'all',
+      search:       u.searchParams.get('search')       || '',
+      page:         u.searchParams.get('page')         || '1',
     };
-    return q;
   }
-
   function pushUrl(q) {
     const p = new URLSearchParams();
-    if (q.sort_option && q.sort_option !== 'date_desc') p.set('sort_option', q.sort_option);
-    if (q.vehicle_type && q.vehicle_type !== 'all')     p.set('vehicle_type', q.vehicle_type);
-    if ((q.search || '').trim() !== '')                 p.set('search', q.search.trim());
-    if (q.page && q.page !== '1')                       p.set('page', q.page);
-    history.pushState({}, '', location.pathname + '?' + p.toString());
+    if (q.sort_option !== 'date_desc') p.set('sort_option', q.sort_option);
+    if (q.vehicle_type !== 'all')      p.set('vehicle_type', q.vehicle_type);
+    if ((q.search || '').trim() !== '')p.set('search', q.search.trim());
+    if (q.page && q.page !== '1')      p.set('page', q.page);
+    history.pushState({}, '', location.pathname + (p.toString() ? '?'+p.toString() : ''));
   }
-
   function setLoading(on) {
     const wrap = document.getElementById('violatorContainer');
     if (!wrap) return;
@@ -48,212 +77,225 @@
       wrap.querySelector('[data-vtr-loader]')?.remove();
     }
   }
-
-  function injectTable(html, newUrlForHistory) {
+  function injectTable(html, newUrlParams) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const partial = doc.querySelector('#vtr-table-wrap');
     const wrap = document.getElementById('violatorContainer');
-    if (!wrap) return;
-    wrap.innerHTML = partial ? partial.outerHTML : html;
-    if (newUrlForHistory) pushUrl(newUrlForHistory);
-    // Scroll to top of table after navigation
-    wrap.scrollIntoView({ behavior: 'instant', block: 'start' });
+    if (wrap) wrap.innerHTML = partial ? partial.outerHTML : html;
+    if (newUrlParams) pushUrl(newUrlParams);
   }
-
-  function loadPage(page = '1', push = true) {
+  function loadPage(page='1', push=true) {
     const c = cfg();
-    const q = getParams();
-    q.page = page;
-
+    const base = getParamsFromUI();
+    const q = Object.assign({}, base, { page });
     setLoading(true);
     $.ajax({
       url: c.partialUrl,
       data: q,
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      headers: { 'X-Requested-With':'XMLHttpRequest' }
     })
     .done(html => injectTable(html, push ? q : null))
     .always(() => setLoading(false));
   }
 
-  function toastOk(msg) {
-    if (!window.Swal) return;
-    Swal.fire({ toast:true, position:'top-end', icon:'success', title: msg || 'Done', timer:1500, showConfirmButton:false });
-  }
-
-  // ---------- Status update helpers (Paid & password) ----------
-  function postStatus(ticketId, data) {
-    const c = cfg();
-    return $.ajax({
-      url: `${c.statusUrl}/${ticketId}/status`,
-      method: 'POST',
-      data: Object.assign({ _token: csrf }, data),
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    });
-  }
-
-  async function promptReference(ticketId) {
-    const { value, isConfirmed } = await Swal.fire({
-      title: 'Enter Reference Number',
-      input: 'text',
-      inputLabel: 'Reference # (required for Paid)',
-      inputPlaceholder: 'e.g., OR-123456',
-      showCancelButton: true,
-      confirmButtonText: 'Submit',
-      showLoaderOnConfirm: true,
-      preConfirm: async (ref) => {
-        ref = (ref || '').trim();
-        if (!ref) { Swal.showValidationMessage('Reference number is required.'); return false; }
-        try {
-          await postStatus(ticketId, { status_id: cfg().paidId, reference_number: ref });
-        } catch (xhr) {
-          const msg = xhr?.responseJSON?.message || 'Could not mark as Paid.';
-          Swal.showValidationMessage(msg); return false;
-        }
-        return true;
-      },
-      allowOutsideClick: () => !Swal.isLoading()
-    });
-    return isConfirmed;
-  }
-
-  async function promptPassword(ticketId, newStatus) {
-    const { value, isConfirmed } = await Swal.fire({
-      title: 'Admin Password Required',
-      input: 'password',
-      inputLabel: 'Enter admin password to confirm',
-      showCancelButton: true,
-      confirmButtonText: 'Confirm',
-      showLoaderOnConfirm: true,
-      preConfirm: async (pw) => {
-        pw = (pw || '').trim();
-        if (!pw) { Swal.showValidationMessage('Password is required.'); return false; }
-        try {
-          await postStatus(ticketId, { status_id: newStatus, admin_password: pw });
-        } catch (xhr) {
-          const msg = xhr?.responseJSON?.message || 'Password check failed.';
-          Swal.showValidationMessage(msg); return false;
-        }
-        return true;
-      },
-      allowOutsideClick: () => !Swal.isLoading()
-    });
-    return isConfirmed;
-  }
-
-  // ---------- SweetAlert details (history) ----------
-  let _detailUrl = null;
-
-  function openDetails(url) {
-    _detailUrl = url;
-    Swal.fire({
-      title: 'Violator Details',
-      html: '<div class="p-3" id="violatorDetails">Loading…</div>',
-      width: '70rem',
-      showCloseButton: true,
-      showConfirmButton: false,
-      didOpen: () => {
-        $('#violatorDetails').load(url, function () {
-          // ensure any table inside is scrollable
-          const box = this.closest('.swal2-html-container');
-          if (box) box.style.maxHeight = '70vh';
-        });
-      }
-    });
-  }
-
-  function reloadDetailsIfOpen() {
-    if (!_detailUrl) return;
-    const host = document.getElementById('violatorDetails');
-    if (!host) return;
-    $('#violatorDetails').load(_detailUrl);
-  }
-
-  // ---------- INIT (hard load + SPA) ----------
-  function init() {
+  // init (hard load + SPA swap)
+  function initList() {
     if (!$('#violatorContainer').length) return;
 
-    // If we landed via SPA and server didn’t render the table yet, fetch it
+    // If table not rendered yet (after SPA swap), sync UI from URL then load
     if (!$('#vtr-table-wrap').length) {
-      const url = new URL(location.href);
-      const q = {
-        sort_option:  url.searchParams.get('sort_option')  || $('#sort_table').val()   || 'date_desc',
-        vehicle_type: url.searchParams.get('vehicle_type') || $('#vehicle_type').val() || 'all',
-        search:       url.searchParams.get('search')       || $('#search_input').val() || '',
-        page:         url.searchParams.get('page')         || '1'
-      };
-      $('#sort_table').val(q.sort_option);
-      $('#vehicle_type').val(q.vehicle_type);
-      $('#search_input').val(q.search);
-      loadPage(q.page, /*push=*/false);
+      const state = getParamsFromURL();
+      $('#sort_table').val(state.sort_option);
+      $('#vehicle_type').val(state.vehicle_type);
+      $('#search_input').val(state.search);
+      loadPage(state.page, /*push=*/false);
     }
   }
-  document.addEventListener('DOMContentLoaded', init);
-  document.addEventListener('page:loaded', init);
+  document.addEventListener('DOMContentLoaded', initList);
+  document.addEventListener('page:loaded', initList);
 
-  // ---------- Filters ----------
-  $(document).on('click', '#search_btn', () => loadPage('1'));
-  $(document).on('keydown', '#search_input', (e) => { if (e.key === 'Enter') { e.preventDefault(); loadPage('1'); }});
-  $(document).on('change', '#sort_table',   () => loadPage('1'));
-  $(document).on('change', '#vehicle_type', () => loadPage('1'));
+  // filters
+  $(document).on('click',   '#search_btn',     () => loadPage('1'));
+  $(document).on('keydown', '#search_input',   (e)=>{ if (e.key==='Enter'){ e.preventDefault(); loadPage('1'); }});
+  $(document).on('change',  '#sort_table',     () => loadPage('1'));
+  $(document).on('change',  '#vehicle_type',   () => loadPage('1'));
 
-  // ---------- Pagination ----------
-  $(document).on('click', '#violatorContainer .pagination a', function (e) {
+  // pagination
+  $(document).on('click', '#violatorContainer .pagination a', function(e){
     e.preventDefault();
     const newPage = new URL(this.href).searchParams.get('page') || '1';
     loadPage(newPage);
   });
 
-  // ---------- SPA back/forward ----------
+  // back/forward
   window.addEventListener('popstate', () => {
     if (!$('#violatorContainer').length) return;
-    const url = new URL(location.href);
-    $('#sort_table').val(url.searchParams.get('sort_option')  || 'date_desc');
-    $('#vehicle_type').val(url.searchParams.get('vehicle_type') || 'all');
-    $('#search_input').val(url.searchParams.get('search') || '');
-    loadPage(url.searchParams.get('page') || '1', /*push=*/false);
+    const s = getParamsFromURL();
+    $('#sort_table').val(s.sort_option);
+    $('#vehicle_type').val(s.vehicle_type);
+    $('#search_input').val(s.search);
+    loadPage(s.page, /*push=*/false);
   });
 
-  // ---------- View More (history) via SweetAlert ----------
-  $(document).on('click', '.view-tickets-btn', function (e) {
+  // ---------- History modal (Bootstrap) ----------
+  let currentDetailUrl = null;
+  function openHistory(url) {
+    currentDetailUrl = url;
+
+    const modalEl = document.getElementById('violatorModal');
+    // Always move modal under <body> to avoid stacking-context issues
+    if (modalEl.parentElement !== document.body) document.body.appendChild(modalEl);
+
+    // Clean old backdrops to prevent perma-dim
+    document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
+
+    $('#violatorModalBody').html('<div class="py-5 text-center"><div class="spinner-border" role="status"></div></div>');
+    const modal = new bootstrap.Modal(modalEl, { backdrop: true, focus: true });
+    modal.show();
+
+    // fetch details
+    $.get(url, html => {
+      $('#violatorModalBody').html(html);
+
+      // Ensure only one backdrop and correct z-index
+      const backs = Array.from(document.querySelectorAll('.modal-backdrop'));
+      backs.slice(0, backs.length - 1).forEach(b => b.remove());
+      backs.at(-1)?.style && (backs.at(-1).style.zIndex = '1990');
+      modalEl.style.zIndex = '2000';
+    });
+  }
+
+  $(document).on('click', '.view-tickets-btn', function(e){
     e.preventDefault();
     const url = this.getAttribute('data-url');
-    if (!url) return;
-    openDetails(url);
+    if (url) openHistory(url);
   });
 
-  // ---------- Status select inside the SweetAlert details ----------
-  $(document).on('change', '.swal2-container .status-select', async function () {
-    const $sel = $(this);
+  // Clear on hide; remove stray backdrops
+  document.addEventListener('hidden.bs.modal', (ev) => {
+    if (ev.target.id !== 'violatorModal') return;
+    $('#violatorModalBody').empty();
+    document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
+  });
+
+  // ---------- Status updates inside modal (SweetAlert prompts) ----------
+  function postStatus(ticketId, data) {
+    const c = cfg();
+    return $.ajax({
+        url: `${c.statusUrl}/${ticketId}/status`,
+        method: 'POST',
+        data: Object.assign({ _token: c.csrf }, data),
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    }
+    /* ======== SWEETALERT HELPERS (render INSIDE modal to avoid focus trap) ======== */
+    async function askReferenceForLeavingPaid(ticketId) {
+    const target = document.getElementById('violatorModal'); // render inside modal
+    const { isConfirmed } = await Swal.fire({
+        target,
+        title: 'Reference Number',
+        input: 'text',
+        inputLabel: 'Enter 8-character reference #',
+        inputPlaceholder: 'e.g., ABCD1234',
+        inputAttributes: { maxlength: 8, minlength: 8, autocapitalize:'off', autocorrect:'off', autocomplete:'off' },
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showCancelButton: true,
+        confirmButtonText: 'Submit',
+        showLoaderOnConfirm: true,
+        preConfirm: async (ref) => {
+        ref = (ref || '').trim();
+        if (ref.length !== 8) { Swal.showValidationMessage('Reference must be exactly 8 characters.'); return false; }
+        try {
+            await postStatus(ticketId, { status_id: 'LEAVING_PAID', reference_number: ref }); // marker; controller will handle
+        } catch (xhr) {
+            Swal.showValidationMessage(xhr?.responseJSON?.message || 'Could not update status.');
+            return false;
+        }
+        return true;
+        }
+    });
+    return isConfirmed;
+    }
+
+  async function askAdminPassword(ticketId, newStatus) {
+    const target = document.getElementById('violatorModal');
+    const { isConfirmed } = await Swal.fire({
+        target,
+        title: 'Admin Password Required',
+        input: 'password',
+        inputLabel: 'Enter admin password to confirm',
+        inputAttributes: { autocapitalize:'off', autocomplete:'current-password', maxlength:128 },
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showCancelButton: true,
+        confirmButtonText: 'Confirm',
+        showLoaderOnConfirm: true,
+        preConfirm: async (pw) => {
+        pw = (pw || '').trim();
+        if (!pw) { Swal.showValidationMessage('Password is required.'); return false; }
+        try {
+            await postStatus(ticketId, { status_id: newStatus, admin_password: pw });
+        } catch (xhr) {
+            Swal.showValidationMessage(xhr?.responseJSON?.message || 'Password check failed.');
+            return false;
+        }
+        return true;
+        }
+    });
+    return isConfirmed;
+    }
+
+    /* ======== STATUS CHANGE (GUARDED, SINGLE PROMPT) ======== */
+    let _changing = false;
+    $(document).on('change', '#violatorModal .status-select', async function () {
+    if (_changing) return;
+    _changing = true;
+
+    const c = cfg();
+    const $sel      = $(this);
     const ticketId  = Number($sel.data('ticket-id'));
-    const oldStatus = Number($sel.data('current-status-id'));
+    const oldStatus = Number($sel.data('current-status-id')); // from data- attr
     const newStatus = Number($sel.val());
-    const paidId    = cfg().paidId;
 
-    if (!ticketId) return;
-
-    // revert helper
+    // Always revert UI immediately; apply after success only
     const revert = () => $sel.val(oldStatus);
 
     try {
-      let ok = false;
-      if (newStatus === paidId) {
-        ok = await promptReference(ticketId);
-      } else if (oldStatus === paidId && newStatus !== paidId) {
-        ok = await promptPassword(ticketId, newStatus);
-      } else {
+        let ok = false;
+
+        // Rule 1: FROM PAID → (Pending/Unpaid/Cancelled) => Ask REFERENCE (8 chars)
+        if (oldStatus === c.paidId && newStatus !== c.paidId) {
+        ok = await askReferenceForLeavingPaid(ticketId);
+        }
+        // Rule 2: FROM PENDING → (Unpaid/Cancelled) => Ask ADMIN PASSWORD
+        else if (oldStatus === c.pendingId && (newStatus === c.unpaidId || newStatus === c.cancelledId)) {
+        ok = await askAdminPassword(ticketId, newStatus);
+        }
+        // All other transitions → straight update
+        else {
         await postStatus(ticketId, { status_id: newStatus });
         ok = true;
-      }
+        }
 
-      if (!ok) { revert(); return; }
+        if (!ok) { revert(); return; }
 
-      toastOk('Status updated');
-      reloadDetailsIfOpen();
+        // Success → update marker and reload the modal body content
+        $sel.attr('data-current-status-id', newStatus);
+
+        Swal.fire({ toast:true, position:'top-end', icon:'success', title:'Status updated', timer:1200, showConfirmButton:false });
+
+        if (window.currentDetailUrl) {
+        $('#violatorModalBody').html('<div class="py-5 text-center"><div class="spinner-border" role="status"></div></div>');
+        $.get(window.currentDetailUrl, html => $('#violatorModalBody').html(html));
+        }
     } catch (err) {
-      console.error(err);
-      Swal.fire('Error', String(err?.responseJSON?.message || err?.message || err || 'Update failed'), 'error');
-      revert();
+        revert();
+        Swal.fire('Error', String(err?.responseJSON?.message || err?.message || err || 'Update failed'), 'error');
+    } finally {
+        _changing = false;
     }
-  });
+    });
+
 
 })(jQuery);
