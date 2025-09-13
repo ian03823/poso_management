@@ -1,6 +1,5 @@
-// public/js/analytics.js
+// resources/js/analytics.js
 
-// global holders (so we can destroy between SPA swaps)
 window.pie = window.pie || null;
 window.bar = window.bar || null;
 window.map = window.map || null;
@@ -9,26 +8,20 @@ window.hotspotMarkers = window.hotspotMarkers || null;
 window._analyticsModal = window._analyticsModal || null;
 
 function initAnalytics() {
-  // only run when the analytics page is present
-  if (!document.getElementById('analytics-page')) return;
-
   const pieEl = document.getElementById('pieChart');
   const barEl = document.getElementById('barChart');
   const mapEl = document.getElementById('map');
-  
-  if (!pieEl || !barEl || !mapEl) return;
+  if (!pieEl || !barEl || !mapEl) return; // not on analytics page
 
-  // render violation filter options (from PHP-provided window.VIOLATION_OPTIONS)
+  // render violation filter list
   renderViolationFilterList();
 
-  // ---- destroy previous instances (if any) to avoid duplicates/warnings) ----
-  try { window.pie?.destroy();  } catch(_) {}
-  try { window.bar?.destroy();  } catch(_) {}
-  try {
-    if (window.map) { window.map.remove(); window.map = null; window.heat = null; }
-  } catch(_) {}
+  // destroy old instances if any (due to AJAX swap)
+  try { if (window.pie) { window.pie.destroy(); window.pie = null; } } catch(_) {}
+  try { if (window.bar) { window.bar.destroy(); window.bar = null; } } catch(_) {}
+  try { if (window.map) { window.map.remove(); window.map = null; window.heat = null; } } catch(_) {}
 
-  // ---- initialize charts ----
+  // Charts
   window.pie = new Chart(pieEl, {
     type: 'pie',
     data: { labels: ['Paid', 'Unpaid'], datasets: [{ data: [0, 0] }] },
@@ -44,9 +37,9 @@ function initAnalytics() {
     }
   });
 
-  // ---- initialize map ----
-  const lat = Number(root.dataset.defaultLat ?? 15.9285);
-  const lng = Number(root.dataset.defaultLng ?? 120.3487);
+  // Map
+  const lat = Number(window.DEFAULT_LAT ?? 15.9285);
+  const lng = Number(window.DEFAULT_LNG ?? 120.3487);
 
   window.map = L.map('map', { zoomControl: true }).setView([lat, lng], 13);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -56,75 +49,46 @@ function initAnalytics() {
 
   window.heat = L.heatLayer([], { radius: 25, blur: 15, maxZoom: 17 }).addTo(window.map);
   window.hotspotMarkers = L.layerGroup().addTo(window.map);
+
   setTimeout(() => window.map.invalidateSize(), 250);
 
-  // Modal instance for drill-down
+  // Modal
   const modalEl = document.getElementById('hotspotModal');
   window._analyticsModal = modalEl ? new bootstrap.Modal(modalEl) : null;
 
-  // ---- filters & URL sync ----
-  // 1) Load filters from URL (if present) OR fallback to last 3 months
-  if (!applyFiltersFromURL()) {
-    setDefaultMonths();
-  }
+  // Bind buttons
+  document.getElementById('applyFilters')?.addEventListener('click', fetchStats);
+  document.getElementById('resetFilters')?.addEventListener('click', resetFilters);
 
-  // 2) Bind actions (use {once:false} because elements are replaced on SPA swaps)
-  document.getElementById('applyFilters')?.addEventListener('click', () => {
-    pushFiltersToUrl();   // push current filters to URL
-    fetchStats();         // refresh stats
-  }, { passive: true });
-
-  document.getElementById('resetFilters')?.addEventListener('click', () => {
-    setDefaultMonths();
-    clearViolationChecks();
-    setStatusRadio('');
-    pushFiltersToUrl();   // write cleared defaults to URL
-    fetchStats();
-  }, { passive: true });
-
-  // 3) Back/forward support
-  window.addEventListener('popstate', () => {
-    if (!document.getElementById('analytics-page')) return; // if user left page
-    applyFiltersFromURL(); // set controls from URL
-    fetchStats();          // re-run
-  });
-
-  // Initial fetch
+  // init default filters (last 3 months)
+  initDefaultMonths();
   fetchStats();
 }
 
-function setDefaultMonths() {
+function initDefaultMonths() {
   const to = new Date();
   const from = new Date(to.getFullYear(), to.getMonth() - 2, 1);
-  setMonthInput('fromMonth', from);
-  setMonthInput('toMonth', to);
-}
-function setMonthInput(id, date) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const ym = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
-  el.value = ym;
+  document.getElementById('fromMonth').value = `${from.getFullYear()}-${String(from.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('toMonth').value   = `${to.getFullYear()}-${String(to.getMonth()+1).padStart(2,'0')}`;
 }
 
-function clearViolationChecks() {
-  document
-    .querySelectorAll('#violationFilterList input[type="checkbox"]')
-    .forEach(cb => cb.checked = false);
-}
-function setStatusRadio(val) {
-  const all = document.querySelectorAll('input[name="statusFilter"]');
-  all.forEach(r => r.checked = (r.value === val));
+function resetFilters() {
+  initDefaultMonths();
+  document.querySelectorAll('#violationFilterList input[type="checkbox"]').forEach(cb => cb.checked = false);
+  document.querySelector('input[name="statusFilter"][value=""]')?.click();
+  fetchStats();
 }
 
 function getFilters() {
-  const fromMonth = document.getElementById('fromMonth')?.value || '';
-  const toMonth   = document.getElementById('toMonth')?.value || '';
+  const fromMonth = document.getElementById('fromMonth').value; // YYYY-MM
+  const toMonth   = document.getElementById('toMonth').value;   // YYYY-MM
   const status    = document.querySelector('input[name="statusFilter"]:checked')?.value || '';
 
   const violations = Array.from(
     document.querySelectorAll('#violationFilterList input[type="checkbox"]:checked')
   ).map(cb => cb.value);
 
+  // convert month to date bounds on server; we just pass YYYY-MM
   return { from: fromMonth, to: toMonth, status, violations };
 }
 
@@ -137,39 +101,6 @@ function buildQuery(params) {
   return usp.toString();
 }
 
-function pushFiltersToUrl(replace = false) {
-  const q = buildQuery(getFilters());
-  const url = `/dataAnalytics?${q}`;
-  history[replace ? 'replaceState' : 'pushState']({}, '', url);
-}
-
-function applyFiltersFromURL() {
-  const p = new URLSearchParams(location.search);
-  const from = p.get('from');
-  const to   = p.get('to');
-  const status = p.get('status') || '';
-
-  // if URL has nothing relevant, return false (caller will set defaults)
-  if (!from && !to && !status && !p.get('violations[]')) return false;
-
-  // set month inputs
-  if (from) document.getElementById('fromMonth').value = from;
-  if (to)   document.getElementById('toMonth').value   = to;
-
-  // set status
-  setStatusRadio(status);
-
-  // set violations
-  clearViolationChecks();
-  const ids = p.getAll('violations[]');
-  ids.forEach(id => {
-    const cb = document.getElementById(`vio_${id}`);
-    if (cb) cb.checked = true;
-  });
-
-  return true;
-}
-
 async function fetchStats() {
   const loadingEl = document.getElementById('loadingIndicator');
   if (loadingEl) loadingEl.style.display = 'block';
@@ -179,7 +110,7 @@ async function fetchStats() {
     const res = await fetch(`/dataAnalytics/latest?${q}`, { headers: { 'Accept': 'application/json' }});
     const e = await res.json();
 
-    // charts
+    // Charts
     window.pie.data.datasets[0].data = [e.paid || 0, e.unpaid || 0];
     window.pie.update();
 
@@ -189,12 +120,13 @@ async function fetchStats() {
     window.bar.data.datasets[0].data = values;
     window.bar.update();
 
-    // heat & markers
+    // Heat + Markers
     const pts = (e.hotspots || []).map(h => [Number(h.latitude), Number(h.longitude), Number(h.c)]);
     window.heat.setLatLngs(pts);
 
     window.hotspotMarkers.clearLayers();
     const top = [...(e.hotspots || [])].sort((a,b)=>b.c-a.c).slice(0,10);
+
     top.forEach(h => {
       const radius = Math.min(60, 18 + Number(h.c) * 1.6);
       const marker = L.circleMarker([h.latitude, h.longitude], {
@@ -216,8 +148,7 @@ async function fetchStats() {
 function renderViolationFilterList() {
   const box = document.getElementById('violationFilterList');
   if (!box) return;
-  const root = document.getElementById('analytics-page');
-  const opts = JSON.parse(root?.dataset.violationOptions || '[]');
+  const opts = Array.isArray(window.VIOLATION_OPTIONS) ? window.VIOLATION_OPTIONS : [];
   box.innerHTML = opts.map(v => `
     <div class="form-check">
       <input class="form-check-input" type="checkbox" value="${v.id}" id="vio_${v.id}">
@@ -229,7 +160,7 @@ function renderViolationFilterList() {
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 
 async function openHotspotModal(lat, lng, area) {
-  const body  = document.getElementById('hotspotModalBody');
+  const body = document.getElementById('hotspotModalBody');
   const title = document.getElementById('hotspotModalLabel');
   if (title) title.textContent = `Hotspot Tickets — ${area ?? 'Location'}`;
   if (body) body.innerHTML = `<div class="text-center py-4 text-muted">Loading…</div>`;
@@ -267,6 +198,6 @@ async function openHotspotModal(lat, lng, area) {
   window._analyticsModal?.show();
 }
 
-// Re-run analytics init after SPA swaps and also on a cold load
+// Run on initial load and after AJAX swaps
 document.addEventListener('DOMContentLoaded', initAnalytics);
 document.addEventListener('page:loaded', initAnalytics);

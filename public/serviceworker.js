@@ -1,36 +1,43 @@
-/* serviceworker.js — PWA runtime + background sync
-   - Network-first for HTML + /js/issueTicket.js (so new code deploys immediately)
+/* serviceworker.js — PWA runtime + OCR assets
+   - Network-first for HTML + critical JS (id-scan.js, issueTicket.js)
+   - Cache-first for large OCR assets (fast, truly offline)
    - Stale-while-revalidate for other static assets
-   - Offline fallback to /offline for navigations
-   - Background sync for tickets via Dexie
+   - Offline fallback for navigations
+   - Background sync for tickets via Dexie (self-hosted)
 */
 
-const SW_VERSION = 'v2025-09-08-03'; // ⬅ bump on every deploy
-const ORIGIN = self.location.origin || 'https://poso_management.test';
+const SW_VERSION = 'v2025-09-08-04'; // ⬅ bump on every deploy
+const ORIGIN = self.location.origin;
 
 const STATIC_CACHE  = `pwa-static-${SW_VERSION}`;
 const PAGES_CACHE   = `pwa-pages-${SW_VERSION}`;
 const RUNTIME_CACHE = `pwa-runtime-${SW_VERSION}`;
 
-// ---- Dexie for background sync ----
-importScripts('https://unpkg.com/dexie@3.2.4/dist/dexie.min.js');
+// ---- Dexie for background sync (SELF-HOSTED) ----
+// Put Dexie at: public/vendor/dexie/dexie.min.js
+importScripts('/vendor/dexie/dexie.min.js');
 const db = new Dexie('ticketDB');
 db.version(2).stores({ tickets: '++id,client_uuid' });
 
-// ---- Pre-cache (optional, safe defaults) ----
+// ---- Pre-cache (safe defaults) ----
 const filesToCache = [
   '/offline',
-  '/pwa',
   '/',
   '/css/app.css',
   '/js/app.js',
   '/js/id-scan.js',
   '/js/issueTicket.js',
-  '/vendor/html5-qrcode/html5-qrcode.min.js',
+
+  // OCR assets (both paths; keep whichever you use)
   '/vendor/tesseract/tesseract.min.js',
   '/vendor/tesseract/worker.min.js',
+  '/vendor/tesseract/tesseract-core.wasm',
+  '/vendor/tesseract/eng.traineddata.gz',
   '/wasm/tesseract-core.wasm',
   '/wasm/eng.traineddata.gz',
+
+  // Icons
+  '/images/icons/POSO-Logo.png',
   '/images/icons/icon-72x72.png',
   '/images/icons/icon-96x96.png',
   '/images/icons/icon-128x128.png',
@@ -42,11 +49,11 @@ const filesToCache = [
 ];
 
 // ---- Background Sync: tickets ----
-self.addEventListener('sync', event => {
+self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-tickets') {
     event.waitUntil((async () => {
       const records = await db.tickets.toArray();
-      await Promise.all(records.map(async rec => {
+      await Promise.all(records.map(async (rec) => {
         try {
           const resp = await fetch(`${ORIGIN}/pwa/sync/ticket`, {
             method: 'POST',
@@ -60,7 +67,8 @@ self.addEventListener('sync', event => {
           });
           if (resp.ok) await db.tickets.delete(rec.id);
         } catch (e) {
-          console.error('Sync failed for ticket', rec.id, e);
+          // keep for next sync
+          console.error('[SW] Sync failed for ticket', rec.id, e);
         }
       }));
     })());
@@ -102,38 +110,49 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Only handle same-origin GETs
+  // Non-GET → just pass through
   if (request.method !== 'GET') {
     event.respondWith(fetch(request, { credentials: 'include' }));
     return;
   }
-  if (url.origin !== self.location.origin) {
-    // Let cross-origin requests pass through
-    return;
-  }
+  // Cross-origin → ignore (let browser handle)
+  if (url.origin !== self.location.origin) return;
 
   const isNavigate = request.mode === 'navigate' || request.destination === 'document';
-  const isIssueTicketJs =
-    url.pathname.endsWith('/js/issueTicket.js') ||
-    url.pathname.includes('/js/issueTicket.js');
+  const path = url.pathname;
 
-  // 1) Network-first for documents and issueTicket.js
-  if (isNavigate || isIssueTicketJs) {
-    event.respondWith(networkFirst(request, isNavigate ? PAGES_CACHE : RUNTIME_CACHE));
+  // OCR assets: cache-first (huge files, should be instant + offline)
+  const isOCR =
+    path.startsWith('/vendor/tesseract/') ||
+    path.startsWith('/wasm/');
+
+  // Critical JS: network-first to pick up new deploys immediately
+  const isCriticalJS =
+    path.endsWith('/js/issueTicket.js') ||
+    path.endsWith('/js/id-scan.js') ||
+    path.endsWith('/js/app.js');
+
+  if (isNavigate || isCriticalJS) {
+    event.respondWith(networkFirst(request, isNavigate ? PAGES_CACHE : RUNTIME_CACHE, isNavigate ? '/offline' : null));
     return;
   }
 
-  // 2) Stale-while-revalidate for other static assets
+  if (isOCR) {
+    event.respondWith(cacheFirst(request, STATIC_CACHE));
+    return;
+  }
+
+  // Static assets → stale-while-revalidate
   if (['script', 'style', 'image', 'font', 'worker'].includes(request.destination)) {
     event.respondWith(staleWhileRevalidate(request, RUNTIME_CACHE));
     return;
   }
 
-  // 3) Default: try cache, then network (with offline fallback for navigations)
+  // Default: cache-first with offline fallback for navigations
   event.respondWith(cacheFirstWithFallback(request, isNavigate ? '/offline' : null));
 });
 
-// ---- Notifications bridge ----
+// ---- Notifications bridge (optional) ----
 self.addEventListener('message', (e) => {
   const { title, options } = e.data || {};
   if (title) self.registration.showNotification(title, options || {});
@@ -141,24 +160,30 @@ self.addEventListener('message', (e) => {
 
 /* ========== Helpers ========== */
 
-async function networkFirst(request, cacheName) {
+async function networkFirst(request, cacheName, offlinePath = null) {
   try {
     const res = await fetch(request, { cache: 'no-cache' });
     const cache = await caches.open(cacheName);
-    // Put a copy for offline use
     cache.put(request, res.clone());
     return res;
   } catch (err) {
     const cached = await caches.match(request);
     if (cached) return cached;
-
-    // Fallback for navigations
-    if (request.mode === 'navigate' || request.destination === 'document') {
-      const offline = await caches.match('/offline');
+    if (offlinePath && (request.mode === 'navigate' || request.destination === 'document')) {
+      const offline = await caches.match(offlinePath);
       if (offline) return offline;
     }
     throw err;
   }
+}
+
+async function cacheFirst(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const res = await fetch(request);
+  cache.put(request, res.clone());
+  return res;
 }
 
 async function staleWhileRevalidate(request, cacheName) {
@@ -175,8 +200,7 @@ async function cacheFirstWithFallback(request, offlinePath = null) {
   const cached = await caches.match(request);
   if (cached) return cached;
   try {
-    const res = await fetch(request);
-    return res;
+    return await fetch(request);
   } catch (err) {
     if (offlinePath && (request.mode === 'navigate' || request.destination === 'document')) {
       const offline = await caches.match(offlinePath);

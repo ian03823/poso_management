@@ -59,6 +59,18 @@ Route::middleware('enforcer')->group(function () {
     Route::get('violators/{id}', [TicketController::class, 'show'])->name('enforcer.violators.show');
     Route::get('enforcer/change/password', [EnforcerAuthController::class, 'showChangePassword'])->name('enforcer.password.edit');
     Route::post('enforcer/change/password', [EnforcerAuthController::class, 'changePassword'])->name('enforcer.password.update');
+    Route::get('/wasm/tesseract-core.wasm', function () {
+    return response()->file(public_path('vendor/tesseract/tesseract-core.wasm'), [
+        'Content-Type' => 'application/wasm',
+        'Cache-Control' => 'public, max-age=31536000'
+        ]);
+    });
+    Route::get('/wasm/eng.traineddata.gz', function () {
+        return response()->file(public_path('vendor/tesseract/eng.traineddata.gz'), [
+            'Content-Type' => 'application/gzip',
+            'Cache-Control' => 'public, max-age=31536000'
+        ]);
+    });
 });
 
 // Admin protected routes
@@ -77,7 +89,10 @@ Route::middleware('admin')->group(function () {
         
     //Violation routes
     Route::get('/violation/partial', [ViolationController::class,'partial'])->name('violation.partial');
-    Route::resource('violation', ViolationController::class); 
+    
+    Route::resource('violation', ViolationController::class)->except(['destroy']); 
+    // soft-delete (deactivate)
+    Route::delete('violation/{violation}', [ViolationController::class,'destroy'])->name('violation .destroy');
     Route::get('violation/{violation}/json', [ViolationController::class, 'json'])
      ->name('violation.json');
 
@@ -134,18 +149,5 @@ Route::middleware('auth')->group(function () {
     Route::post('/violator/password/change', [ViolatorAuthController::class, 'changePassword'])->name('violator.password.update');
 });
 
-// Serve Tesseract assets with correct headers (fixes stuck OCR)
-Route::get('/wasm/tesseract-core.wasm', function () {
-    return response()->file(public_path('vendor/tesseract/tesseract-core.wasm'), [
-        'Content-Type' => 'application/wasm',
-        'Cache-Control' => 'public, max-age=31536000'
-    ]);
-});
-Route::get('/wasm/eng.traineddata.gz', function () {
-    return response()->file(public_path('vendor/tesseract/eng.traineddata.gz'), [
-        'Content-Type' => 'application/gzip',
-        'Cache-Control' => 'public, max-age=31536000'
-    ]);
-});
 
 //Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');

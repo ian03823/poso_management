@@ -180,60 +180,52 @@
   </div>
 </div>
 
-{{-- Scan ID Modal (layout-only changes: camera box + responsive) --}}
+{{-- Scan ID Modal (OCR-only) --}}
 <div class="modal fade" id="scanIdModal" tabindex="-1" aria-labelledby="scanIdModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title fw-semibold" id="scanIdModalLabel">Scan Violator ID</h5>
+        <h5 class="modal-title fw-semibold" id="scanIdModalLabel">Scan Violator ID (OCR)</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="scan-close"></button>
       </div>
 
       <div class="modal-body">
-        <ul class="nav nav-pills mb-3" id="scanTab" role="tablist">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="tab-qr" data-bs-toggle="pill" data-bs-target="#pane-qr" type="button" role="tab">QR Scan</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="tab-ocr" data-bs-toggle="pill" data-bs-target="#pane-ocr" type="button" role="tab">OCR (Photo)</button>
-          </li>
-        </ul>
+        <style>
+          .camera-box{display:grid;place-items:center;width:100%}
+          .camera-frame{width:min(92vw,520px);border-radius:14px;overflow:hidden;
+            box-shadow:0 8px 24px rgba(0,0,0,.15);background:#000}
+          .camera-frame video{width:100%;height:auto;object-fit:contain;background:#000}
+          .overlay-guide{position:absolute;inset:0;pointer-events:none;border:2px dashed rgba(255,255,255,.45);
+            border-radius:12px;margin:10%}
+        </style>
 
-        <div class="tab-content">
-          {{-- QR MODE --}}
-          <div class="tab-pane fade show active" id="pane-qr" role="tabpanel" aria-labelledby="tab-qr">
-            <div class="camera-box">
-              <div id="qr-reader"></div>
-            </div>
-            <div class="d-flex gap-2 mt-3">
-              <button class="btn btn-secondary" id="qr-stop">Stop</button>
-              <small class="text-muted ms-auto">Tip: point at the QR of the ID</small>
-            </div>
+        <div class="camera-box position-relative">
+          <div class="camera-frame">
+            <video id="ocr-video" playsinline autoplay muted></video>
           </div>
-
-          {{-- OCR MODE --}}
-          <div class="tab-pane fade" id="pane-ocr" role="tabpanel" aria-labelledby="tab-ocr">
-            <div class="camera-box">
-              <div class="ratio ratio-4x3">
-                <video id="ocr-video" playsinline autoplay muted></video>
-              </div>
-              <canvas id="ocr-canvas" class="d-none"></canvas>
-            </div>
-            <div class="d-flex gap-2 mt-3 align-items-center">
-              <button class="btn btn-success" id="ocr-capture">Capture & OCR</button>
-              <button class="btn btn-outline-secondary" id="ocr-switch">Switch Camera</button>
-              <div class="ms-auto" id="ocr-status" style="min-width: 140px;"></div>
-            </div>
-          </div>
+          <div class="overlay-guide d-none d-sm-block"></div>
+          <canvas id="ocr-canvas" class="d-none"></canvas>
         </div>
+
+        <div class="d-flex gap-2 mt-3 align-items-center">
+          <button class="btn btn-success" id="ocr-capture">Capture & OCR</button>
+          <button class="btn btn-outline-secondary" id="ocr-switch">Switch Camera</button>
+          <div class="ms-auto" id="ocr-status" style="min-width:160px;"></div>
+        </div>
+
+        <!-- Optional debug:
+        <div class="form-text mt-2">OCR raw text:</div>
+        <pre id="ocr-debug" class="bg-light p-2 small" style="max-height:160px;overflow:auto"></pre> -->
       </div>
 
       <div class="modal-footer">
-        <small class="text-muted">Camera runs on *https* only. This works offline once cached.</small>
+        <small class="text-muted">Works offline once cached. Best in bright, even light.</small>
       </div>
     </div>
   </div>
 </div>
+
+
 
 @if(session('duplicate_error'))
   <script>Swal.fire({
@@ -260,4 +252,7 @@
 <script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}"></script>
 <script src="{{ asset('vendor/tesseract/tesseract.min.js') }}"></script>
 <script src="{{ asset('js/id-scan.js') }}"></script> --}}
+<script src="{{ asset('vendor/tesseract/tesseract.min.js') }}" defer></script>
+<!-- Your scripts (issueTicket last so everything above is ready) -->
+<script src="{{ asset('js/id-scan.js')}}?v={{ filemtime(public_path('js/id-scan.js')) }}"></script>
 @endpush

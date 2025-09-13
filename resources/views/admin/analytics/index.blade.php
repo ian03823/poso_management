@@ -3,7 +3,7 @@
 @section('title', 'POSO Admin Management')
 
 @section('content')
-{{-- @php
+@php
   $latestTicket = \App\Models\Ticket::latest()->first();
   $defaultLat = $latestTicket->latitude ?? 15.9285;
   $defaultLng = $latestTicket->longitude ?? 120.3487;
@@ -11,7 +11,13 @@
   // Violation options for the filter (limit to 12 for UI)
   $violationOptions = \App\Models\Violation::select('id','violation_name')
       ->orderBy('violation_name')->limit(12)->get();
-@endphp --}}
+@endphp
+
+<script>
+  window.DEFAULT_LAT = {{ $defaultLat }};
+  window.DEFAULT_LNG = {{ $defaultLng }};
+  window.VIOLATION_OPTIONS = @json($violationOptions);
+</script>
 
 <style>
   .analytics-toolbar .btn-check:checked + .btn { box-shadow: inset 0 0 0 2px rgba(25,135,84,.35); }
@@ -34,12 +40,7 @@
   </div>
 </div>
 
-<div class="container-fluid mt-4" 
-    id="analytics-page"
-    data-page="analytics"
-    data-default-lat="{{ $defaultLat }}"
-    data-default-lng="{{ $defaultLng }}"
-    data-violation-options='@json($violationOptions)'>
+<div class="container-fluid mt-4">
 
   <div class="d-flex flex-wrap align-items-end justify-content-between analytics-toolbar gap-2 mb-3">
     <div class="d-flex flex-wrap align-items-end gap-2">
