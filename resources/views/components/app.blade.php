@@ -10,7 +10,6 @@
 
   <!-- PWA manifest and service worker registration -->
   <link rel="manifest" href="{{ asset('pwa-manifest.json') }}" crossorigin="use-credentials">
-  <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
 
   {{-- Match header color for Android status bar --}}
   <meta name="theme-color" content="#0b8a5d">
@@ -21,10 +20,9 @@
         navigator.serviceWorker.register('/serviceworker.js', { scope: '/' });
       });
     }
-  </script>
+  </>
 
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
 
   {{-- Your global app styles/scripts --}}
   @vite(['resources/css/app.css', 'resources/js/app.js'])
