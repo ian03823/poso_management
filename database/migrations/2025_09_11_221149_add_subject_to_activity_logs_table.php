@@ -14,17 +14,16 @@ return new class extends Migration
         Schema::table('activity_logs', function (Blueprint $table) {
             //
             if (!Schema::hasColumn('activity_logs', 'subject_type')) {
-                $table->string('subject_type')->nullable()->index()->after('actor_id');
+                $table->string('subject_type')->nullable()->index();
             }
             if (!Schema::hasColumn('activity_logs', 'subject_id')) {
-                $table->unsignedBigInteger('subject_id')->nullable()->index()->after('subject_type');
+                $table->unsignedBigInteger('subject_id')->nullable()->index();
             }
 
             // Useful indexes
             if (!Schema::hasColumn('activity_logs', 'action')) {
                 $table->string('action')->index()->change();
             }
-            $table->index(['actor_type', 'actor_id']);
             $table->index('created_at');
         });
     }

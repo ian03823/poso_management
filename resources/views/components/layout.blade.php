@@ -11,7 +11,9 @@
 
   <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('POSO-Logo.png') }}">
   @vite(['resources/css/app.css', 'resources/js/app.js'])
-
+  <script src="{{ asset('vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+  <script src="{{ asset('vendor/bootstrap/bootstrap.min.css') }}"></script>
+  <script src="{{ asset('vendor/sweetalert2/sweetalert2.all.min.js') }}"></script>
   {{-- Minimalist admin layout CSS --}}
   <link rel="stylesheet" href="{{ asset('css/admin-layout.css')}}">
   <link rel="stylesheet" href="{{ asset('css/admin-dashboard.css') }}">
@@ -156,6 +158,7 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
   <script src="{{ asset('vendor/bootstrap/bootstrap.bundle.min.js') }}" defer></script>
+  <script src="{{ asset('vendor/bootstrap/bootstrap.min.css') }}" defer></script>
   <script src="{{ asset('vendor/sweetalert2/sweetalert2.all.min.js') }}" defer></script>
   {{-- AJAX navigation (after vendor scripts) --}}
   <script src="{{ asset('js/ajax.js') }}"></script>
