@@ -9,10 +9,34 @@
   };
   async function closeScanModal() {
     const m = document.getElementById('scanIdModal');
-    if (m) bootstrap.Modal.getOrCreateInstance(m).hide();
+    try {
+      if (m && window.bootstrap?.Modal) {
+        window.bootstrap.Modal.getOrCreateInstance(m).hide();
+      }
+    } catch (_) {}
+
+    // manual fallback cleanup
+    if (m) {
+      m.classList.remove('show');
+      m.setAttribute('aria-hidden','true');
+      m.style.display='none';
+    }
     document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
     document.body.classList.remove('modal-open');
     document.body.style.removeProperty('padding-right');
+  }
+
+  // Modal lifecycle
+  const modalEl = document.getElementById('scanIdModal');
+  if (modalEl) {
+    if (window.bootstrap?.Modal) {
+      modalEl.addEventListener('shown.bs.modal', () => { startCamera(); getWorker().catch(()=>{}); });
+      modalEl.addEventListener('hidden.bs.modal', async () => { await stopCamera(); });
+    } else {
+      // fallback if Bootstrap JS isn’t present
+      document.getElementById('openScanId')?.addEventListener('click', () => { startCamera(); getWorker().catch(()=>{}); });
+      document.getElementById('scan-close')?.addEventListener('click', async () => { await stopCamera(); closeScanModal(); });
+    }
   }
   const setValSmart = (id, name, val) => {
     if (val == null) return;

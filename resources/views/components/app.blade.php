@@ -18,8 +18,7 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/serviceworker.js')
-          .catch(err => console.error('SW registration failed:', err));
+        navigator.serviceWorker.register('/serviceworker.js', { scope: '/' });
       });
     }
   </script>
@@ -96,11 +95,10 @@
   </main>
 
   <!-- Libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11" defer></script>
-  <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js" defer></script>
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <script src="{{ asset('js/issueTicket.js') }}"></script>
+  <script src="{{ asset('vendor/dexie/dexie.min.js') }}" defer></script>
+  <script src="{{ asset('vendor/bootstrap/bootstrap.bundle.min.js') }}" defer></script>
+  <script src="{{ asset('vendor/sweetalert2/sweetalert2.all.min.js') }}" defer></script>
   
   @stack('modals')
   @stack('scripts')

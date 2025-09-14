@@ -16,8 +16,7 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        'pwa/sync/ticket',   // background sync endpoint hit by your SW
-        // 'pwa/sync/*',     // (optional) if you’ll add more sync endpoints
+        'pwa/sync/ticket'
     ];
     
 }

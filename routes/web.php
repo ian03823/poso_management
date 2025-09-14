@@ -19,9 +19,9 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\LocalTestTicketController;
 
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// Route::get('/', function () {
+//     return view('welcome');
+// });
 
 /* health check used by isReallyOnline() */
 Route::get('/ping', fn() => response()->noContent());
@@ -49,6 +49,7 @@ Route::post('/vlogout', [ViolatorAuthController::class, 'logout'])->name('violat
 // Enforcer protected routes
 Route::middleware('enforcer')->group(function () {
     // PWA start url should serve the Issue Ticket page
+    Route::view('/offline','offline');
     Route::get('/pwa', [TicketController::class, 'create'])->name('pwa');
     Route::resource('enforcerCreate', EnforcerAcc::class);
     Route::resource('enforcerTicket', TicketController::class);
@@ -143,7 +144,7 @@ Route::middleware('admin')->group(function () {
         ->name('admin.activity-logs.index');
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware('violator')->group(function () {
     Route::get('/vdash', [ViolatorManagementController::class,'violatorDash'])->name('violator.dashboard');
     Route::get('/violator/password/change', [ViolatorAuthController::class, 'showChangePasswordForm'])->name('violator.password.change');
     Route::post('/violator/password/change', [ViolatorAuthController::class, 'changePassword'])->name('violator.password.update');

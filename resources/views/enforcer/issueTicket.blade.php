@@ -2,8 +2,9 @@
 
 @section('title', 'POSO Digital Ticket - Cite Ticket')
 
-@push('styles')
-  <link rel="stylesheet" href="{{ asset('css/enforcer-issueTicket.css') }}">
+@push('head')
+  {{-- CSRF meta for JS --}}
+  <meta name="csrf-token" content="{{ csrf_token() }}">
 @endpush
 
 @section('body')
@@ -25,8 +26,20 @@
     {{-- Sticky page topbar --}}
     <div class="page-topbar rounded-3 px-2">
       <h1 class="page-title">Traffic Citation Ticket</h1>
+      {{-- Queued badge (updates live) --}}
+      <button type="button" class="btn btn-outline-secondary me-2" id="queueInfoBtn" title="Offline queue">
+        <i class="bi bi-cloud-arrow-down"></i>
+        <span class="ms-1">Queued:</span>
+        <span class="badge bg-secondary" id="queueCount">0</span>
+      </button>
+
+      {{-- Sync Now --}}
+      <button type="button" class="btn btn-outline-primary me-2" id="syncNowBtn">
+       Sync now
+      </button>
+
       <button type="button" class="btn btn-outline-success ms-auto" data-bs-toggle="modal" data-bs-target="#scanIdModal" id="openScanId">
-        <i class="bi bi-camera me-1"></i> Scan ID
+         Scan ID
       </button>
     </div>
 
@@ -39,6 +52,7 @@
             <input type="hidden" id="current_violator_id" value="{{ $v->id }}">
           @endif
           <div class="row g-3">
+            <input type="hidden" id="client_uuid" name="client_uuid" value="{{ old('client_uuid') }}">
             <input type="hidden" id="enforcer_id" name="enforcer_id" value="{{ auth('enforcer')->id() }}">
 
             {{-- Name --}}
@@ -246,13 +260,6 @@
 @endsection
 
 @push('scripts')
-{{-- External scripts (unchanged) --}}
-{{-- <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
-<script src="{{ asset('js/issueTicket.js') }}"></script>
-<script src="{{ asset('vendor/html5-qrcode/html5-qrcode.min.js') }}"></script>
-<script src="{{ asset('vendor/tesseract/tesseract.min.js') }}"></script>
-<script src="{{ asset('js/id-scan.js') }}"></script> --}}
-<script src="{{ asset('vendor/tesseract/tesseract.min.js') }}" defer></script>
-<!-- Your scripts (issueTicket last so everything above is ready) -->
-<script src="{{ asset('js/id-scan.js')}}?v={{ filemtime(public_path('js/id-scan.js')) }}"></script>
+  <script src="{{ asset('js/issueTicket.js') }}?v={{ filemtime(public_path('js/issueTicket.js')) }}"></script>
+  <script src="{{ asset('js/id-scan.js')}}?v={{ filemtime(public_path('js/id-scan.js')) }}"></script>
 @endpush
