@@ -9,6 +9,7 @@
     { "src": "/(css|js|images|img|vendor|fonts)/(.*)", "dest": "/public/$1/$2" },
     { "src": "/(.*\\.(png|jpg|jpeg|gif|svg|webp|ico|map|txt|json))", "dest": "/public/$1" },
     { "src": "/favicon.ico", "dest": "/public/favicon.ico" },
-    { "src": "/(.*)", "dest": "/api/index.php" }
+    { "src": "/(.*)", "dest": "/api/index.php" },
+    { "src": "/ping", "dest": "/public/ping.php" }
   ]
 }
