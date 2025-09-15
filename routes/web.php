@@ -17,6 +17,9 @@ use App\Http\Controllers\ViolatorTableController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\LocalTestTicketController;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Config;
 
 
 // Route::get('/', function () {
@@ -29,21 +32,31 @@ Route::get('/ping', fn() => response()->noContent());
 // background sync JSON submit (CSRF exempt)
 Route::post('/pwa/sync/ticket', [TicketController::class, 'storeJson'])->name('ticket.sync');
 
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 Route::get('/health', function () {
     try {
-        $hasPg = extension_loaded('pdo_pgsql');
+        $cfg = Config::get('database.connections.pgsql');
         $row = DB::selectOne('select 1 as ok, now() as ts');
         return response()->json([
-            'ok' => true,
-            'pdo_pgsql' => $hasPg,
+            'ok'        => true,
+            'pdo_pgsql' => extension_loaded('pdo_pgsql'),
+            'db' => [
+                'driver'   => $cfg['driver'] ?? null,
+                'host'     => $cfg['host'] ?? null,
+                'port'     => $cfg['port'] ?? null,
+                'database' => $cfg['database'] ?? null,
+                'schema'   => $cfg['search_path'] ?? null,
+                'sslmode'  => $cfg['sslmode'] ?? null,
+                'emulate_prepares' => $cfg['options'][PDO::ATTR_EMULATE_PREPARES] ?? null,
+            ],
             'db_time' => $row->ts ?? null,
         ]);
     } catch (\Throwable $e) {
         Log::error('Health check error: '.$e->getMessage());
-        return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);
+        return response()->json([
+            'ok' => false,
+            'error' => $e->getMessage(),
+        ], 500);
     }
 });
 // Admin login routes
