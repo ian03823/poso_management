@@ -4,9 +4,13 @@
     "api/index.php": { "runtime": "vercel-php@0.7.1" }
   },
   "routes": [
+    { "src": "/build/(.*)", "dest": "/public/build/$1" },
+    { "src": "/storage/(.*)", "dest": "/public/storage/$1" },
+    { "src": "/(css|js|images|img|vendor|fonts)/(.*)", "dest": "/public/$1/$2" },
+    { "src": "/(.*\\.(png|jpg|jpeg|gif|svg|webp|ico|map|txt|json))", "dest": "/public/$1" },
+    { "src": "/favicon.ico", "dest": "/public/favicon.ico" },
     { "src": "/(.*)", "dest": "/api/index.php" }
   ],
-  "outputDirectory": "public",
   "env": {
     "APP_ENV": "production",
     "APP_DEBUG": "false",
