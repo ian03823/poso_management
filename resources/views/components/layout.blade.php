@@ -10,7 +10,7 @@
   <script src="https://kit.fontawesome.com/7922e0fdab.js" crossorigin="anonymous"></script>
 
   <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('POSO-Logo.png') }}">
-  @vite(['resources/css/app.css', 'resources/js/app.js'])
+  @vite(['public/css/admin-layout.css'])
   <script src="{{ asset('vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
   <script src="{{ asset('vendor/bootstrap/bootstrap.min.css') }}"></script>
   <script src="{{ asset('vendor/sweetalert2/sweetalert2.all.min.js') }}"></script>
