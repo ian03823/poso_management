@@ -6,6 +6,13 @@
   <title>@yield('title')</title>
 
   <!-- Bootstrap + Icons -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/serviceworker.js', { scope: '/' });
+      });
+    }
+  </script>
   
   <script src="https://kit.fontawesome.com/7922e0fdab.js" crossorigin="anonymous"></script>
 
@@ -157,9 +164,10 @@
   <link href="https://unpkg.com/leaflet/dist/leaflet.css" rel="stylesheet"/>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-  <script src="{{ asset('vendor/bootstrap/bootstrap.bundle.min.js') }}" defer></script>
-  <script src="{{ asset('vendor/bootstrap/bootstrap.min.css') }}" defer></script>
-  <script src="{{ asset('vendor/sweetalert2/sweetalert2.all.min.js') }}" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.2/dexie.min.js"></script>
+
   {{-- AJAX navigation (after vendor scripts) --}}
   <script src="{{ asset('js/ajax.js') }}"></script>
 

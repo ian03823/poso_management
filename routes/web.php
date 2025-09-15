@@ -29,7 +29,23 @@ Route::get('/ping', fn() => response()->noContent());
 // background sync JSON submit (CSRF exempt)
 Route::post('/pwa/sync/ticket', [TicketController::class, 'storeJson'])->name('ticket.sync');
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
+Route::get('/health', function () {
+    try {
+        $hasPg = extension_loaded('pdo_pgsql');
+        $row = DB::selectOne('select 1 as ok, now() as ts');
+        return response()->json([
+            'ok' => true,
+            'pdo_pgsql' => $hasPg,
+            'db_time' => $row->ts ?? null,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Health check error: '.$e->getMessage());
+        return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);
+    }
+});
 // Admin login routes
 Route::get('/alogin', [AuthController::class, 'showLogin'])->name('admin.showLogin');
 Route::post('/alogin', [AuthController::class, 'login'])->name('admin.login');

@@ -20,8 +20,7 @@
         navigator.serviceWorker.register('/serviceworker.js', { scope: '/' });
       });
     }
-  </>
-
+  </script>
 
 
   {{-- Your global app styles/scripts --}}
