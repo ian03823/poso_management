@@ -118,7 +118,7 @@ Route::middleware('admin')->group(function () {
 
     //Ticket routes
     Route::get('ticket/partial', [AdminTicketController::class, 'partial'])->name('ticket.partial');
-    Route::post('ticket/{ticket}/status', [AdminTicketController::class, 'updateStatus'])->name('ticket.updateStatus');
+    Route::post('ticket/{ticket}/status', [AdminTicketController::class, 'updateStatus'])->name('ticket.update.status');
     Route::resource('ticket', AdminTicketController::class);
 
     //Impound Vehicle routes
