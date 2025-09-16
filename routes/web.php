@@ -38,25 +38,20 @@ Route::get('/health', function () {
         $cfg = Config::get('database.connections.pgsql');
         $row = DB::selectOne('select 1 as ok, now() as ts');
         return response()->json([
-            'ok'        => true,
-            'pdo_pgsql' => extension_loaded('pdo_pgsql'),
-            'db' => [
-                'driver'   => $cfg['driver'] ?? null,
-                'host'     => $cfg['host'] ?? null,
-                'port'     => $cfg['port'] ?? null,
-                'database' => $cfg['database'] ?? null,
-                'schema'   => $cfg['search_path'] ?? null,
-                'sslmode'  => $cfg['sslmode'] ?? null,
-                'emulate_prepares' => $cfg['options'][PDO::ATTR_EMULATE_PREPARES] ?? null,
-            ],
-            'db_time' => $row->ts ?? null,
+        'ok'        => true,
+        'pdo_pgsql' => extension_loaded('pdo_pgsql'),
+        'db' => [
+            'host'   => $cfg['host'] ?? null,
+            'port'   => $cfg['port'] ?? null,
+            'schema' => $cfg['search_path'] ?? null,
+            'ssl'    => $cfg['sslmode'] ?? null,
+            'emulate_prepares' => $cfg['options'][PDO::ATTR_EMULATE_PREPARES] ?? null,
+        ],
+        'db_time' => $row->ts ?? null,
         ]);
     } catch (\Throwable $e) {
         Log::error('Health check error: '.$e->getMessage());
-        return response()->json([
-            'ok' => false,
-            'error' => $e->getMessage(),
-        ], 500);
+        return response()->json(['ok'=>false,'error'=>$e->getMessage()], 500);
     }
 });
 // Admin login routes

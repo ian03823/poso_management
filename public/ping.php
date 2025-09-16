@@ -1,1 +1,3 @@
-<?php header('content-type: text/plain'); echo "pong\n";
+<?php 
+header('content-type: text/plain'); 
+echo "pong\n";
