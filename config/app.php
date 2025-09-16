@@ -1,6 +1,4 @@
 <?php
-use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\Facade;
 
 return [
 
@@ -28,7 +26,7 @@ return [
     |
     */
 
-    'env' => env('APP_ENV', 'production'),
+    'env' => env('APP_ENV', 'local'),
 
     /*
     |--------------------------------------------------------------------------
@@ -41,7 +39,7 @@ return [
     |
     */
 
-    'debug' => (bool) env('APP_DEBUG', false),
+    'debug' => (bool) env('APP_DEBUG', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -54,7 +52,7 @@ return [
     |
     */
 
-    'url' => env('APP_URL', 'https://poso-digitalticket.vercel.app/'),
+    'url' => env('APP_URL', 'https:poso_management.test'),
 
     /*
     |--------------------------------------------------------------------------
@@ -86,7 +84,7 @@ return [
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 
-    /* 
+    /*
     |--------------------------------------------------------------------------
     | Encryption Key
     |--------------------------------------------------------------------------
@@ -125,37 +123,5 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
     
-    // ─── App basics ─────────────────────────────────────────────────────────────
-    'name'    => env('APP_NAME', 'Laravel'),
-    'env'     => env('APP_ENV', 'production'),
-    'debug'   => (bool) env('APP_DEBUG', false),
 
-    // ⚠️ Prefer no trailing slash here
-    'url'     => env('APP_URL', 'https://pososc-digitalticket.vercel.app'),
-
-    'timezone'        => 'Asia/Manila',
-    'locale'          => env('APP_LOCALE', 'en'),
-    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
-    'faker_locale'    => env('APP_FAKER_LOCALE', 'en_US'),
-
-    // ─── Encryption ─────────────────────────────────────────────────────────────
-    'cipher'        => 'AES-256-CBC',
-    'key'           => env('APP_KEY'),
-    'previous_keys' => [
-        ...array_filter(explode(',', env('APP_PREVIOUS_KEYS', ''))),
-    ],
-    // ─── Providers (this is what you were missing) ─────────────────────────────
-    // Registers all the core Illuminate providers (including View), then your app providers.
-    'providers' => ServiceProvider::defaultProviders()->merge([
-        App\Providers\AppServiceProvider::class,
-        // Add these only if they exist in your app:
-        // App\Providers\AuthServiceProvider::class,
-        // App\Providers\EventServiceProvider::class,
-    ])->toArray(),
-
-    // ─── Aliases (facades) ─────────────────────────────────────────────────────
-    'aliases' => Facade::defaultAliases()->merge([
-        // You can add custom aliases here if you use any.
-        // 'View' => Illuminate\Support\Facades\View::class, // already included by default
-    ])->toArray(),
 ];
