@@ -24,16 +24,29 @@ return new class extends Migration
                 $table->string('action')->nullable();
             }
         });
-        // 2) Ensure indexes exist (Postgres-safe, idempotent)
-        // subject_type
-        DB::statement('CREATE INDEX IF NOT EXISTS activity_logs_subject_type_index ON activity_logs (subject_type)');
-        // subject_id
-        DB::statement('CREATE INDEX IF NOT EXISTS activity_logs_subject_id_index ON activity_logs (subject_id)');
-        // action
-        DB::statement('CREATE INDEX IF NOT EXISTS activity_logs_action_index ON activity_logs (action)');
-        // created_at (only if column exists)
-        if (Schema::hasColumn('activity_logs', 'created_at')) {
-            DB::statement('CREATE INDEX IF NOT EXISTS activity_logs_created_at_index ON activity_logs (created_at)');
+         // add indexes only if they don't exist (works on MySQL & MariaDB)
+        if (!$this->indexExists('activity_logs', 'activity_logs_subject_type_index')) {
+            Schema::table('activity_logs', function (Blueprint $table) {
+                $table->index('subject_type', 'activity_logs_subject_type_index');
+            });
+        }
+        if (!$this->indexExists('activity_logs', 'activity_logs_subject_id_index')) {
+            Schema::table('activity_logs', function (Blueprint $table) {
+                $table->index('subject_id', 'activity_logs_subject_id_index');
+            });
+        }
+
+        if (!$this->indexExists('activity_logs', 'activity_logs_action_index')) {
+            Schema::table('activity_logs', function (Blueprint $table) {
+                $table->index('action', 'activity_logs_action_index');
+            });
+        }
+
+        if (Schema::hasColumn('activity_logs', 'created_at') &&
+            !$this->indexExists('activity_logs', 'activity_logs_created_at_index')) {
+            Schema::table('activity_logs', function (Blueprint $table) {
+                $table->index('created_at', 'activity_logs_created_at_index');
+            });
         }
     }
 
@@ -42,14 +55,21 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Drop indexes first (safe if they don't exist)
-        DB::statement('DROP INDEX IF EXISTS activity_logs_subject_type_index');
-        DB::statement('DROP INDEX IF EXISTS activity_logs_subject_id_index');
-        DB::statement('DROP INDEX IF EXISTS activity_logs_action_index');
-        DB::statement('DROP INDEX IF EXISTS activity_logs_created_at_index');
-        
+        // drop indexes if they exist (MySQL syntax requires the table name)
+        if ($this->indexExists('activity_logs', 'activity_logs_subject_type_index')) {
+            DB::statement('DROP INDEX activity_logs_subject_type_index ON activity_logs');
+        }
+        if ($this->indexExists('activity_logs', 'activity_logs_subject_id_index')) {
+            DB::statement('DROP INDEX activity_logs_subject_id_index ON activity_logs');
+        }
+        if ($this->indexExists('activity_logs', 'activity_logs_action_index')) {
+            DB::statement('DROP INDEX activity_logs_action_index ON activity_logs');
+        }
+        if ($this->indexExists('activity_logs', 'activity_logs_created_at_index')) {
+            DB::statement('DROP INDEX activity_logs_created_at_index ON activity_logs');
+        }
+
         Schema::table('activity_logs', function (Blueprint $table) {
-            //
             if (Schema::hasColumn('activity_logs', 'subject_id')) {
                 $table->dropColumn('subject_id');
             }
@@ -57,5 +77,15 @@ return new class extends Migration
                 $table->dropColumn('subject_type');
             }
         });
+    }
+    private function indexExists(string $table, string $indexName): bool
+    {
+        $database = DB::connection()->getDatabaseName();
+
+        return DB::table('information_schema.statistics')
+            ->where('table_schema', $database)
+            ->where('table_name', $table)
+            ->where('index_name', $indexName)
+            ->exists();
     }
 };
