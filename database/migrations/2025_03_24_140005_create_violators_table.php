@@ -13,13 +13,15 @@ return new class extends Migration
     {
         Schema::create('violators', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->string('first_name', 225);
+            $table->string('middle_name', 225);
+            $table->string('last_name', 225);
             $table->string('address');
-            $table->string('phone');
+            $table->string('phone')->nullable;
             $table->date('birthdate')->nullable();
             $table->string('license_number')->nullable();
             $table->string('username')->unique()->nullable();
-            $table->string('password')->nullable(); 
+            $table->string('password', 225)->nullable(); 
             $table->timestamps();
         });
     }

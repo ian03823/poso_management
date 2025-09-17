@@ -16,6 +16,8 @@ return new class extends Migration
             // Who did it (Admin or Enforcer)
             $table->morphs('actor');            // actor_type, actor_id
             $table->string('action');           // e.g., ticket.issued, ticket.updated, user.login
+            $table->string('subject_type')->nullable();
+            $table->unsignedBigInteger('subject_id')->nullable();
             $table->text('description')->nullable();
             $table->json('properties')->nullable();
             $table->string('ip', 45)->nullable();

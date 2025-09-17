@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('mname', 20);
             $table->string('lname', 20);
             $table->string('phone', 15)->unique();
-            $table->string('password', 30);
+            $table->string('password', 225);
             $table->timestamps();
         });
     }
