@@ -16,7 +16,7 @@ use App\Http\Controllers\ImpoundedController;
 use App\Http\Controllers\ViolatorTableController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\ActivityLogController;
-use App\Http\Controllers\LocalTestTicketController;
+use App\Http\Controllers\Admin\DiagnosticsController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Config;
@@ -81,9 +81,7 @@ Route::middleware('admin')->group(function () {
     Route::get('/admin/dashboard', [AdminDashboardController::class,'adminDash'])->name('admin.dashboard');
     Route::get('/admin/profile/update', [AdminDashboardController::class,'edit'])->name('admin.profile.edit');
     Route::put('/admin/profile/update', [AdminDashboardController::class,'update'])->name('admin.profile.update');
-
-
-
+    Route::get('/diagnostics', [DiagnosticsController::class, 'index'])->name('admin.diagnostics');
     //Issue Ticket 
     Route::get('/admin/tickets/create', [AdminTicketController::class, 'create'])
         ->name('admin.tickets.create');
