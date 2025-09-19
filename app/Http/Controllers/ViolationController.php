@@ -48,26 +48,6 @@ class ViolationController extends Controller
             'search'         => $search,
         ]);
     }
-    private function buildActor(): array
-    {
-        if (auth('enforcer')->check()) {
-            $actor = auth('enforcer')->user();
-            $name  = trim(($actor->fname ?? '').' '.($actor->mname ?? '').' '.($actor->lname ?? ''));
-            $name  = trim(preg_replace('/\s+/', ' ', $name)) ?: ($actor->badge_num ?? 'Unknown');
-            $label = 'Enforcer';
-            // Optionally show badge no.
-            $display = $name . ($actor->badge_num ? " ({$actor->badge_num})" : '');
-            return [$actor, $label, $display];
-        }
-        if (auth('admin')->check()) {
-            $actor = auth('admin')->user();
-            $name  = $actor->name ?? trim(($actor->fname ?? '').' '.($actor->lname ?? ''));
-            $label = 'Admin';
-            return [$actor, $label, $name ?: 'Admin'];
-        }
-        // Fallback (system tasks)
-        return [null, 'System', 'System'];
-    }
 
     /**
      * Show the form for creating a new resource.
@@ -143,72 +123,20 @@ class ViolationController extends Controller
        $v = Violation::findOrFail($id);
 
         $data = $request->validate([
-            'violation_code' => [
-                'sometimes','string','max:20',
-                Rule::unique('violations','violation_code')->ignore($v->id)->whereNull('deleted_at'),
-            ],
-            'violation_name' => [
-                'sometimes','string','max:255',
-                Rule::unique('violations','violation_name')->ignore($v->id)->whereNull('deleted_at'),
-            ],
-            'fine_amount' => 'sometimes|numeric|min:0',
-            'category'    => 'sometimes|string|max:100',
-            'description' => 'sometimes|nullable|string',
+            'violation_code' => 'nullable|string|min:2|max:3',
+            'violation_name' => 'nullable|min:3',
+            'fine_amount' => 'nullable|min:0|numeric',
+            'category' => 'nullable|string',
+
         ]);
 
-        // Build actor FIRST (so we can use it inside the closure safely)
-        [$actor, $role, $actorName] = $this->buildActor();
-
-        // Snapshot for a tiny diff (optional)
-        $fields = array_keys($data);
-        $before = $v->only($fields);
-
-        DB::transaction(function () use ($v, $data, $request, $fields, $before, $actor, $role, $actorName) {
-            // 1) Save
-            $v->update($data);
-
-            // 2) Compute changes after save
-            $v->refresh();
-            $changes = [];
-            foreach ($fields as $f) {
-                $old = $before[$f] ?? null;
-                $new = $v->$f;
-                if (is_numeric($old) && is_numeric($new)) { $old=(float)$old; $new=(float)$new; }
-                if ($old !== $new) $changes[$f] = ['from'=>$old,'to'=>$new];
-            }
-
-            // 3) Register AFTER-COMMIT logger (registered while tx is open)
-            DB::afterCommit(function () use ($request, $v, $changes, $actor, $role, $actorName) {
-                $ref  = $v->violation_code ?: $v->getKey();
-                $desc = "{$role} {$actorName} updated violation (#{$ref})";
-
-                try {
-                    LogActivity::on($v)
-                        ->by($actor)
-                        ->event('violation.updated')
-                        ->withProperties([
-                            'violation_id'   => $v->id,
-                            'violation_code' => $v->violation_code,
-                            'changed_fields' => array_keys($changes),
-                            'changes'        => $changes ?: null,
-                            'actor_role'     => $role,
-                        ])
-                        ->fromRequest($request)
-                        ->log($desc);
-                } catch (\Throwable $e) {
-                    Log::warning('[ActivityLog skipped] '.$e->getMessage(), [
-                        'ctx' => 'violation.update',
-                        'violation_id' => $v->id,
-                    ]);
-                }
-            });
-        });
+        $v->update($data);
 
         return response()->json([
-            'success'   => true,
-            'message'   => 'Violation updated successfully.',
-            'violation' => $v->fresh(),
-        ]);
+            'success' => true,
+            'message' => 'Violation Updated Successfully',
+            'violation'=> $v
+        ], 200);
     }
     
 
