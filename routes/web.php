@@ -81,7 +81,6 @@ Route::middleware('admin')->group(function () {
     Route::get('/admin/dashboard', [AdminDashboardController::class,'adminDash'])->name('admin.dashboard');
     Route::get('/admin/profile/update', [AdminDashboardController::class,'edit'])->name('admin.profile.edit');
     Route::put('/admin/profile/update', [AdminDashboardController::class,'update'])->name('admin.profile.update');
-    Route::get('/diagnostics', [DiagnosticsController::class, 'index'])->name('admin.diagnostics');
     //Issue Ticket 
     Route::get('/admin/tickets/create', [AdminTicketController::class, 'create'])
         ->name('admin.tickets.create');
@@ -90,10 +89,7 @@ Route::middleware('admin')->group(function () {
         
     //Violation routes
     Route::get('/violation/partial', [ViolationController::class,'partial'])->name('violation.partial');
-    
-    Route::resource('violation', ViolationController::class)->except(['destroy']); 
-    // soft-delete (deactivate)
-    Route::delete('violation/{violation}', [ViolationController::class,'destroy'])->name('violation .destroy');
+    Route::resource('violation', ViolationController::class); 
     Route::get('violation/{violation}/json', [ViolationController::class, 'json'])
      ->name('violation.json');
 
@@ -101,7 +97,6 @@ Route::middleware('admin')->group(function () {
     //Enforcer routes
     Route::get('/enforcer/partial', [AddEnforcer::class, 'partial'])->name('enforcer.partial');
     Route::resource('enforcer', AddEnforcer::class)->except(['destroy']);
-    
     // soft-delete (deactivate)
     Route::delete('enforcer/{enforcer}', [AddEnforcer::class,'destroy'])->name('enforcer.destroy');
     Route::post('enforcer/{enforcer}/restore', [AddEnforcer::class,'restore'])->name('enforcer.restore');
