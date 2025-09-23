@@ -27,28 +27,37 @@ class ViolatorPhoneController extends Controller
 
     public function submitPhone(Request $request)
     {
-        /** @var Violator $user */
-        $user = auth('violator')->user();
+        try {
+            /** @var \App\Models\Violator $user */
+            $user = auth('violator')->user();
 
-        $data = $request->validate([
-            'phone_number' => [
-                'required','string','max:32',
-                // unique across violator table except self
-                Rule::unique('violator','phone_number')->ignore($user->violator_id,'violator_id'),
-                // basic PH format example (optional): starts with +63 or 09
-                'regex:/^(\+?63|0)9\d{9}$/'
-            ],
-        ], [
-            'phone_number.regex' => 'Enter a valid PH mobile number (e.g., 09XXXXXXXXX or +639XXXXXXXXX).'
-        ]);
+            $data = $request->validate([
+                'phone_number' => [
+                    'required','string','max:32',
+                    \Illuminate\Validation\Rule::unique('violator','phone_number')->ignore($user->violator_id,'violator_id'),
+                    'regex:/^(\+?63|0)9\d{9}$/',
+                ],
+            ], [
+                'phone_number.regex' => 'Enter a valid PH mobile number (e.g., 09XXXXXXXXX or +639XXXXXXXXX).'
+            ]);
 
-        $user->phone_number = $data['phone_number'];
-        $user->phone_verified_at = null; // force verification if changed
-        $user->save();
+            $user->phone_number = $data['phone_number'];
+            $user->phone_verified_at = null;
+            $user->save();
 
-        $this->issueOtp($user);
+            $res = $this->issueOtp($user, true);
+            if (!$res['ok']) {
+                return back()->withErrors(['phone_number' => $res['message']])->withInput();
+            }
 
-        return back()->with('status','OTP sent to your phone.');
+            return back()->with('status', 'OTP sent to your phone.');
+        } catch (\Throwable $e) {
+            Log::error('submitPhone failed', [
+                'err' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return back()->withErrors(['phone_number' => 'Server error while sending OTP. Please try again in a minute.']);
+        }
     }
 
     public function resendOtp(Request $request)
