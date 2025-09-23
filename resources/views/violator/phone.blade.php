@@ -9,9 +9,6 @@
   @if (session('status'))
     <div class="alert alert-info">{{ session('status') }}</div>
   @endif
-  @if (session('ok'))
-    <div class="alert alert-success">{{ session('ok') }}</div>
-  @endif
   @if ($errors->any())
     <div class="alert alert-danger">
       <ul class="mb-0">
@@ -32,7 +29,6 @@
         </div>
       </form>
 
-      @if ($hasPhone && !$isVerified)
         <hr>
         <form method="POST" action="{{ route('violator.otp.verify') }}" id="otp-form">
           @csrf
@@ -46,7 +42,6 @@
             </form>
           </div>
         </form>
-      @endif
     </div>
   </div>
 </div>

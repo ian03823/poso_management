@@ -140,26 +140,33 @@ Route::middleware('admin')->group(function () {
         ->name('admin.activity-logs.index');
 });
 
-// Violator protected routes
-Route::prefix('violator')->name('violator.')->group(function () {
-    // login/logout already defined above as /vlogin, /vlogout
+// 1) Logged-in violator, NOT necessarily phone-verified yet
+Route::middleware('violator')->group(function () {
+    // Phone & OTP flow (accessible before verification)
+    Route::get('/violator/phone', [ViolatorPhoneController::class, 'showPrompt'])
+        ->name('violator.phone.prompt');
 
-    // 1) These require being logged in as violator, but NOT yet phone-verified
-    Route::middleware('violator')->group(function () {
-        // Phone & OTP flow
-        Route::get('/phone', [ViolatorPhoneController::class, 'showPrompt'])->name('phone.prompt');
-        Route::post('/phone', [ViolatorPhoneController::class, 'submitPhone'])->name('phone.submit');
-        Route::post('/otp/verify', [ViolatorPhoneController::class, 'verifyOtp'])->name('otp.verify');
-        Route::post('/otp/resend', [ViolatorPhoneController::class, 'resendOtp'])->name('otp.resend');
+    Route::post('/violator/phone', [ViolatorPhoneController::class, 'submitPhone'])
+        ->name('violator.phone.submit');
 
-        // Allow password change even if not yet phone-verified (keep your existing routes)
-        Route::get('/password/change', [ViolatorAuthController::class, 'showChangePasswordForm'])->name('password.change');
-        Route::post('/password/change', [ViolatorAuthController::class, 'changePassword'])->name('password.update');
-    });
+    Route::post('/violator/otp/verify', [ViolatorPhoneController::class, 'verifyOtp'])
+        ->name('violator.otp.verify');
 
-    // 2) Pages that require both: logged in + phone verified
-    Route::middleware(['violator', 'violator.phone'])->group(function () {
-        Route::get('/dashboard', [ViolatorManagementController::class, 'violatorDash'])->name('violator.dashboard');
-    });
+    Route::post('/violator/otp/resend', [ViolatorPhoneController::class, 'resendOtp'])
+        ->name('violator.otp.resend');
+
+    // Allow password change before verification (your existing routes)
+    Route::get('/violator/password/change', [ViolatorAuthController::class, 'showChangePasswordForm'])
+        ->name('violator.password.change');
+
+    Route::post('/violator/password/change', [ViolatorAuthController::class, 'changePassword'])
+        ->name('violator.password.update');
+});
+
+// 2) Pages that require BOTH: logged in + phone verified
+Route::middleware(['violator', 'violator.phone'])->group(function () {
+    // Keep the original path and name
+    Route::get('/vdash', [ViolatorManagementController::class,'violatorDash'])
+        ->name('violator.dashboard');
 });
 

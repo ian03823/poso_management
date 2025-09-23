@@ -16,7 +16,7 @@ class EnsureViolatorPhoneVerified
     public function handle(Request $request, Closure $next): Response
     {
         $user = auth('violator')->user();
-        if (!$user) return redirect()->route('violator.login');
+        if (!$user) return redirect()->route('violator.showLogin');
 
         $needsPhone = empty($user->phone_number);
         $needsVerify = !$user->phone_verified_at;
