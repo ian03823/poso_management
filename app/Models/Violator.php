@@ -24,7 +24,9 @@ class Violator extends Authenticatable
         'last_name',
         'address',
         'birthdate',
-        'license_number', 
+        'license_number',
+        'phone_number',
+        'phone_verified_at', 
         'username', 
         'password',
         'defaultPassword',
@@ -37,6 +39,7 @@ class Violator extends Authenticatable
         'failed_attempts' => 'integer',
         'lockouts_count'  => 'integer',
         'lockout_until'   => 'datetime',
+        'phone_verified_at' => 'datetime'
     ];
     public function vehicles()
     {

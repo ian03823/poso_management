@@ -16,6 +16,7 @@ use App\Http\Controllers\ImpoundedController;
 use App\Http\Controllers\ViolatorTableController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\ViolatorPhoneController;
 use App\Http\Controllers\Admin\DiagnosticsController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -139,11 +140,26 @@ Route::middleware('admin')->group(function () {
         ->name('admin.activity-logs.index');
 });
 
-Route::middleware('violator')->group(function () {
-    Route::get('/vdash', [ViolatorManagementController::class,'violatorDash'])->name('violator.dashboard');
-    Route::get('/violator/password/change', [ViolatorAuthController::class, 'showChangePasswordForm'])->name('violator.password.change');
-    Route::post('/violator/password/change', [ViolatorAuthController::class, 'changePassword'])->name('violator.password.update');
+// Violator protected routes
+Route::prefix('violator')->name('violator.')->group(function () {
+    // login/logout already defined above as /vlogin, /vlogout
+
+    // 1) These require being logged in as violator, but NOT yet phone-verified
+    Route::middleware('violator')->group(function () {
+        // Phone & OTP flow
+        Route::get('/phone', [ViolatorPhoneController::class, 'showPrompt'])->name('phone.prompt');
+        Route::post('/phone', [ViolatorPhoneController::class, 'submitPhone'])->name('phone.submit');
+        Route::post('/otp/verify', [ViolatorPhoneController::class, 'verifyOtp'])->name('otp.verify');
+        Route::post('/otp/resend', [ViolatorPhoneController::class, 'resendOtp'])->name('otp.resend');
+
+        // Allow password change even if not yet phone-verified (keep your existing routes)
+        Route::get('/password/change', [ViolatorAuthController::class, 'showChangePasswordForm'])->name('password.change');
+        Route::post('/password/change', [ViolatorAuthController::class, 'changePassword'])->name('password.update');
+    });
+
+    // 2) Pages that require both: logged in + phone verified
+    Route::middleware(['violator', 'violator.phone'])->group(function () {
+        Route::get('/dashboard', [ViolatorManagementController::class, 'violatorDash'])->name('violator.dashboard');
+    });
 });
 
-
-//Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
