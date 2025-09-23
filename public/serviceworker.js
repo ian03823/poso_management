@@ -2,7 +2,7 @@
    Place this file in: /public/serviceworker.js
 */
 
-const SW_VERSION   = 'v2025-09-12-03'; // bump each deploy
+const SW_VERSION   = 'v2025-09-23-otpfix'; // bump each deploy
 const ORIGIN       = self.location.origin;
 
 const STATIC_CACHE  = `pwa-static-${SW_VERSION}`;
@@ -147,16 +147,29 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // non-GET → pass through
-  if (req.method !== 'GET') {
-    event.respondWith(fetch(req, { credentials: 'include' }));
-    return;
-  }
-  // ignore cross-origin
+  // === HARD BYPASS RULES ===
+  // 1) Never intercept non-GET (POST/PUT/PATCH/DELETE/etc.) — let the browser hit Laravel directly
+  if (req.method !== 'GET') return;
+
+  // 2) Ignore cross-origin requests
   if (url.origin !== self.location.origin) return;
 
-  const isNavigate = req.mode === 'navigate' || req.destination === 'document';
+  // 3) Bypass sensitive/auth/OTP/session endpoints even for GET
+  //    (add more paths here if needed)
   const path = url.pathname;
+  const bypassPrefixes = [
+    '/violator/phone',
+    '/violator/otp/verify',
+    '/violator/otp/resend',
+    '/vlogin', '/vlogout',
+    '/alogin', '/plogin',
+    '/pwa/sync' // any other sync endpoints you use
+  ];
+  if (bypassPrefixes.some(p => path.startsWith(p))) return;
+
+  // === Your existing logic below (unchanged) ===
+
+  const isNavigate = req.mode === 'navigate' || req.destination === 'document';
 
   // OCR assets → cache-first
   const isOCR = path.startsWith('/vendor/tesseract/') || path.startsWith('/wasm/');
@@ -181,6 +194,7 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(cacheFirstWithFallback(req, isNavigate ? '/offline' : null));
 });
+
 
 // ---------- messages: SYNC_NOW, QUEUE_POLL, notif bridge ----------
 self.addEventListener('message', (e) => {
