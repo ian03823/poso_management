@@ -1,5 +1,5 @@
 @extends('components.violator')
-@section('title', 'POSO Digital Ticket')
+@section('title', 'POSO Digital Ticket - Dashboard')
 
 @section('violator')
 @php $ticketOverdue = $ticket_overdue ?? false; @endphp
