@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use app\Models\Violator;
+use App\Models\Violator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
@@ -34,7 +34,8 @@ class ViolatorPhoneController extends Controller
             $data = $request->validate([
                 'phone_number' => [
                     'required','string','max:32',
-                    \Illuminate\Validation\Rule::unique('violator','phone_number')->ignore($user->violator_id,'violator_id'),
+                    // ← FIXED: correct table & PK for your model
+                    Rule::unique('violator','phone_number')->ignore($user->id, 'id'),
                     'regex:/^(\+?63|0)9\d{9}$/',
                 ],
             ], [
