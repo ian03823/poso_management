@@ -91,29 +91,28 @@ function escposRasterBytes(mono, w, h, mode = 0) {
 
 /**
  * Print an image URL to the BLE printer (centered).
- * @param {string} url   public path to the image (e.g., '/qr/poso-qr.png')
- * @param {Function} write  function(u8) -> Promise that writes bytes (you already have it)
- * @param {Function} ALIGN  helper to build ESC/POS alignment bytes: ALIGN(0|1|2)
- * @param {number}   maxW   target width in pixels (default 360)
+ * NOTE: uses a *chunked* writer for BLE reliability.
+ * @param {string} url
+ * @param {Function} writeChunked  function(u8[, chunk]) -> Promise
+ * @param {Function} ALIGN
+ * @param {number}   maxW
  */
-async function printImageUrl(url, write, ALIGN, maxW = 360) {
+async function printImageUrl(url, writeChunked, ALIGN, maxW = 360) {
   try {
     const img = await loadImage(url);
     const c = drawToCanvas(img, maxW);
     const ctx = c.getContext('2d');
     const { data } = ditherToMono(ctx, c.width, c.height);
     const raster = escposRasterBytes({ data }, c.width, c.height, 0);
-    await write(ALIGN(1));               // center
-    // send in small chunks (BLE 20B payloads inside your write already)
-    const CHUNK = 1024;                  // bigger chunks fine; your write() still slices to 20B
-    for (let i=0; i<raster.length; i+=CHUNK) {
-      await write(raster.slice(i, i+CHUNK));
-    }
-    await write(ALIGN(0));
+
+    await writeChunked(ALIGN(1));   // center
+    await writeChunked(raster);     // send bytes in BLE-safe chunks
+    await writeChunked(ALIGN(0));   // back to left
   } catch (e) {
     console.warn('[printImageUrl] failed:', e);
   }
 }
+
 /* one-time guard */
 if (window.__ISSUE_TICKET_WIRED__) {
   console.warn('[issueTicket] duplicate include — skipping');
@@ -406,7 +405,33 @@ if (window.__ISSUE_TICKET_WIRED__) {
 
         const enc=new TextEncoder(), NL='\x0A';
         const ALIGN=(n)=>Uint8Array.of(0x1B,0x61,n), FEED=(n)=>Uint8Array.of(0x1B,0x64,n);
-        const write = async (u8) => { if (ch.writeValueWithoutResponse) await ch.writeValueWithoutResponse(u8); else await ch.writeValue(u8); await sleep(60); };
+
+        // tiny-command writer (OK for ESC/POS commands and short text)
+        const write = async (u8) => {
+          if (ch.writeValueWithoutResponse) await ch.writeValueWithoutResponse(u8);
+          else await ch.writeValue(u8);
+          await sleep(60);
+        };
+        // NEW: chunked writer for binary/image data (BLE 20-byte MTU)
+        const writeChunked = async (u8, chunk = 20, tries = 3) => {
+          for (let i = 0; i < u8.length; i += chunk) {
+            const slice = u8.slice(i, i + chunk);
+            let ok = false, attempt = 0;
+            while (!ok && attempt < tries) {
+              try {
+                if (ch.writeValueWithoutResponse) await ch.writeValueWithoutResponse(slice);
+                else await ch.writeValue(slice);
+                ok = true;
+              } catch (e) {
+                attempt++;
+                if (attempt >= tries) throw e;
+                await sleep(30 * attempt);
+              }
+            }
+            await sleep(10);
+          }
+        };
+
         const send = async (s) => {
           const b = enc.encode(s);
           for (let i=0;i<b.length;i+=20) { await write(b.slice(i,i+20)); }
@@ -418,11 +443,13 @@ if (window.__ISSUE_TICKET_WIRED__) {
         // Header
         await write(Uint8Array.of(0x1B,0x40)); // init
         await write(ALIGN(1));
-        // >>> ADD QR (centered) – from /qr/poso-qr.png
-        await printImageUrl('/qr.png', write, ALIGN, 384);
-        await send('https://posomanagement-production.up.railway.app/v/login'+NL);
+
+        // >>> QR ABOVE HEADER (centered) – from /public/qr.png (cache-busted)
+        await printImageUrl('/qr.png?v=1', writeChunked, ALIGN, 384);
+        await send('https://tinyurl.com/posoVlogin'+NL);
         await write(FEED(1));
-        //Header Text
+
+        // Header Text
         await send('City of San Carlos'+NL);
         await send('Public Order and Safety Office'+NL);
         await send('(POSO)'+NL+NL);
