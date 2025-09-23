@@ -136,10 +136,13 @@ class ViolatorPhoneController extends Controller
 
             // === SMS send hook ===
             if (app()->environment('production')) {
-                // TODO: call your SMS provider here; if it throws, catch below
-                Log::info("OTP generated for violator_id={$user->violator_id} (sending via SMS provider).");
+                $msg = "POSO San Carlos: Your OTP is {$otp}. It expires in 10 minutes.";
+                $ok  = \App\Services\SmsSender::send($user->phone_number, $msg);
+                if (!$ok) {
+                    return ['ok' => false, 'message' => 'SMS sending failed. Please try again later.'];
+                }
             } else {
-                Log::debug("[DEV] OTP for violator {$user->violator_id}: {$otp}");
+                Log::debug("[DEV] OTP for violator {$user->id}: {$otp}");
                 session()->flash('dev_otp', $otp);
             }
 
