@@ -27,6 +27,8 @@ class EnsureViolatorPhoneVerified
             'violator.phone.submit',
             'violator.otp.verify',
             'violator.otp.resend',
+            'violator.password.change',
+            'violator.password.update',
         ])) {
             return $next($request);
         }

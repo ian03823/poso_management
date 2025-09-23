@@ -29,6 +29,7 @@
         </div>
       </form>
 
+      @if($hasPhone && !$isVerified)
         <hr>
         <form method="POST" action="{{ route('violator.otp.verify') }}" id="otp-form">
           @csrf
@@ -36,12 +37,13 @@
           <input type="text" name="otp" maxlength="6" class="form-control" inputmode="numeric" autocomplete="one-time-code" required>
           <div class="d-flex align-items-center gap-2 mt-3">
             <button class="btn btn-success">Verify</button>
-            <form method="POST" action="{{ route('violator.otp.resend') }}" class="ms-2">
-              @csrf
-              <button class="btn btn-outline-secondary" formaction="{{ route('violator.otp.resend') }}">Resend OTP</button>
-            </form>
           </div>
         </form>
+        <form method="POST" action="{{ route('violator.otp.resend') }}" class="ms-2">
+            @csrf
+          <button class="btn btn-outline-secondary" formaction="{{ route('violator.otp.resend') }}">Resend OTP</button>
+        </form>
+      @endif
     </div>
   </div>
 </div>

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ViolatorPhoneController extends Controller
 {
@@ -102,33 +103,40 @@ class ViolatorPhoneController extends Controller
         return redirect()->route('violator.dashboard')->with('ok','Phone verified!');
     }
 
-    private function issueOtp(Violator $user, bool $resend = false): void
+    private function issueOtp(Violator $user, bool $respectThrottle = false): array
     {
-        // Rate limit sends: 3 per 10 minutes
-        $sendKey = "violator:{$user->violator_id}:otp_sends";
-        if (RateLimiter::tooManyAttempts($sendKey, 3)) {
-            abort(back()->withErrors(['phone_number' => 'You requested too many OTPs. Try again later.']));
-        }
-        RateLimiter::hit($sendKey, 600);
+        try {
+            // Rate limit sends: 3 per 10 minutes
+            if ($respectThrottle) {
+                $sendKey = "violator:{$user->violator_id}:otp_sends";
+                if (RateLimiter::tooManyAttempts($sendKey, 3)) {
+                    return ['ok' => false, 'message' => 'You requested too many OTPs. Try again later.'];
+                }
+                RateLimiter::hit($sendKey, 600);
+            }
 
-        $otp = random_int(100000, 999999);
-        $hash = Hash::make((string)$otp);
+            $otp = random_int(100000, 999999);
+            $hash = Hash::make((string)$otp);
 
-        Cache::put(
-            "violator:{$user->violator_id}:otp",
-            ['hash' => $hash, 'expires_at' => now()->addMinutes(10)],
-            now()->addMinutes(10)
-        );
+            Cache::put(
+                "violator:{$user->violator_id}:otp",
+                ['hash' => $hash, 'expires_at' => now()->addMinutes(10)],
+                now()->addMinutes(10)
+            );
 
-        // === SEND THE OTP ===
-        // Hook your SMS provider here (Twilio/Vonage/Asia gateways).
-        // For local/dev, we log it so you can see it safely.
-        if (app()->environment('production')) {
-            // TODO: integrate SMS SDK call here
-            Log::info("OTP sent to {$user->phone_number} (hidden).");
-        } else {
-            Log::debug("[DEV] OTP for violator {$user->violator_id}: {$otp}");
-            session()->flash('dev_otp', $otp);
+            // === SMS send hook ===
+            if (app()->environment('production')) {
+                // TODO: call your SMS provider here; if it throws, catch below
+                Log::info("OTP generated for violator_id={$user->violator_id} (sending via SMS provider).");
+            } else {
+                Log::debug("[DEV] OTP for violator {$user->violator_id}: {$otp}");
+                session()->flash('dev_otp', $otp);
+            }
+
+            return ['ok' => true];
+        } catch (\Throwable $e) {
+            Log::error('OTP send failed', ['err' => $e->getMessage()]);
+            return ['ok' => false, 'message' => 'Failed to send OTP. Please try again shortly.'];
         }
     }
 }
