@@ -10,6 +10,110 @@ const Notify = {
   warn(m){this.toast({icon:'warning',title:m})}, err(m){this.toast({icon:'error',title:m})}
 };
 
+async function loadImage(url) {
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.crossOrigin = 'anonymous'; // harmless if same-origin
+    img.src = url;
+  });
+}
+
+function drawToCanvas(img, maxWidth = 360) {
+  const scale = Math.min(1, maxWidth / img.width);
+  const w = Math.floor(img.width * scale);
+  const h = Math.floor(img.height * scale);
+  const c = document.createElement('canvas');
+  c.width = w % 8 === 0 ? w : w + (8 - (w % 8)); // width must be multiple of 8
+  c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  // pad right area to white if we extended width
+  if (c.width > w) {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(w, 0, c.width - w, h);
+  }
+  return c;
+}
+
+// Simple Floyd–Steinberg dithering to B/W
+function ditherToMono(ctx, w, h) {
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  const gray = new Float32Array(w*h);
+  for (let i=0, j=0; i<d.length; i+=4, j++) {
+    gray[j] = (0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]); // 0..255
+  }
+  for (let y=0; y<h; y++) {
+    for (let x=0; x<w; x++) {
+      const i = y*w + x;
+      const old = gray[i];
+      const newVal = old < 128 ? 0 : 255;
+      const err = old - newVal;
+      gray[i] = newVal;
+      // diffuse
+      if (x+1 < w) gray[i+1] += err*7/16;
+      if (x-1 >=0 && y+1 < h) gray[i+w-1] += err*3/16;
+      if (y+1 < h) gray[i+w] += err*5/16;
+      if (x+1 < w && y+1 < h) gray[i+w+1] += err*1/16;
+    }
+  }
+  // pack 1bpp
+  const bytesPerRow = Math.ceil(w/8);
+  const out = new Uint8Array(bytesPerRow * h);
+  let p = 0;
+  for (let y=0; y<h; y++) {
+    for (let bx=0; bx<bytesPerRow; bx++) {
+      let byte = 0;
+      for (let bit=0; bit<8; bit++) {
+        const x = bx*8 + bit;
+        const v = (x < w && gray[y*w + x] === 0) ? 1 : 0; // 1 = black
+        byte |= (v << (7 - bit));
+      }
+      out[p++] = byte;
+    }
+  }
+  return { data: out, bytesPerRow };
+}
+
+// Build ESC/POS raster: GS v 0 m xL xH yL yH [data]
+function escposRasterBytes(mono, w, h, mode = 0) {
+  const bytesPerRow = Math.ceil(w/8);
+  const xL = bytesPerRow & 0xFF, xH = (bytesPerRow >> 8) & 0xFF;
+  const yL = h & 0xFF, yH = (h >> 8) & 0xFF;
+  const header = Uint8Array.of(0x1D, 0x76, 0x30, mode, xL, xH, yL, yH);
+  const out = new Uint8Array(header.length + mono.data.length);
+  out.set(header, 0);
+  out.set(mono.data, header.length);
+  return out;
+}
+
+/**
+ * Print an image URL to the BLE printer (centered).
+ * @param {string} url   public path to the image (e.g., '/qr/poso-qr.png')
+ * @param {Function} write  function(u8) -> Promise that writes bytes (you already have it)
+ * @param {Function} ALIGN  helper to build ESC/POS alignment bytes: ALIGN(0|1|2)
+ * @param {number}   maxW   target width in pixels (default 360)
+ */
+async function printImageUrl(url, write, ALIGN, maxW = 360) {
+  try {
+    const img = await loadImage(url);
+    const c = drawToCanvas(img, maxW);
+    const ctx = c.getContext('2d');
+    const { data } = ditherToMono(ctx, c.width, c.height);
+    const raster = escposRasterBytes({ data }, c.width, c.height, 0);
+    await write(ALIGN(1));               // center
+    // send in small chunks (BLE 20B payloads inside your write already)
+    const CHUNK = 1024;                  // bigger chunks fine; your write() still slices to 20B
+    for (let i=0; i<raster.length; i+=CHUNK) {
+      await write(raster.slice(i, i+CHUNK));
+    }
+    await write(ALIGN(0));
+  } catch (e) {
+    console.warn('[printImageUrl] failed:', e);
+  }
+}
 /* one-time guard */
 if (window.__ISSUE_TICKET_WIRED__) {
   console.warn('[issueTicket] duplicate include — skipping');
@@ -314,12 +418,17 @@ if (window.__ISSUE_TICKET_WIRED__) {
         // Header
         await write(Uint8Array.of(0x1B,0x40)); // init
         await write(ALIGN(1));
+        // >>> ADD QR (centered) – from /qr/poso-qr.png
+        await printImageUrl('/qr.png', write, ALIGN, 384);
+        await send('https://posomanagement-production.up.railway.app/v/login'+NL);
+        await write(FEED(1));
+        //Header Text
         await send('City of San Carlos'+NL);
         await send('Public Order and Safety Office'+NL);
         await send('(POSO)'+NL+NL);
         await send('Traffic Citation Ticket'+NL);
         await write(ALIGN(0));
-
+        
         // Copy 1
         await L('Ticket #: ', p.ticket.ticket_number);
         await L('Date issued: ', p.ticket.issued_at);
@@ -330,7 +439,7 @@ if (window.__ISSUE_TICKET_WIRED__) {
         await L('License No.: ', p.violator.license_number);
         await write(FEED(1));
         await L('Plate: ', p.vehicle.plate_number);
-        await L('Type: ', p.vehicle.vehicle_type);
+        await L('Vehicle: ', p.vehicle.vehicle_type);
         await L('Owner: ', p.vehicle.is_owner);
         await L('Owner Name: ', p.vehicle.owner_name);
         await write(FEED(1));
@@ -342,6 +451,7 @@ if (window.__ISSUE_TICKET_WIRED__) {
         await write(FEED(1));
         if (p.ticket.is_impounded) { await send('*** VEHICLE IMPOUNDED ***'+NL); await write(FEED(1)); }
         await L('Badge No: ', p.enforcer.badge_num);
+        await send('*UNOFFICIAL RECEIPT*. Please present this to cashiers officer at City Hall'+NL);
         await write(FEED(3));
 
         // Copy 2 (reprint header + summary)
@@ -356,7 +466,21 @@ if (window.__ISSUE_TICKET_WIRED__) {
         await write(FEED(1));
         await L('Violator: ', nameLine);
         await L('License No.: ', p.violator.license_number);
+        await L('Birthdate: ', p.violator.birthdate);
+        await L('Address: ', p.violator.address);
+        await write(FEED(1));
         await L('Plate: ', p.vehicle.plate_number);
+        await L('Vehicle: ', p.vehicle.vehicle_type);
+        await L('Owner: ', p.vehicle.is_owner);
+        await L('Owner Name: ', p.vehicle.owner_name);
+        await write(FEED(1));
+        await send('Violations:'+NL);
+        for (const v of (p.violations||[])) await send('- '+safe(v.name)+' (Php'+safe(v.fine)+')'+NL);
+        await write(FEED(1));
+        if (p.ticket.is_impounded) { await send('*** VEHICLE IMPOUNDED ***'+NL); await write(FEED(1)); }
+        await L('Badge No: ', p.enforcer.badge_num);
+        await send('_____________________'+NL);
+        await send('Signature of violator'+NL);
         await write(FEED(5));
         try { dev.gatt.disconnect(); } catch {}
       })(p);
