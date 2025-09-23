@@ -35,7 +35,7 @@ class ViolatorPhoneController extends Controller
                 'phone_number' => [
                     'required','string','max:32',
                     // ← FIXED: correct table & PK for your model
-                    Rule::unique('violator','phone_number')->ignore($user->id, 'id'),
+                    Rule::unique('violators','phone_number')->ignore($user->id, 'id'),
                     'regex:/^(\+?63|0)9\d{9}$/',
                 ],
             ], [
