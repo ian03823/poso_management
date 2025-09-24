@@ -16,8 +16,9 @@ use App\Http\Controllers\ImpoundedController;
 use App\Http\Controllers\ViolatorTableController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\ViolatorEmailController;
+use App\Http\Controllers\ViolatorForgotPasswordController;
 use App\Http\Controllers\ViolatorPhoneController;
-use App\Http\Controllers\Admin\DiagnosticsController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Config;
@@ -32,6 +33,7 @@ Route::get('/ping', fn() => response()->noContent());
 
 // background sync JSON submit (CSRF exempt)
 Route::post('/pwa/sync/ticket', [TicketController::class, 'storeJson'])->name('ticket.sync');
+
 
 // Admin login routes
 Route::get('/alogin', [AuthController::class, 'showLogin'])->name('admin.showLogin');
@@ -142,31 +144,31 @@ Route::middleware('admin')->group(function () {
 
 // 1) Logged-in violator, NOT necessarily phone-verified yet
 Route::middleware('violator')->group(function () {
-    // Phone & OTP flow (accessible before verification)
-    Route::get('/violator/phone', [ViolatorPhoneController::class, 'showPrompt'])
-        ->name('violator.phone.prompt');
+    Route::get('/vdash', [ViolatorManagementController::class,'violatorDash'])
+        ->name('violator.dashboard');
 
-    Route::post('/violator/phone', [ViolatorPhoneController::class, 'submitPhone'])
-        ->name('violator.phone.submit');
-
-    Route::post('/violator/otp/verify', [ViolatorPhoneController::class, 'verifyOtp'])
-        ->name('violator.otp.verify');
-
-    Route::post('/violator/otp/resend', [ViolatorPhoneController::class, 'resendOtp'])
-        ->name('violator.otp.resend');
-
+    Route::get('/violator/email',  [ViolatorEmailController::class,'showForm'])->name('violator.email.show');
+    Route::post('/violator/email', [ViolatorEmailController::class,'save'])->name('violator.email.save');
+    Route::post('/violator/email/verify', [ViolatorEmailController::class,'verify'])->name('violator.email.verify');
+    Route::post('/violator/email/resend', [ViolatorEmailController::class,'resend'])->name('violator.email.resend');
     // Allow password change before verification (your existing routes)
+    
     Route::get('/violator/password/change', [ViolatorAuthController::class, 'showChangePasswordForm'])
         ->name('violator.password.change');
 
     Route::post('/violator/password/change', [ViolatorAuthController::class, 'changePassword'])
         ->name('violator.password.update');
 });
+// Forgot password (Violator) – multi-step
+Route::get('/violator/password/forgot', [ViolatorForgotPasswordController::class,'showRequest'])->name('violator.password.forgot.request');
+Route::post('/violator/password/forgot', [ViolatorForgotPasswordController::class,'submitEmail'])->name('violator.password.forgot.submit');
 
-// 2) Pages that require BOTH: logged in + phone verified
-Route::middleware(['violator', 'violator.phone'])->group(function () {
-    // Keep the original path and name
-    Route::get('/vdash', [ViolatorManagementController::class,'violatorDash'])
-        ->name('violator.dashboard');
-});
+Route::get('/violator/password/confirm', [ViolatorForgotPasswordController::class,'showConfirm'])->name('violator.password.forgot.confirm'); // shows name/address
+Route::post('/violator/password/send-otp', [ViolatorForgotPasswordController::class,'sendOtp'])->name('violator.password.forgot.sendOtp');
+
+Route::get('/violator/password/enter-otp', [ViolatorForgotPasswordController::class,'showEnterOtp'])->name('violator.password.forgot.otp');
+Route::post('/violator/password/verify-otp', [ViolatorForgotPasswordController::class,'verifyOtp'])->name('violator.password.forgot.verify');
+
+Route::get('/violator/password/reset', [ViolatorForgotPasswordController::class,'showReset'])->name('violator.password.forgot.reset');
+Route::post('/violator/password/reset', [ViolatorForgotPasswordController::class,'reset'])->name('violator.password.forgot.update');
 

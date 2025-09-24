@@ -19,6 +19,19 @@
       License #: {{ $violator->license_number }} <br>
       <i class="bi bi-geo-alt me-2"></i>
       Address: {{ $violator->address }}
+      <i class="bi bi-envelope me-2"></i>
+      Email: {{ $violator->email ?? 'Not provided' }} <br>
+      @if (empty(auth('violator')->user()->email))
+        <div class="alert alert-warning d-flex justify-content-between align-items-center">
+          <div><strong>Security reminder:</strong> You haven’t registered an email yet.</div>
+          <a class="btn btn-sm btn-outline-dark" href="{{ route('violator.email.show') }}">Add email</a>
+        </div>
+      @elseif (!auth('violator')->user()->email_verified_at)
+        <div class="alert alert-info d-flex justify-content-between align-items-center">
+          <div><strong>Confirm your email:</strong> Enter the code we sent.</div>
+          <a class="btn btn-sm btn-primary" href="{{ route('violator.email.show') }}">Confirm now</a>
+        </div>
+      @endif
     </p>
   </div>
 

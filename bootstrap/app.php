@@ -23,10 +23,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->group('violator', [
             \App\Http\Middleware\ViolatorMiddleware::class,
         ]);
-        $middleware->alias([
-            'violator.phone' => \App\Http\Middleware\EnsureViolatorPhoneVerified::class,
-        ]);
-
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
