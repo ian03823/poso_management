@@ -32,29 +32,22 @@ use Illuminate\Support\Facades\Config;
 /* health check used by isReallyOnline() */
 Route::get('/ping', fn() => response()->noContent());
 
-Route::get('/_diag/mail', function () {
-    try {
-        $to = request('to') ?: config('mail.from.address');
-        Mail::raw('POSO test email body', function ($m) use ($to) {
-            $m->to($to)->subject('POSO test email');
-        });
-        return 'MAIL SENT OK to '.$to;
-    } catch (\Throwable $e) {
-        Log::error('MAIL SEND FAILED', [
-            'err' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            // helpful to see what config actually loaded in prod:
-            'mailer' => [
-                'transport' => config('mail.mailers.smtp.transport'),
-                'host' => config('mail.mailers.smtp.host'),
-                'port' => config('mail.mailers.smtp.port'),
-                'encryption' => config('mail.mailers.smtp.encryption'),
-                'username' => config('mail.mailers.smtp.username'),
-                'from' => config('mail.from.address'),
-            ],
-        ]);
-        return 'MAIL FAILED. Check Railway logs.';
+Route::get('/_diag/smtp', function () {
+    $hosts = [
+        ['smtp.gmail.com', 587, 'tls'],
+        ['smtp.gmail.com', 465, 'ssl'],
+    ];
+    $out = [];
+    foreach ($hosts as [$host,$port,$label]) {
+        $t0 = microtime(true);
+        $fp = @fsockopen($host, $port, $errno, $errstr, 5); // 5s timeout
+        $ok = (bool) $fp;
+        if ($fp) fclose($fp);
+        $out[] = [$host,$port,$label,$ok ? 'OK' : "FAIL: $errno $errstr", round((microtime(true)-$t0)*1000).'ms'];
     }
+    header('Content-Type: text/plain');
+    foreach ($out as $r) echo implode(' | ', $r)."\n";
+    return '';
 });
 
 // background sync JSON submit (CSRF exempt)

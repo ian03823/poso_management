@@ -139,7 +139,3 @@
   </div>  
 </div>
 @endsection
-
-@push('script')
-    <script src="{{ asset('js/analytics.js') }}"></script>
-@endpush
