@@ -2,7 +2,7 @@
    Place this file in: /public/serviceworker.js
 */
 
-const SW_VERSION   = 'v2025-09-23-otpfix'; // bump each deploy
+const SW_VERSION   = 'v2025-09-24'; // bump each deploy
 const ORIGIN       = self.location.origin;
 
 const STATIC_CACHE  = `pwa-static-${SW_VERSION}`;
