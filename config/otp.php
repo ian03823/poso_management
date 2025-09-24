@@ -13,4 +13,8 @@ return [
         'token' => env('TWILIO_AUTH_TOKEN'),
         'from'  => env('TWILIO_FROM'),
     ],
+    'gmail_webapp' => [
+        'url'    => env('GMAIL_WEBAPP_URL'),
+        'secret' => env('GMAIL_WEBAPP_SECRET'),
+    ],
 ];
