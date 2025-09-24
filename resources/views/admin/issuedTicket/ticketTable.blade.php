@@ -40,8 +40,6 @@
       <select id="ticket-sort" class="form-select">
         <option value="date_desc" {{ $sortOption==='date_desc'?'selected':'' }}>Date (Newest First)</option>
         <option value="date_asc"  {{ $sortOption==='date_asc'?'selected':'' }}>Date (Oldest First)</option>
-        <option value="name_asc"  {{ $sortOption==='name_asc'?'selected':'' }}>Violator A → Z</option>
-        <option value="name_desc" {{ $sortOption==='name_desc'?'selected':'' }}>Violator Z → A</option>
       </select>
     </div>
   </div>
