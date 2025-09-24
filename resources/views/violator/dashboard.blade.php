@@ -18,7 +18,7 @@
       <i class="bi bi-card-heading me-2"></i>
       License #: {{ $violator->license_number }} <br>
       <i class="bi bi-geo-alt me-2"></i>
-      Address: {{ $violator->address }}
+      Address: {{ $violator->address }} <br>
       <i class="bi bi-envelope me-2"></i>
       Email: {{ $violator->email ?? 'Not provided' }} <br>
       @if (empty(auth('violator')->user()->email))

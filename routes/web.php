@@ -18,6 +18,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\ViolatorEmailController;
 use App\Http\Controllers\ViolatorForgotPasswordController;
+use Illuminate\Support\Facades\Mail;
 use App\Http\Controllers\ViolatorPhoneController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -30,6 +31,31 @@ use Illuminate\Support\Facades\Config;
 
 /* health check used by isReallyOnline() */
 Route::get('/ping', fn() => response()->noContent());
+
+Route::get('/_diag/mail', function () {
+    try {
+        $to = request('to') ?: config('mail.from.address');
+        Mail::raw('POSO test email body', function ($m) use ($to) {
+            $m->to($to)->subject('POSO test email');
+        });
+        return 'MAIL SENT OK to '.$to;
+    } catch (\Throwable $e) {
+        Log::error('MAIL SEND FAILED', [
+            'err' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            // helpful to see what config actually loaded in prod:
+            'mailer' => [
+                'transport' => config('mail.mailers.smtp.transport'),
+                'host' => config('mail.mailers.smtp.host'),
+                'port' => config('mail.mailers.smtp.port'),
+                'encryption' => config('mail.mailers.smtp.encryption'),
+                'username' => config('mail.mailers.smtp.username'),
+                'from' => config('mail.from.address'),
+            ],
+        ]);
+        return 'MAIL FAILED. Check Railway logs.';
+    }
+});
 
 // background sync JSON submit (CSRF exempt)
 Route::post('/pwa/sync/ticket', [TicketController::class, 'storeJson'])->name('ticket.sync');
@@ -152,7 +178,7 @@ Route::middleware('violator')->group(function () {
     Route::post('/violator/email/verify', [ViolatorEmailController::class,'verify'])->name('violator.email.verify');
     Route::post('/violator/email/resend', [ViolatorEmailController::class,'resend'])->name('violator.email.resend');
     // Allow password change before verification (your existing routes)
-    
+
     Route::get('/violator/password/change', [ViolatorAuthController::class, 'showChangePasswordForm'])
         ->name('violator.password.change');
 
