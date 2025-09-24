@@ -1,0 +1,27 @@
+/* public/css/admin-analytics.css */
+
+.analytics-toolbar .btn-check:checked + .btn {
+  box-shadow: inset 0 0 0 2px rgba(25,135,84,.35);
+}
+
+.kpi-card .card-body { min-height: 86px; }
+
+.heat-legend .heat-dot {
+  display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px;
+}
+.heat-low  { background:#a1d99b; }
+.heat-mid  { background:#feb24c; }
+.heat-high { background:#f03b20; }
+
+/* Bigger map */
+.analytics-map {
+  height: 480px;          /* ← larger map */
+  border: 1px solid #e9ecef;
+}
+
+/* Insights area */
+#insightsBox {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+  line-height: 1.45;
+  white-space: pre-wrap;
+}

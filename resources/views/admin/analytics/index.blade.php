@@ -1,124 +1,195 @@
 {{-- resources/views/admin/analytics/index.blade.php --}}
 @extends('components.layout')
-@section('title', 'POSO Admin Management')
+@section('title','POSO Admin Management')
 
 @section('content')
 @php
-  $latestTicket = \App\Models\Ticket::latest()->first();
-  $defaultLat = $latestTicket->latitude ?? 15.9285;
-  $defaultLng = $latestTicket->longitude ?? 120.3487;
-
-  // Violation options for the filter (limit to 12 for UI)
-  $violationOptions = \App\Models\Violation::select('id','violation_name')
-      ->orderBy('violation_name')->limit(12)->get();
+  $latestTicket  = \App\Models\Ticket::latest()->first();
+  $defaultLat    = $latestTicket->latitude  ?? 15.9285;
+  $defaultLng    = $latestTicket->longitude ?? 120.3487;
+  $violationOpts = \App\Models\Violation::select('id','violation_name')->orderBy('violation_name')->limit(50)->get();
 @endphp
 
-<script>
-  window.DEFAULT_LAT = {{ $defaultLat }};
-  window.DEFAULT_LNG = {{ $defaultLng }};
-  window.VIOLATION_OPTIONS = @json($violationOptions);
-</script>
+<link rel="stylesheet" href="{{ asset('css/admin-analytics.css') }}"/>
 
-<style>
-  .analytics-toolbar .btn-check:checked + .btn { box-shadow: inset 0 0 0 2px rgba(25,135,84,.35); }
-  .heat-legend { font-size:.9rem }
-  .heat-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
-  .heat-low { background:#a1d99b; }
-  .heat-mid { background:#feb24c; }
-  .heat-high{ background:#f03b20; }
-  #loadingIndicator{
-    display:none; position:fixed; top:80px; right:20px; z-index:1040;
-    background:#fff; border:1px solid #dee2e6; border-radius:.5rem;
-    padding:.5rem .75rem; box-shadow:0 2px 8px rgba(0,0,0,.08);
-  }
-</style>
+<div class="container-fluid py-3" 
+     id="analyticsRoot"
+     data-latest-endpoint="{{ route('dataAnalytics.latest') }}"
+     data-hotspot-endpoint="{{ route('dataAnalytics.hotspotTickets') }}"
+     data-default-lat="{{ $defaultLat }}"
+     data-default-lng="{{ $defaultLng }}"
+>
+  {{-- Toolbar --}}
+  <div class="card shadow-sm mb-3 analytics-toolbar">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-6 col-md-2">
+          <label class="form-label small mb-1">From (month)</label>
+          <input type="month" id="fltFrom" class="form-control form-control-sm">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small mb-1">To (month)</label>
+          <input type="month" id="fltTo" class="form-control form-control-sm">
+        </div>
 
-<div id="loadingIndicator">
-  <div class="d-flex align-items-center gap-2">
-    <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
-    <span>Loading statistics…</span>
+        <div class="col-12 col-md-3">
+          <label class="form-label small mb-1 d-block">Violations</label>
+          <div class="dropdown w-100">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start" data-bs-toggle="dropdown">
+              <span id="vioBtnText">All Violations</span>
+            </button>
+            <div class="dropdown-menu p-2 w-100" style="max-height: 300px; overflow:auto; min-width: 260px;">
+              <div id="vioList" class="small">
+                @forelse($violationOpts as $v)
+                  <div class="form-check">
+                    <input class="form-check-input vio-opt" type="checkbox" value="{{ $v->id }}" id="vio_{{ $v->id }}">
+                    <label class="form-check-label" for="vio_{{ $v->id }}">{{ $v->violation_name }}</label>
+                  </div>
+                @empty
+                  <div class="text-muted">No violations available.</div>
+                @endforelse
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+          <label class="form-label small mb-1 d-block">Status</label>
+          <div class="btn-group" role="group" aria-label="Status">
+            <input class="btn-check" type="radio" name="fltStatus" id="st_all" value="" checked>
+            <label class="btn btn-sm btn-outline-success" for="st_all">All</label>
+            <input class="btn-check" type="radio" name="fltStatus" id="st_paid" value="paid">
+            <label class="btn btn-sm btn-outline-success" for="st_paid">Paid</label>
+            <input class="btn-check" type="radio" name="fltStatus" id="st_unpaid" value="unpaid">
+            <label class="btn btn-sm btn-outline-success" for="st_unpaid">Unpaid</label>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-2 d-flex gap-2">
+          <button id="btnApply" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-funnel"></i> Apply
+          </button>
+          <button id="btnReset" class="btn btn-outline-secondary btn-sm w-100">Reset</button>
+        </div>
+      </div>
+    </div>
   </div>
-</div>
 
-<div class="container-fluid mt-4">
-
-  <div class="d-flex flex-wrap align-items-end justify-content-between analytics-toolbar gap-2 mb-3">
-    <div class="d-flex flex-wrap align-items-end gap-2">
-      <div>
-        <label class="form-label small mb-1">From (month)</label>
-        <input type="month" id="fromMonth" class="form-control form-control-sm" />
+  {{-- KPIs --}}
+  <div class="row g-3 mb-1">
+    <div class="col-12 col-md-4">
+      <div class="card kpi-card shadow-sm">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small">Total Tickets</div>
+            <div class="fs-4 fw-bold" id="kpiTotal">—</div>
+          </div>
+          <i class="bi bi-collection fs-3 text-secondary"></i>
+        </div>
       </div>
-      <div>
-        <label class="form-label small mb-1">To (month)</label>
-        <input type="month" id="toMonth" class="form-control form-control-sm" />
+    </div>
+    <div class="col-6 col-md-4">
+      <div class="card kpi-card shadow-sm">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small">Paid</div>
+            <div class="fs-4 fw-bold text-success" id="kpiPaid">—</div>
+          </div>
+          <i class="bi bi-cash-coin fs-3 text-success"></i>
+        </div>
       </div>
+    </div>
+    <div class="col-6 col-md-4">
+      <div class="card kpi-card shadow-sm">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted small">Unpaid</div>
+            <div class="fs-4 fw-bold text-danger" id="kpiUnpaid">—</div>
+          </div>
+          <i class="bi bi-exclamation-triangle fs-3 text-danger"></i>
+        </div>
+      </div>
+    </div>
+  </div>
 
-      <div class="dropdown">
-        <label class="form-label small mb-1 d-block">Violations</label>
-        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-          Select Violations
-        </button>
-        <div class="dropdown-menu p-2" style="max-height: 260px; overflow:auto; min-width: 260px;">
-          <div id="violationFilterList" class="small"></div>
+  {{-- Charts + Big Map --}}
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+          <span>Paid vs Unpaid</span>
+          <span class="spinner-border spinner-border-sm d-none" id="spinPie"></span>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3">
+            <canvas id="chartPie"></canvas>
+          </div>
+          <div class="text-muted small mt-2" id="pieEmpty" style="display:none">No data to display.</div>
         </div>
       </div>
 
-      <div class="ms-1">
-        <label class="form-label small mb-1 d-block">Status</label>
-        <input class="btn-check" type="radio" name="statusFilter" id="status_all" value="" checked>
-        <label class="btn btn-sm btn-outline-success me-1" for="status_all">All</label>
-        <input class="btn-check" type="radio" name="statusFilter" id="status_paid" value="paid">
-        <label class="btn btn-sm btn-outline-success me-1" for="status_paid">Paid</label>
-        <input class="btn-check" type="radio" name="statusFilter" id="status_unpaid" value="unpaid">
-        <label class="btn btn-sm btn-outline-success" for="status_unpaid">Unpaid</label>
-      </div>
-
-      <div class="ms-1">
-        <button id="applyFilters" class="btn btn-sm btn-primary">
-          <i class="bi bi-funnel"></i> Apply
-        </button>
-        <button id="resetFilters" class="btn btn-sm btn-outline-secondary">Reset</button>
+      <div class="card shadow-sm h-100 mt-3">
+        <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+          <span>Tickets by Month</span>
+          <span class="spinner-border spinner-border-sm d-none" id="spinBar"></span>
+        </div>
+        <div class="card-body">
+          <div class="ratio ratio-4x3">
+            <canvas id="chartBar"></canvas>
+          </div>
+          <div class="text-muted small mt-2" id="barEmpty" style="display:none">No data to display.</div>
+        </div>
       </div>
     </div>
 
-    <div class="heat-legend text-muted">
-      <span class="me-2"><span class="heat-dot heat-low"></span>Low</span>
-      <span class="me-2"><span class="heat-dot heat-mid"></span>Medium</span>
-      <span><span class="heat-dot heat-high"></span>High</span>
-    </div>
-  </div>
-
-  <div class="row g-3">
-    <div class="col-md-4">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold">Paid vs Unpaid</div>
-        <div class="card-body"><canvas id="pieChart" height="220"></canvas></div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold">Tickets by Month</div>
-        <div class="card-body"><canvas id="barChart" height="220"></canvas></div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <div class="col-lg-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
           <span>Hotspot Map</span>
           <small class="text-muted">Click dots to drill-down</small>
         </div>
-        <div class="card-body"><div id="map" style="height:320px;"></div></div>
+        <div class="card-body">
+          <div id="map" class="rounded analytics-map"></div>
+          <div class="heat-legend text-muted small mt-2">
+            <span class="me-2"><span class="heat-dot heat-low"></span>Low</span>
+            <span class="me-2"><span class="heat-dot heat-mid"></span>Medium</span>
+            <span><span class="heat-dot heat-high"></span>High</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="mt-3 d-flex gap-2">
-    <a href="{{ route('reports.download','xlsx') }}" class="btn btn-success">
-      <i class="bi bi-file-earmark-spreadsheet"></i> Monthly Report Excel
-    </a>
-    <a href="{{ route('reports.download','docx') }}" class="btn btn-primary">
-      <i class="bi bi-file-earmark-word"></i> Download Word
-    </a>
+  {{-- Insights + Export --}}
+  <div class="row g-3 mt-3">
+    <div class="col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+          <span>Data Insights (auto-generated)</span>
+          <button id="btnCopyInsights" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-clipboard"></i> Copy
+          </button>
+        </div>
+        <div class="card-body">
+          <textarea id="insightsBox" class="form-control" rows="8"
+            placeholder="Insights will appear here; you can edit them before exporting."></textarea>
+          <div class="text-muted small mt-2" id="insightsHint">Tips: adjust filters above to update the insights.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body d-flex flex-column gap-2">
+          <a id="btnExportXlsx" class="btn btn-success" href="{{ route('reports.download','xlsx') }}" data-no-ajax>
+            <i class="bi bi-file-earmark-spreadsheet"></i> Monthly Report Excel
+          </a>
+          <a id="btnExportDocx" class="btn btn-primary" href="{{ route('reports.download','docx') }}" data-no-ajax>
+            <i class="bi bi-file-earmark-word"></i> Download Word
+          </a>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -131,11 +202,9 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <div id="hotspotModalBody">
-          <div class="text-center py-4 text-muted">Loading…</div>
-        </div>
+        <div id="hotspotBody" class="text-center text-muted py-4">Loading…</div>
       </div>
     </div>
-  </div>  
+  </div>
 </div>
 @endsection

@@ -84,12 +84,19 @@ class AnalyticsController extends Controller
             ->groupBy('area','tickets.latitude','tickets.longitude')
             ->orderByDesc('c')
             ->get();
+        $insights = $this->buildInsights([
+            'paid'     => (int)$paid,
+            'unpaid'   => (int)$unpaid,
+            'monthly'  => $monthlySeries,   // Collection: 'YYYY-MM' => int
+            'hotspots' => $hotspots,        // Collection of {area, latitude, longitude, c}
+        ]);
 
         return response()->json([
             'paid'           => (int)$paid,
             'unpaid'         => (int)$unpaid,
             'monthlyCounts'  => $monthlySeries, // keys = 'YYYY-MM'
             'hotspots'       => $hotspots,
+            'insights'       => $insights,
         ]);
     }
 
@@ -297,6 +304,88 @@ class AnalyticsController extends Controller
         $phpWord->save($tmp, 'Word2007');
 
         return response()->download($tmp, $fname)->deleteFileAfterSend();
+    }
+    protected function buildInsights(array $m): array
+    {
+        $paid   = (int)($m['paid']   ?? 0);
+        $unpaid = (int)($m['unpaid'] ?? 0);
+        $total  = $paid + $unpaid;
+
+        $monthly   = collect($m['monthly'] ?? []);
+        $hotspots  = collect($m['hotspots'] ?? []);
+        $insights  = [];
+
+        // 1) Payment health
+        if ($total === 0) {
+            $insights[] = "No tickets in the selected period. Validate filters or data capture.";
+        } else {
+            $unpaidPct = round(($unpaid / max($total,1)) * 100, 1);
+            if ($unpaidPct >= 50) {
+                $insights[] = "High unpaid rate at {$unpaidPct}% ({$unpaid}/{$total}). Recommend SMS/email reminders within 72 hours and a 7-day follow-up.";
+            } elseif ($unpaidPct >= 25) {
+                $insights[] = "Unpaid rate is {$unpaidPct}% ({$unpaid}/{$total}). Consider reminder cadence and on-site payment options.";
+            } else {
+                $insights[] = "Healthy compliance: unpaid rate {$unpaidPct}% ({$unpaid}/{$total}). Maintain current enforcement and reminders.";
+            }
+        }
+
+        // 2) Monthly trend & momentum
+        if ($monthly->isNotEmpty()) {
+            // get top month
+            $peak = $monthly->sortDesc()->keys()->first();
+            if ($peak) {
+                $insights[] = "Peak month is {$peak} with {$monthly[$peak]} tickets. Plan staffing and checkpoints around this period.";
+            }
+
+            // growth last vs previous
+            $keys = $monthly->keys()->values();
+            $n = $keys->count();
+            if ($n >= 2) {
+                $lastKey = $keys[$n-1];
+                $prevKey = $keys[$n-2];
+                $delta   = (int)$monthly[$lastKey] - (int)$monthly[$prevKey];
+                if ($delta > 0)      $insights[] = "Upward trend: +{$delta} tickets in {$lastKey} vs {$prevKey}. Prepare for increased workload.";
+                elseif ($delta < 0)  $insights[] = "Downward trend: {$lastKey} is " . abs($delta) . " lower than {$prevKey}. Investigate cause (awareness, patrol patterns).";
+            }
+
+            // momentum (avg change over last 3 steps)
+            if ($n >= 4) {
+                $vals = $monthly->values();
+                $chg = [];
+                for ($i=1; $i<$vals->count(); $i++) $chg[] = $vals[$i]-$vals[$i-1];
+                $avg = round(array_sum(array_slice($chg, -3)) / 3, 1);
+                if ($avg > 0)      $insights[] = "Positive momentum: average +{$avg} tickets per month recently.";
+                elseif ($avg < 0)  $insights[] = "Negative momentum: average {$avg} tickets per month recently.";
+            }
+        } else {
+            $insights[] = "No monthly series available. Encourage consistent date logging.";
+        }
+
+        // 3) Hotspots
+        if ($hotspots->isEmpty()) {
+            $insights[] = "No geo-tagged tickets. Encourage capturing location to enable hotspot analysis.";
+        } else {
+            $top = $hotspots->sortByDesc('c')->take(3)->values();
+            $list = $top->map(fn($h) => ($h->area ?? 'Unknown') . " ({$h->c})")->implode(', ');
+            $insights[] = "Top hotspots: {$list}. Prioritize patrols and random checkpoints in these areas.";
+
+            // dominance check (top vs second)
+            if ($top->count() >= 2 && (int)$top[1]->c > 0) {
+                $ratio = round((int)$top[0]->c / max(1,(int)$top[1]->c), 2);
+                if ($ratio >= 1.5) {
+                    $insights[] = "One area dominates (≈{$ratio}× second place). Consider targeted enforcement and community advisories there.";
+                }
+            }
+        }
+
+        // 4) Operational suggestions based on totals
+        if ($total > 0 && $total < 10) {
+            $insights[] = "Low ticket volume ({$total}). Validate patrol coverage and reporting discipline.";
+        } elseif ($total >= 50) {
+            $insights[] = "High workload ({$total} tickets). Ensure printer supplies, device charging, and backup staff rotations.";
+        }
+
+        return array_values(array_unique($insights));
     }
     /**
      * Show the form for creating a new resource.

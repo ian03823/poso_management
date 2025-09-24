@@ -1,203 +1,247 @@
-// resources/js/analytics.js
+// public/js/analytics.js — redesigned + insights text
+(function () {
+  let pie, bar, map, heat, markers, modal;
 
-window.pie = window.pie || null;
-window.bar = window.bar || null;
-window.map = window.map || null;
-window.heat = window.heat || null;
-window.hotspotMarkers = window.hotspotMarkers || null;
-window._analyticsModal = window._analyticsModal || null;
+  function $(sel, root = document) { return root.querySelector(sel); }
+  function $all(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
 
-function initAnalytics() {
-  const pieEl = document.getElementById('pieChart');
-  const barEl = document.getElementById('barChart');
-  const mapEl = document.getElementById('map');
-  if (!pieEl || !barEl || !mapEl) return; // not on analytics page
+  function getRoot() { return $('#analyticsRoot'); }
+  function getEndpoints() {
+    const r = getRoot(); if (!r) return {};
+    return {
+      latest:  r.dataset.latestEndpoint  || '/dataAnalytics/latest',
+      hotspot: r.dataset.hotspotEndpoint || '/dataAnalytics/hotspotTickets'
+    };
+  }
 
-  // render violation filter list
-  renderViolationFilterList();
+  function currentFilters() {
+    const from = $('#fltFrom')?.value || '';
+    const to   = $('#fltTo')?.value   || '';
+    const status = $('input[name="fltStatus"]:checked')?.value || '';
+    const vio = $all('.vio-opt:checked').map(cb => cb.value);
+    return { from, to, status, violations: vio };
+  }
 
-  // destroy old instances if any (due to AJAX swap)
-  try { if (window.pie) { window.pie.destroy(); window.pie = null; } } catch(_) {}
-  try { if (window.bar) { window.bar.destroy(); window.bar = null; } } catch(_) {}
-  try { if (window.map) { window.map.remove(); window.map = null; window.heat = null; } } catch(_) {}
+  function buildQuery(obj) {
+    const usp = new URLSearchParams();
+    if (obj.from) usp.set('from', obj.from);
+    if (obj.to) usp.set('to', obj.to);
+    if (obj.status) usp.set('status', obj.status);
+    (obj.violations || []).forEach(v => usp.append('violations[]', v));
+    return usp.toString();
+  }
 
-  // Charts
-  window.pie = new Chart(pieEl, {
-    type: 'pie',
-    data: { labels: ['Paid', 'Unpaid'], datasets: [{ data: [0, 0] }] },
-    options: { plugins: { legend: { position: 'bottom' } } }
-  });
+  function initDefaultMonths() {
+    const to = new Date();
+    const from = new Date(to.getFullYear(), to.getMonth() - 2, 1);
+    $('#fltFrom').value = `${from.getFullYear()}-${String(from.getMonth()+1).padStart(2,'0')}`;
+    $('#fltTo').value   = `${to.getFullYear()}-${String(to.getMonth()+1).padStart(2,'0')}`;
+  }
 
-  window.bar = new Chart(barEl, {
-    type: 'bar',
-    data: { labels: [], datasets: [{ label: 'Violations', data: [] }] },
-    options: {
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-      plugins: { legend: { display: false } }
-    }
-  });
+  // ---- Charts ----
+  function ensureCharts() {
+    if (pie) try { pie.destroy(); } catch {}
+    if (bar) try { bar.destroy(); } catch {}
+    const ctxPie = $('#chartPie')?.getContext('2d');
+    const ctxBar = $('#chartBar')?.getContext('2d');
+    if (!ctxPie || !ctxBar || typeof Chart === 'undefined') return;
 
-  // Map
-  const lat = Number(window.DEFAULT_LAT ?? 15.9285);
-  const lng = Number(window.DEFAULT_LNG ?? 120.3487);
-
-  window.map = L.map('map', { zoomControl: true }).setView([lat, lng], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap'
-  }).addTo(window.map);
-
-  window.heat = L.heatLayer([], { radius: 25, blur: 15, maxZoom: 17 }).addTo(window.map);
-  window.hotspotMarkers = L.layerGroup().addTo(window.map);
-
-  setTimeout(() => window.map.invalidateSize(), 250);
-
-  // Modal
-  const modalEl = document.getElementById('hotspotModal');
-  window._analyticsModal = modalEl ? new bootstrap.Modal(modalEl) : null;
-
-  // Bind buttons
-  document.getElementById('applyFilters')?.addEventListener('click', fetchStats);
-  document.getElementById('resetFilters')?.addEventListener('click', resetFilters);
-
-  // init default filters (last 3 months)
-  initDefaultMonths();
-  fetchStats();
-}
-
-function initDefaultMonths() {
-  const to = new Date();
-  const from = new Date(to.getFullYear(), to.getMonth() - 2, 1);
-  document.getElementById('fromMonth').value = `${from.getFullYear()}-${String(from.getMonth()+1).padStart(2,'0')}`;
-  document.getElementById('toMonth').value   = `${to.getFullYear()}-${String(to.getMonth()+1).padStart(2,'0')}`;
-}
-
-function resetFilters() {
-  initDefaultMonths();
-  document.querySelectorAll('#violationFilterList input[type="checkbox"]').forEach(cb => cb.checked = false);
-  document.querySelector('input[name="statusFilter"][value=""]')?.click();
-  fetchStats();
-}
-
-function getFilters() {
-  const fromMonth = document.getElementById('fromMonth').value; // YYYY-MM
-  const toMonth   = document.getElementById('toMonth').value;   // YYYY-MM
-  const status    = document.querySelector('input[name="statusFilter"]:checked')?.value || '';
-
-  const violations = Array.from(
-    document.querySelectorAll('#violationFilterList input[type="checkbox"]:checked')
-  ).map(cb => cb.value);
-
-  // convert month to date bounds on server; we just pass YYYY-MM
-  return { from: fromMonth, to: toMonth, status, violations };
-}
-
-function buildQuery(params) {
-  const usp = new URLSearchParams();
-  if (params.from) usp.set('from', params.from);
-  if (params.to) usp.set('to', params.to);
-  if (params.status) usp.set('status', params.status);
-  (params.violations || []).forEach(v => usp.append('violations[]', v));
-  return usp.toString();
-}
-
-async function fetchStats() {
-  const loadingEl = document.getElementById('loadingIndicator');
-  if (loadingEl) loadingEl.style.display = 'block';
-
-  try {
-    const q = buildQuery(getFilters());
-    const res = await fetch(`/dataAnalytics/latest?${q}`, { headers: { 'Accept': 'application/json' }});
-    const e = await res.json();
-
-    // Charts
-    window.pie.data.datasets[0].data = [e.paid || 0, e.unpaid || 0];
-    window.pie.update();
-
-    const months = Object.keys(e.monthlyCounts || {});
-    const values = Object.values(e.monthlyCounts || {});
-    window.bar.data.labels = months;
-    window.bar.data.datasets[0].data = values;
-    window.bar.update();
-
-    // Heat + Markers
-    const pts = (e.hotspots || []).map(h => [Number(h.latitude), Number(h.longitude), Number(h.c)]);
-    window.heat.setLatLngs(pts);
-
-    window.hotspotMarkers.clearLayers();
-    const top = [...(e.hotspots || [])].sort((a,b)=>b.c-a.c).slice(0,10);
-
-    top.forEach(h => {
-      const radius = Math.min(60, 18 + Number(h.c) * 1.6);
-      const marker = L.circleMarker([h.latitude, h.longitude], {
-        radius, weight: 1, opacity: 0.9, fillOpacity: 0.35
-      }).bindTooltip(`${h.area ?? 'Hotspot'}: ${h.c} tickets`, { direction: 'top' });
-
-      marker.on('click', () => openHotspotModal(h.latitude, h.longitude, h.area));
-      window.hotspotMarkers.addLayer(marker);
+    pie = new Chart(ctxPie, {
+      type: 'doughnut',
+      data: { labels: ['Paid','Unpaid'], datasets: [{ data: [0,0] }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
     });
 
-  } catch (err) {
-    console.error('Fetch failed:', err);
-  } finally {
-    if (loadingEl) loadingEl.style.display = 'none';
-    setTimeout(()=> window.map && window.map.invalidateSize(), 200);
+    bar = new Chart(ctxBar, {
+      type: 'bar',
+      data: { labels: [], datasets: [{ label:'Tickets', data: [] }] },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } },
+        plugins:{ legend:{ display:false } }
+      }
+    });
   }
-}
 
-function renderViolationFilterList() {
-  const box = document.getElementById('violationFilterList');
-  if (!box) return;
-  const opts = Array.isArray(window.VIOLATION_OPTIONS) ? window.VIOLATION_OPTIONS : [];
-  box.innerHTML = opts.map(v => `
-    <div class="form-check">
-      <input class="form-check-input" type="checkbox" value="${v.id}" id="vio_${v.id}">
-      <label class="form-check-label" for="vio_${v.id}">${escapeHtml(v.violation_name || 'Violation')}</label>
-    </div>
-  `).join('') || '<div class="text-muted">No violations available</div>';
-}
+  // ---- Map ----
+  function ensureMap() {
+    if (!$('#map') || typeof L === 'undefined') return;
+    if (map) { try { map.remove(); } catch {} map = null; heat = null; }
+    const root = getRoot();
+    const lat = Number(root?.dataset.defaultLat ?? 15.9285);
+    const lng = Number(root?.dataset.defaultLng ?? 120.3487);
 
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+    map = L.map('map', { zoomControl:true }).setView([lat, lng], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
 
-async function openHotspotModal(lat, lng, area) {
-  const body = document.getElementById('hotspotModalBody');
-  const title = document.getElementById('hotspotModalLabel');
-  if (title) title.textContent = `Hotspot Tickets — ${area ?? 'Location'}`;
-  if (body) body.innerHTML = `<div class="text-center py-4 text-muted">Loading…</div>`;
+    heat = L.heatLayer([], { radius: 25, blur: 15, maxZoom: 17 }).addTo(map);
+    markers = L.layerGroup().addTo(map);
+    setTimeout(()=> map.invalidateSize(), 200);
+  }
 
-  const q = buildQuery(getFilters());
-  try {
-    const res = await fetch(`/dataAnalytics/hotspotTickets?lat=${lat}&lng=${lng}&${q}`);
-    const json = await res.json();
-    const rows = json.tickets || [];
-    if (!rows.length) {
-      body.innerHTML = `<div class="text-center py-4 text-muted">No tickets found for this spot in the selected range.</div>`;
-    } else {
-      body.innerHTML = `
-        <div class="table-responsive">
-          <table class="table table-sm align-middle">
-            <thead class="table-light">
-              <tr><th>ID</th><th>Issued At</th><th>Location</th><th>Status</th></tr>
-            </thead>
-            <tbody>
-              ${rows.map(r => `
-                <tr>
-                  <td>${r.id}</td>
-                  <td>${r.issued_at}</td>
-                  <td>${escapeHtml(r.location)}</td>
-                  <td><span class="badge ${r.status==='Paid'?'bg-success':'bg-warning text-dark'}">${r.status}</span></td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>`;
+  // ---- Fetch + Render ----
+  async function fetchStats() {
+    const { latest } = getEndpoints();
+    const q = buildQuery(currentFilters());
+    $('#spinPie')?.classList.remove('d-none');
+    $('#spinBar')?.classList.remove('d-none');
+
+    try {
+      const res = await fetch(`${latest}?${q}`, { headers:{ 'Accept':'application/json' }});
+      const data = await res.json();
+
+      const paid   = Number(data.paid || 0);
+      const unpaid = Number(data.unpaid || 0);
+      const months = Object.keys(data.monthlyCounts || {});
+      const totals = Object.values(data.monthlyCounts || {}).map(x=>Number(x));
+
+      // KPIs
+      $('#kpiPaid').textContent = paid;
+      $('#kpiUnpaid').textContent = unpaid;
+      $('#kpiTotal').textContent = paid + unpaid;
+
+      // Pie
+      if (pie) {
+        pie.data.datasets[0].data = [paid, unpaid];
+        pie.update();
+      }
+      $('#pieEmpty').style.display = (paid + unpaid) ? 'none' : '';
+
+      // Bar
+      if (bar) {
+        bar.data.labels = months;
+        bar.data.datasets[0].data = totals;
+        bar.update();
+      }
+      $('#barEmpty').style.display = totals.some(v=>v>0) ? 'none' : '';
+
+      // Heat + markers
+      if (heat && markers) {
+        const pts = (data.hotspots || []).map(h => [Number(h.latitude), Number(h.longitude), Number(h.c)]);
+        heat.setLatLngs(pts);
+
+        markers.clearLayers();
+        [...(data.hotspots || [])].slice(0, 12).forEach(h => {
+          const m = L.circleMarker([h.latitude, h.longitude], {
+            radius: Math.min(60, 18 + Number(h.c) * 1.6),
+            weight: 1, opacity: 0.9, fillOpacity: 0.35
+          }).bindTooltip(`${h.area ?? 'Hotspot'}: ${h.c} tickets`);
+          m.on('click', ()=> openHotspot(h.latitude, h.longitude, h.area));
+          markers.addLayer(m);
+        });
+      }
+
+      // Insights text (array from server)
+      if (Array.isArray(data.insights)) {
+        const text = data.insights.map((s,i)=>`${i+1}. ${s}`).join('\n');
+        $('#insightsBox').value = text;
+      } else if (typeof data.insights_text === 'string') {
+        $('#insightsBox').value = data.insights_text;
+      }
+
+    } catch (e) {
+      console.error('Analytics fetch failed', e);
+      if (window.Swal) Swal.fire('Error','Failed to load analytics data.','error');
+    } finally {
+      $('#spinPie')?.classList.add('d-none');
+      $('#spinBar')?.classList.add('d-none');
+      setTimeout(()=> map && map.invalidateSize(), 150);
+      updateViolationButtonText();
+      updateExportLinks();
     }
-  } catch (e) {
-    body.innerHTML = `<div class="text-danger">Failed to load tickets.</div>`;
   }
-  window._analyticsModal?.show();
-}
 
-// Run on initial load and after AJAX swaps
-document.addEventListener('DOMContentLoaded', initAnalytics);
-document.addEventListener('page:loaded', initAnalytics);
+  function updateViolationButtonText(){
+    const boxes = $all('.vio-opt:checked');
+    const btn = $('#vioBtnText');
+    if (!btn) return;
+    if (boxes.length === 0) btn.textContent = 'All Violations';
+    else if (boxes.length === 1) btn.textContent = boxes[0].nextElementSibling?.textContent?.trim() || '1 selected';
+    else btn.textContent = `${boxes.length} selected`;
+  }
+
+  function updateExportLinks(){
+    const q = buildQuery(currentFilters());
+    const x = $('#btnExportXlsx'); const d = $('#btnExportDocx');
+    if (x) x.href = `${x.href.split('?')[0]}?${q}`;
+    if (d) d.href = `${d.href.split('?')[0]}?${q}`;
+  }
+
+  async function openHotspot(lat, lng, area){
+    const { hotspot } = getEndpoints();
+    $('#hotspotBody').innerHTML = `<div class="text-center text-muted py-4">Loading…</div>`;
+    $('#hotspotModalLabel').textContent = `Hotspot Tickets — ${area ?? 'Location'}`;
+    modal = modal || (typeof bootstrap !== 'undefined' ? new bootstrap.Modal($('#hotspotModal')) : null);
+
+    try{
+      const q = buildQuery(currentFilters());
+      const res = await fetch(`${hotspot}?lat=${lat}&lng=${lng}&${q}`);
+      const json = await res.json();
+      const rows = json.tickets || [];
+      if (!rows.length){
+        $('#hotspotBody').innerHTML = `<div class="text-center text-muted py-4">No tickets for this spot in the selected range.</div>`;
+      } else {
+        $('#hotspotBody').innerHTML = `
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead class="table-light">
+                <tr><th>ID</th><th>Issued At</th><th>Location</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr>
+                    <td>${r.id}</td>
+                    <td>${r.issued_at}</td>
+                    <td>${escapeHtml(r.location || '')}</td>
+                    <td>
+                      <span class="badge ${r.status==='Paid'?'bg-success':'bg-warning text-dark'}">${r.status}</span>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+      }
+    } catch(e){
+      $('#hotspotBody').innerHTML = `<div class="text-danger">Failed to load tickets.</div>`;
+    }
+    modal && modal.show();
+  }
+
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+  function bindEvents(){
+    $('#btnApply')?.addEventListener('click', fetchStats);
+    $('#btnReset')?.addEventListener('click', () => {
+      initDefaultMonths();
+      $all('.vio-opt').forEach(cb => cb.checked = false);
+      $('#st_all')?.click();
+      fetchStats();
+    });
+    $all('.vio-opt').forEach(cb => cb.addEventListener('change', updateViolationButtonText));
+
+    $('#btnCopyInsights')?.addEventListener('click', () => {
+      const ta = $('#insightsBox');
+      if (!ta) return;
+      ta.select();
+      document.execCommand('copy');
+      if (window.Swal) Swal.fire('Copied','Insights copied to clipboard.','success');
+    });
+  }
+
+  function init(){
+    if (!getRoot()) return; // not on this page
+    ensureCharts();
+    ensureMap();
+    bindEvents();
+    initDefaultMonths();
+    fetchStats();
+  }
+
+  // Run on normal load + SPA swap
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else { init(); }
+  document.addEventListener('page:loaded', init);
+})();
