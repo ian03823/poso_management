@@ -293,12 +293,17 @@ class AnalyticsController extends Controller
         if (empty($lines)) {
             $lines[] = "Maintain current deployment; no significant trends in the selected coverage.";
         }
-        $section->addText('Recommendations', ['bold'=>true,'size'=>12]);
-        foreach ($lines as $p) {
-            $section->addListItem($p, 0, null, ['listType' => \PhpOffice\PhpWord\Style\ListItem::TYPE_BULLET_FILLED]);
+        $section->addText('Insights & Recommendations', ['bold'=>true,'size'=>12]);
+        if (empty($insights)) {
+            $section->addText('No insights available for the selected coverage.', ['color'=>'555555']);
+        } else {
+            foreach ($insights as $line) {
+                $section->addListItem($line, 0, null, [
+                    'listType' => \PhpOffice\PhpWord\Style\ListItem::TYPE_BULLET_FILLED
+                ]);
+            }
         }
-
-        // Output
+                // Output
         $fname = 'POSO_Analytics_' . $now->format('Ymd_His') . '.docx';
         $tmp   = tempnam(sys_get_temp_dir(), 'rpt').'.docx';
         $phpWord->save($tmp, 'Word2007');

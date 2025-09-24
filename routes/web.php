@@ -23,6 +23,7 @@ use App\Http\Controllers\ViolatorPhoneController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Http;
 
 
 // Route::get('/', function () {
@@ -32,22 +33,33 @@ use Illuminate\Support\Facades\Config;
 /* health check used by isReallyOnline() */
 Route::get('/ping', fn() => response()->noContent());
 
-Route::get('/_diag/smtp', function () {
-    $hosts = [
-        ['smtp.gmail.com', 587, 'tls'],
-        ['smtp.gmail.com', 465, 'ssl'],
-    ];
-    $out = [];
-    foreach ($hosts as [$host,$port,$label]) {
-        $t0 = microtime(true);
-        $fp = @fsockopen($host, $port, $errno, $errstr, 5); // 5s timeout
-        $ok = (bool) $fp;
-        if ($fp) fclose($fp);
-        $out[] = [$host,$port,$label,$ok ? 'OK' : "FAIL: $errno $errstr", round((microtime(true)-$t0)*1000).'ms'];
+Route::get('/_diag/otp-driver', function () {
+    return response()->json([
+        'OTP_DRIVER' => env('OTP_DRIVER'),
+        'config.driver' => config('otp.driver'),
+        'webapp.url' => config('otp.gmail_webapp.url'),
+        'has.secret' => config('otp.gmail_webapp.secret') ? true : false,
+    ]);
+});
+
+Route::get('/_diag/gas', function () {
+    $url = config('otp.gmail_webapp.url');
+    $secret = config('otp.gmail_webapp.secret');
+    $to = request('to') ?: config('mail.from.address');
+
+    try {
+        $res = Http::timeout(15)->asJson()->post($url, [
+            'secret'  => $secret,
+            'to'      => $to,
+            'subject' => 'POSO GAS test',
+            'text'    => 'Hello from GAS test',
+            'html'    => '<b>Hello</b> from GAS test',
+        ]);
+        return response("status={$res->status()} body={$res->body()}", 200, ['Content-Type'=>'text/plain']);
+    } catch (\Throwable $e) {
+        Log::error('GAS direct test failed', ['err'=>$e->getMessage()]);
+        return 'EXCEPTION: '.$e->getMessage();
     }
-    header('Content-Type: text/plain');
-    foreach ($out as $r) echo implode(' | ', $r)."\n";
-    return '';
 });
 
 // background sync JSON submit (CSRF exempt)
