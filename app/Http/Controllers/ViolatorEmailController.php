@@ -27,7 +27,7 @@ class ViolatorEmailController extends Controller
         $user = auth('violator')->user();
 
         $data = $request->validate([
-            'email' => ['required','email','max:191', Rule::unique('violators','email')->ignore($user->id,'id')],
+            'email' => ['required','email','max:30', Rule::unique('violators','email')->ignore($user->id,'id')],
         ]);
 
         $user->email = $data['email'];
