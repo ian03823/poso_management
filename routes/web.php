@@ -115,11 +115,6 @@ Route::middleware('admin')->group(function () {
     Route::get('/admin/dashboard', [AdminDashboardController::class,'adminDash'])->name('admin.dashboard');
     Route::get('/admin/profile/update', [AdminDashboardController::class,'edit'])->name('admin.profile.edit');
     Route::put('/admin/profile/update', [AdminDashboardController::class,'update'])->name('admin.profile.update');
-    //Issue Ticket 
-    Route::get('/admin/tickets/create', [AdminTicketController::class, 'create'])
-        ->name('admin.tickets.create');
-    Route::post('/admin/tickets', [AdminTicketController::class, 'store'])
-        ->name('admin.tickets.store');
         
     //Violation routes
     Route::get('/violation/partial', [ViolationController::class,'partial'])->name('violation.partial');
@@ -144,6 +139,11 @@ Route::middleware('admin')->group(function () {
      ->name('ticket.updateStatus');
 
     //Ticket routes
+    //Issue Ticket 
+    Route::get('/admin/tickets/create', [AdminTicketController::class, 'create'])
+        ->name('admin.tickets.create');
+    Route::post('/admin/tickets', [AdminTicketController::class, 'store'])
+        ->name('admin.tickets.store');
     Route::get('ticket/partial', [AdminTicketController::class, 'partial'])->name('ticket.partial');
     Route::post('ticket/{ticket}/status', [AdminTicketController::class, 'updateStatus'])->name('ticket.update.status');
     Route::resource('ticket', AdminTicketController::class);

@@ -25,7 +25,7 @@
     </div>
 
     <div class="d-flex align-items-center gap-2">
-      <a href="/ticket/create" class="btn btn-light text-success fw-semibold" data-ajax>
+      <a href="{{route('admin.tickets.create')}}" class="btn btn-light text-success fw-semibold" data-ajax>
         <i class="bi bi-receipt-cutoff me-2"></i>Cite A Ticket
       </a>
     </div>

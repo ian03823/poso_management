@@ -124,8 +124,8 @@ class AdminTicketController extends Controller
         // Auto-provision violator credentials if newly created (same as Enforcer)
         if ($violator->wasRecentlyCreated) {
             $violator->username = 'user'.rand(1000,9999);
-            $rawPwd             = \Illuminate\Support\Str::random(8);
-            $violator->defaultPassword = \Illuminate\Support\Facades\Hash::make($rawPwd);
+            $rawPwd             = 'violator'.rand(1000,9999); // default
+            $violator->defaultPassword = Hash::make($rawPwd);
             $violator->save();
             $creds = ['username'=>$violator->username, 'password'=>$rawPwd];
         } else {

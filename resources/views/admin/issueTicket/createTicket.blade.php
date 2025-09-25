@@ -23,7 +23,7 @@
         {{-- Pass groups to JS --}}
         <script> window.violationGroups = @json($violationGroups->toArray()); </script>
 
-        <form id="ticketForm" action="{{ route('admin.tickets.store') }}" method="POST">
+        <form id="ticketForm" action="{{ route('admin.tickets.store') }}" method="POST" data-index-url="{{ route('ticket.index') }}">
           @csrf
           <div class="row g-3">
             {{-- First/Middle/Last name (match Violator schema used by Enforcer flow) --}}
@@ -163,7 +163,7 @@
                     <option value="{{ $e->id }}">
                       {{ $e->badge_num }} — {{ $e->lname }}, {{ $e->fname }}
                     </option>
-                  @endforeach
+                  @endforeach 
                 </select>
                 <label for="apprehending_enforcer_id">Apprehending Enforcer</label>
               </div>
