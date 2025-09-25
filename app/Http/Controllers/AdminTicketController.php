@@ -54,7 +54,19 @@ class AdminTicketController extends Controller
         $grouped = \App\Models\Violation::orderBy('category')
             ->orderBy('violation_name')
             ->get()
-            ->groupBy('category');
+            ->groupBy('category')
+            ->mapWithKeys(function ($items, $key) {
+                // ensure string keys (handles enums/backed enums cleanly)
+                $k = is_object($key) ? (string)$key->value ?? (string)$key : (string)$key;
+                return [$k => $items->map(function($v){
+                    return [
+                        'id'             => $v->id,
+                        'violation_code' => $v->violation_code,
+                        'violation_name' => $v->violation_name,
+                        'fine_amount'    => $v->fine_amount,
+                    ];
+                })->values()];
+            });
 
         $violator = null;
         if ($request->filled('violator_id')) {

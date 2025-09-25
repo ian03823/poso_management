@@ -21,24 +21,46 @@ const containerEl = byId('violationsContainer');
 const selected    = new Set();
 function renderCategory() {
   if (!selectEl || !containerEl) return;
+
+  const raw = (selectEl.value || '').trim();
+  // Try exact, then case-insensitive fallback
+  let list = (window.violationGroups && window.violationGroups[raw]) || null;
+
+  if (!list && window.violationGroups) {
+    const keys = Object.keys(window.violationGroups);
+    const found = keys.find(k => k.trim().toLowerCase() === raw.toLowerCase());
+    if (found) list = window.violationGroups[found];
+  }
+
   containerEl.innerHTML = '';
-  const list = (window.violationGroups || {})[selectEl.value] || [];
-  for (const v of list) {
+
+  if (!list || !Array.isArray(list)) {
+    // quick one-time debug to help diagnose in console
+    console.warn('[violations]', { selected: raw, keys: Object.keys(window.violationGroups || {}) });
+    return;
+  }
+
+  list.forEach(v => {
     const wrap = document.createElement('div');
     wrap.className = 'form-check mb-2';
     wrap.innerHTML = `
-      <input class="form-check-input" type="checkbox" name="violations[]" id="v-${v.id}"
-             value="${v.violation_code}" ${selected.has(v.violation_code) ? 'checked' : ''}>
+      <input class="form-check-input"
+             type="checkbox"
+             name="violations[]"
+             id="v-${v.id}"
+             value="${v.violation_code}">
       <label class="form-check-label" for="v-${v.id}">
-        ${v.violation_name} — ₱${parseFloat(v.fine_amount).toFixed(2)}
+        ${v.violation_name} — ₱${Number(v.fine_amount).toFixed(2)}
       </label>`;
     const chk = wrap.querySelector('input');
+    chk.checked = selected.has(v.violation_code);
     chk.addEventListener('change', () => {
       chk.checked ? selected.add(chk.value) : selected.delete(chk.value);
     });
     containerEl.appendChild(wrap);
-  }
+  });
 }
+
 selectEl?.addEventListener('change', renderCategory);
 
 // Auto-fill owner name

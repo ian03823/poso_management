@@ -14,14 +14,14 @@
     $allFlags = \App\Models\Flag::whereIn('key',['is_resident','is_impounded'])->get();
     $oldFlags = old('flags', []);
   @endphp
+  {{-- Pass groups to JS --}}
+  <script> window.violationGroups = @json($violationGroups); </script>
 
   <div class="container py-4">
     <h1 class="h4 text-center mb-4">Traffic Citation Ticket (Admin)</h1>
 
     <div class="card mx-auto shadow-sm rounded-3 ticket-card" style="max-width: 800px;">
       <div class="card-body p-3 p-sm-4">
-        {{-- Pass groups to JS --}}
-        <script> window.violationGroups = @json($violationGroups->toArray()); </script>
 
         <form id="ticketForm" action="{{ route('admin.tickets.store') }}" method="POST" data-index-url="{{ route('ticket.index') }}">
           @csrf
@@ -136,8 +136,8 @@
               <div class="form-floating mb-3">
                 <select class="form-select" id="categorySelect" aria-label="Select violation category">
                   <option value="" disabled selected>Choose category…</option>
-                  @foreach($violationGroups->keys() as $category)
-                    <option value="{{ $category }}">{{ $category }}</option>
+                  @foreach($violationGroups->keys() as $categoryKey)
+                    <option value="{{ (string)$categoryKey }}">{{ (string)$categoryKey }}</option>
                   @endforeach
                 </select>
                 <label for="categorySelect">Category</label>
