@@ -3,6 +3,7 @@
 /* Keep modal above backdrop and any custom overlays */
 .modal { z-index: 1060 !important; }         /* modal window */
 .modal-backdrop { z-index: 1055 !important; }/* dark overlay */
+.modal-backdrop.show { opacity:.25; }
 
 /* Any custom overlays must stay below Bootstrap modal */
 #ticketLoading,
@@ -47,13 +48,21 @@
   #ticketContainer table tbody tr:hover {
     background-color:#f9fcfa;
   }
-  /* loading overlay */
-  #ticketContainer .loading-overlay {
-    position: absolute; inset:0; display:none;
-    align-items:center; justify-content:center;
-    backdrop-filter: blur(2px);
+  /* Loading overlay – below Bootstrap modal, never traps clicks unless active */
+  #ticketContainer .loading-overlay{
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
     background: rgba(255,255,255,.65);
-    z-index: 30;
+    backdrop-filter: blur(2px);
+    z-index: 1040;          /* < 1055 backdrop and < 1060 modal */
+    pointer-events: none;   /* don't block clicks by default */
+  }
+  #ticketContainer .loading-overlay.active{
+    display: flex;
+    pointer-events: auto;   /* block only while actually loading */
   }
   #ticketContainer .spinner-border {
     width:2.5rem; height:2.5rem;

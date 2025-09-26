@@ -19,13 +19,16 @@
       violationsByCatUrl: r?.dataset.violationsByCatUrl || null
     };
   }
+  
 
   /* ---------------- helpers ---------------- */
   const csrfToken = () => $('meta[name="csrf-token"]').attr('content') || '';
   const getSort = () => ($('#ticket-sort').val() || 'date_desc');
   const setLoading = (on) => {
     const ov = document.getElementById('ticketLoading');
-    if (ov) ov.style.display = on ? 'flex' : 'none';
+    if (!ov) return;
+    if (on) { ov.classList.add('active'); }
+    else    { ov.classList.remove('active'); }
   };
 
   function readFiltersFromURL() {
@@ -91,6 +94,32 @@
       title: msg || 'Updated', timer: 1500, showConfirmButton: false
     });
   }
+  function hideFilterModalSafely() {
+    const el = document.getElementById('ticketFilterModal');
+    if (!el) return;
+    if (window.bootstrap?.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(el).hide();
+    } else {
+      // Hard fallback if BS not present
+      document.body.classList.remove('modal-open');
+      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+    }
+  }
+
+  // Ensure the page isn’t blocked by loader or lingering backdrop
+  $(document).on('show.bs.modal', '#ticketFilterModal', function () {
+    setLoading(false); // make sure loader is off
+  });
+  $(document).on('hidden.bs.modal', '#ticketFilterModal', function () {
+    // belt & suspenders cleanup in SPA
+    document.body.classList.remove('modal-open');
+    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+  });
+  window.addEventListener('popstate', () => {
+    const el = document.getElementById('ticketFilterModal');
+    if (el && window.bootstrap?.Modal) window.bootstrap.Modal.getOrCreateInstance(el).hide();
+  });
+
 
   // Maintain previous state so we can revert selects on cancel/error
   let _lastSelect = null;
@@ -299,12 +328,8 @@
       violation_id: $('#filter-violation').val() || ''
     };
     // Close modal safely in SPA
-    const modalEl = document.getElementById('ticketFilterModal');
-    if (modalEl && window.bootstrap?.Modal) {
-      window.bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-    } else {
-      $('#ticketFilterModal').modal('hide'); // jQuery fallback
-    }
+    hideFilterModalSafely();
+    // Reload table with filters (page 1, keep current sort)
     loadTable(Object.assign({ page: 1, sort_option: getSort() }, filters), /*push=*/true);
   });
 
