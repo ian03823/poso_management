@@ -140,6 +140,8 @@ Route::middleware('admin')->group(function () {
 
     //Ticket routes
     //Issue Ticket 
+    Route::get('/violations/by-category', [AdminTicketController::class, 'violationsByCategory'])
+    ->name('violations.byCategory');
     Route::get('/admin/tickets/create', [AdminTicketController::class, 'create'])
         ->name('admin.tickets.create');
     Route::post('/admin/tickets', [AdminTicketController::class, 'store'])

@@ -1,42 +1,106 @@
-/* ticketTable.js — SweetAlert-only status changes, AJAX-safe, no Bootstrap modals */
+/* ticketTable.js — Admin Issued Tickets
+   - SweetAlert status changes (Paid ref#, Admin PW for others)
+   - Filter modal (status + category -> violations)
+   - AJAX partial reloads with fade, sort, pagination, pushState
+   - SPA-safe: single bind guard, modal cleanup on navigation
+*/
 (function ($) {
-  // Avoid double-binding when page is swapped via AJAX
-  if (window.__ticketTableBound) return;
-  window.__ticketTableBound = true;
+  if (window.__adminTicketTableInit) return;
+  window.__adminTicketTableInit = true;
 
-  /* ---------------- config + helpers ---------------- */
-  function getRoot() { return document.getElementById('ticketContainer'); }
-
+  /* ---------------- config ---------------- */
+  function root() { return document.getElementById('ticketContainer'); }
   function cfg() {
-    const root = getRoot();
+    const r = root();
     return {
-      paidStatusId: Number(root?.dataset.paidStatusId || window.PAID_STATUS_ID || 0),
-      statusUpdateUrl: root?.dataset.statusUpdateUrl || window.STATUS_UPDATE_URL || '/ticket',
-      ticketPartialUrl: root?.dataset.ticketPartialUrl || window.ticketPartialUrl || null
+      paidStatusId: Number(r?.dataset.paidStatusId || 0),
+      statusUpdateUrl: r?.dataset.statusUpdateUrl || '/ticket',
+      ticketPartialUrl: r?.dataset.ticketPartialUrl || null,
+      violationsByCatUrl: r?.dataset.violationsByCatUrl || null
     };
   }
 
-
   /* ---------------- helpers ---------------- */
   const csrfToken = () => $('meta[name="csrf-token"]').attr('content') || '';
+  const getSort = () => ($('#ticket-sort').val() || 'date_desc');
   const setLoading = (on) => {
     const ov = document.getElementById('ticketLoading');
     if (ov) ov.style.display = on ? 'flex' : 'none';
   };
-  const getSort = () => ($('#ticket-sort').val() || 'date_desc');
 
-  function loadTable(opts, push = true) {
+  function readFiltersFromURL() {
+    const sp = new URLSearchParams(location.search);
+    return {
+      sort_option: sp.get('sort_option') || 'date_desc',
+      page: sp.get('page') || 1,
+      status: sp.get('status') || '',
+      category: sp.get('category') || '',
+      violation_id: sp.get('violation_id') || ''
+    };
+  }
+
+  function normalizeParams(params) {
+    // Ensure defaults
+    return Object.assign({
+      sort_option: getSort(),
+      page: 1,
+      status: '',
+      category: '',
+      violation_id: ''
+    }, params || {});
+  }
+
+  function swapHtml($el, html) {
+    $el.removeClass('fade-in').addClass('fade-out');
+    setTimeout(() => {
+      $el.html(html);
+      $el.removeClass('fade-out').addClass('fade-in');
+    }, 140);
+  }
+
+  function renderActiveFilters() {
+    const { status, category, violation_id } = readFiltersFromURL();
+    const $af = $('#active-filters');
+    const parts = [];
+    if (status) parts.push(`Status: ${status}`);
+    if (category) parts.push(`Category: ${category}`);
+    if (violation_id) parts.push(`Violation: #${violation_id}`);
+    $af.text(parts.length ? parts.join(' • ') : '');
+  }
+
+  function loadTable(params, push = true) {
     const C = cfg();
     if (!C.ticketPartialUrl) return;
+    const opts = normalizeParams(params);
     setLoading(true);
     $.get(C.ticketPartialUrl + '?' + $.param(opts))
       .done(html => {
-        $('#ticket-table').html(html);
-        if (push) history.pushState(null, '', '/ticket?' + $.param(opts));
+        swapHtml($('#ticket-table'), html);
+        if (push) {
+          history.pushState(null, '', '/ticket?' + $.param(opts));
+        }
+        renderActiveFilters();
       })
       .always(() => setLoading(false));
   }
-  // Post status as a Promise (for Swal preConfirm)
+
+  function toastOk(msg) {
+    if (!window.Swal) return;
+    Swal.fire({
+      toast: true, position: 'top-end', icon: 'success',
+      title: msg || 'Updated', timer: 1500, showConfirmButton: false
+    });
+  }
+
+  // Maintain previous state so we can revert selects on cancel/error
+  let _lastSelect = null;
+  let _lastValue  = null;
+  function revertSelect() {
+    if (_lastSelect && _lastValue != null) _lastSelect.val(_lastValue);
+    _lastSelect = null; _lastValue = null;
+  }
+
+  // POST status as Promise (for Swal preConfirm)
   function postStatusPromise(ticketId, data) {
     const C = cfg();
     return new Promise((resolve, reject) => {
@@ -51,24 +115,9 @@
     });
   }
 
-  function toastOk(msg) {
-    if (!window.Swal) return;
-    Swal.fire({ toast:true, position:'top-end', icon:'success', title: msg || 'Updated', timer:1500, showConfirmButton:false });
-  }
-
-  // Maintain previous state so we can revert on cancel/error
-  let _lastSelect = null;
-  let _lastValue  = null;
-
-  function revertSelect() {
-    if (_lastSelect && _lastValue != null) _lastSelect.val(_lastValue);
-    _lastSelect = null; _lastValue = null;
-  }
-
-  // Ask reference via SweetAlert
   async function promptReference(ticketId) {
     if (window.Swal) {
-      const { isConfirmed, value } = await Swal.fire({
+      const { isConfirmed } = await Swal.fire({
         title: 'Enter Reference Number',
         input: 'text',
         inputLabel: 'Reference # (required for Paid)',
@@ -95,18 +144,16 @@
       });
       return isConfirmed;
     } else {
-      // Fallback if SweetAlert is missing
       const ref = (prompt('Enter Reference Number:') || '').trim();
       if (!ref) return false;
-      await postStatusPromise(ticketId, { status_id: window.PAID_STATUS_ID, reference_number: ref });
+      await postStatusPromise(ticketId, { status_id: cfg().paidStatusId, reference_number: ref });
       return true;
     }
   }
 
-  // Ask admin password via SweetAlert
   async function promptPassword(ticketId, newStatus) {
     if (window.Swal) {
-      const { isConfirmed, value } = await Swal.fire({
+      const { isConfirmed } = await Swal.fire({
         title: 'Admin Password Required',
         input: 'password',
         inputLabel: 'Enter password to confirm',
@@ -133,7 +180,6 @@
       });
       return isConfirmed;
     } else {
-      // Fallback if SweetAlert is missing
       const pw = (prompt('Enter admin password:') || '').trim();
       if (!pw) return false;
       await postStatusPromise(ticketId, { status_id: newStatus, admin_password: pw });
@@ -141,33 +187,37 @@
     }
   }
 
+  /* ---------------- initial load ---------------- */
+  function initialLoadIfNeeded() {
+    if (!document.getElementById('ticket-table')) return;
+    const hasTable = !!document.querySelector('#ticket-table table');
+    const params = readFiltersFromURL();
+    // If table not rendered (SSR partial omitted), fetch.
+    if (!hasTable) {
+      loadTable(params, /*push=*/false);
+      $('#ticket-sort').val(params.sort_option || 'date_desc');
+      history.replaceState(null, '', location.pathname + location.search);
+    } else {
+      // If present, still reflect filters chips & sort selector
+      $('#ticket-sort').val(params.sort_option || 'date_desc');
+      renderActiveFilters();
+    }
+  }
+  $(initialLoadIfNeeded);
+  document.addEventListener('page:loaded', initialLoadIfNeeded);
+
   /* ---------------- sort & pagination ---------------- */
   $(document).on('change', '#ticket-sort', function () {
-    loadTable({ sort_option: $(this).val(), page: 1 });
+    const f = readFiltersFromURL();
+    loadTable({ sort_option: $(this).val(), page: 1, status: f.status, category: f.category, violation_id: f.violation_id });
   });
 
   $(document).on('click', '#ticket-table .pagination a', function (e) {
     e.preventDefault();
     const page = new URL(this.href).searchParams.get('page') || 1;
-    loadTable({ sort_option: getSort(), page });
+    const f = readFiltersFromURL();
+    loadTable({ sort_option: getSort(), page, status: f.status, category: f.category, violation_id: f.violation_id });
   });
-
-  // Initial table load when landing (and for AJAX nav)
-  function initialLoadIfNeeded() {
-    if (!document.getElementById('ticket-table')) return;
-    const hasTable = !!document.querySelector('#ticket-table table');
-    if (!hasTable) {
-      const params = new URLSearchParams(location.search);
-      loadTable({
-        sort_option: params.get('sort_option') || 'date_desc',
-        page:        params.get('page')        || 1
-      }, /*push=*/false);
-      $('#ticket-sort').val(params.get('sort_option') || 'date_desc');
-      history.replaceState(null, '', location.pathname + location.search);
-    }
-  }
-  $(initialLoadIfNeeded);
-  document.addEventListener('page:loaded', initialLoadIfNeeded);
 
   /* ---------------- status change (SweetAlert) ---------------- */
   $(document).on('change', '.status-select', async function () {
@@ -179,34 +229,97 @@
 
     _lastSelect = $sel;
     _lastValue  = oldStatus;
-
     if (oldStatus === newStatus) return;
 
     try {
       let ok = false;
       if (newStatus === paidId) {
-        // To PAID: Ask reference number only
         ok = await promptReference(ticketId);
       } else {
-        // Other change: Ask admin password only
         ok = await promptPassword(ticketId, newStatus);
       }
 
-      if (!ok) {
-        // canceled or failed validation
-        revertSelect();
-        return;
-      }
+      if (!ok) { revertSelect(); return; }
 
       toastOk('Status updated');
-      // reload table keeping current page/sort
-      const page = new URLSearchParams(location.search).get('page') || 1;
-      loadTable({ sort_option: getSort(), page }, /*push=*/false);
+      const f = readFiltersFromURL();
+      loadTable({ sort_option: getSort(), page: f.page, status: f.status, category: f.category, violation_id: f.violation_id }, /*push=*/false);
       _lastSelect = null; _lastValue = null;
-
     } catch (err) {
       if (window.Swal) Swal.fire('Error', String(err), 'error');
       revertSelect();
     }
   });
+
+  /* ---------------- filter modal wiring ---------------- */
+  // Open modal: prefill from URL and load violations if category is present
+  $(document).on('show.bs.modal', '#ticketFilterModal', function () {
+    const f = readFiltersFromURL();
+    $('#filter-status').val(f.status || '');
+    $('#filter-category').val(f.category || '');
+
+    const $viol = $('#filter-violation');
+    $viol.prop('disabled', true).html('<option value="">All</option>');
+
+    const C = cfg();
+    if (f.category && C.violationsByCatUrl) {
+      $.get(C.violationsByCatUrl, { category: f.category }).done(items => {
+        items.forEach(it => {
+          $viol.append(`<option value="${it.id}">${it.violation_name} (${it.violation_code})</option>`);
+        });
+        $viol.prop('disabled', false);
+        if (f.violation_id) $viol.val(String(f.violation_id));
+      });
+    }
+  });
+
+  // Category change -> fetch violations
+  $(document).on('change', '#filter-category', function () {
+    const cat = $(this).val();
+    const $viol = $('#filter-violation');
+    $viol.prop('disabled', true).html('<option value="">All</option>');
+
+    const C = cfg();
+    if (!cat || !C.violationsByCatUrl) return;
+
+    $.get(C.violationsByCatUrl, { category: cat }).done(items => {
+      items.forEach(it => {
+        $viol.append(`<option value="${it.id}">${it.violation_name} (${it.violation_code})</option>`);
+      });
+      $viol.prop('disabled', false);
+    });
+  });
+
+  // Apply filters
+  $(document).on('submit', '#ticket-filter-form', function (e) {
+    e.preventDefault();
+    const filters = {
+      status: $('#filter-status').val() || '',
+      category: $('#filter-category').val() || '',
+      violation_id: $('#filter-violation').val() || ''
+    };
+    // Close modal safely in SPA
+    const modalEl = document.getElementById('ticketFilterModal');
+    if (modalEl && window.bootstrap?.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+    } else {
+      $('#ticketFilterModal').modal('hide'); // jQuery fallback
+    }
+    loadTable(Object.assign({ page: 1, sort_option: getSort() }, filters), /*push=*/true);
+  });
+
+  // Reset filters
+  $(document).on('click', '#btn-reset-filters', function () {
+    $('#filter-status').val('');
+    $('#filter-category').val('');
+    $('#filter-violation').val('').prop('disabled', true);
+    loadTable({ sort_option: getSort(), page: 1, status: '', category: '', violation_id: '' }, /*push=*/true);
+  });
+
+  // SPA safety: close any open modal on history nav
+  window.addEventListener('popstate', () => {
+    const el = document.getElementById('ticketFilterModal');
+    if (el && window.bootstrap?.Modal) window.bootstrap.Modal.getOrCreateInstance(el).hide();
+  });
+
 })(jQuery);

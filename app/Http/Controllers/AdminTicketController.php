@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Services\LogActivity;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use App\Models\TicketStatus;
 use App\Models\Vehicle;
@@ -23,27 +25,22 @@ class AdminTicketController extends Controller
         //
         $sortOption = $request->get('sort_option','date_desc');
         switch($sortOption) {
-            case 'date_asc':
-                $col = 'issued_at'; $dir = 'asc';  break;
-            case 'name_asc':
-                // sort by violator’s name (assumes violator has `name` accessor)
-                $col = 'violator_name'; $dir = 'asc'; break;
-            case 'name_desc':
-                $col = 'violator_name'; $dir = 'desc'; break;
-            case 'date_desc':
-            default:
-                $col = 'issued_at'; $dir = 'desc'; break;
+            case 'date_asc':  $col='issued_at'; $dir='asc';  break;
+            default:          $col='issued_at'; $dir='desc'; break;
         }
-        
-        $tickets = Ticket::with(['enforcer', 'violator', 'vehicle', 'status'])
-    ->whereHas('enforcer') // only get tickets with enforcer
-    ->orderBy($col, $dir)
-    ->paginate(5)
-    ->appends('sort_option', $sortOption);
 
-        
-        // Render the main blade that @includes your partial
-        return view('admin.issuedTicket.ticketTable', compact('tickets', 'sortOption'));
+        $tickets = Ticket::with(['enforcer','violator','vehicle','status'])
+            ->whereHas('enforcer')
+            ->orderBy($col,$dir)
+            ->paginate(5)
+            ->appends('sort_option',$sortOption);
+
+        // Distinct categories for the modal
+        $violationCategories = Violation::query()
+            ->select('category')->whereNotNull('category')->distinct()
+            ->pluck('category')->filter()->values();
+
+        return view('admin.issuedTicket.ticketTable', compact('tickets','sortOption','violationCategories'));
     }
 
     /**
@@ -184,6 +181,7 @@ class AdminTicketController extends Controller
                 'latitude'             => $d['latitude'] ?? null,
                 'longitude'            => $d['longitude'] ?? null,
                 'confiscation_type_id' => $d['confiscation_type_id'],
+                'admin_id'             => Auth::guard('admin')->id(),
             ]);
 
             $t->flags()->sync($d['flags'] ?? []);
@@ -201,7 +199,44 @@ class AdminTicketController extends Controller
                     ->orderBy('issued_at','desc')
                     ->first();
         $lastAt = $prev ? $prev->issued_at->format('d M Y, H:i') : null;
+        $violatorName = trim(implode(' ', array_filter([
+            $violator->first_name ?? null,
+            $violator->middle_name ?? null,
+            $violator->last_name ?? null,
+        ]))) ?: 'Violator';
+        DB::afterCommit(function () use ($ticket, $violator, $violatorName) {
+            try {
+                $admin = Auth::guard('admin')->user();
+                $adminName = $admin?->name
+                    ?: trim(implode(' ', array_filter([$admin->fname ?? null, $admin->lname ?? null])))
+                    ?: 'Admin';
 
+                if (class_exists(\App\Services\LogActivity::class)) {
+                    \App\Services\LogActivity::on($ticket)
+                        ->by($admin)
+                        ->event('ticket.issued.by_admin')
+                        ->withProperties([
+                            'ticket_id'   => $ticket->id,
+                            'violator_id' => $violator?->id,
+                            'violator'    => $violatorName,
+                            'actor_role'  => 'Admin',
+                        ])
+                        ->fromRequest()
+                        ->log("Admin {$adminName} recorded a paper ticket (#{$ticket->id}) for {$violatorName}");
+                } else {
+                    Log::info('[Activity]', [
+                        'event'       => 'ticket.issued.by_admin',
+                        'ticket_id'   => $ticket->id,
+                        'admin_id'    => $admin?->id,
+                        'admin_name'  => $adminName,
+                        'violator_id' => $violator?->id,
+                        'violator'    => $violatorName,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('[Admin Ticket Activity skipped] '.$e->getMessage());
+            }
+        });
         // Build response (mirror Enforcer response keys)
         $violations = \App\Models\Violation::whereIn('violation_code', json_decode($ticket->violation_codes))
                         ->get()
@@ -293,27 +328,69 @@ class AdminTicketController extends Controller
     public function partial(Request $request)
     {
         $sortOption = $request->get('sort_option','date_desc');
+        $status     = $request->get('status');        // paid|unpaid|pending|cancelled|null
+        $category   = $request->get('category');      // string|null
+        $violationId= $request->get('violation_id');  // int|null
+
         switch($sortOption) {
-            case 'date_asc':
-                $col = 'issued_at'; $dir = 'asc';  break;
-            case 'name_asc':
-                $col = 'violator_name'; $dir = 'asc'; break;
-            case 'name_desc':
-                $col = 'violator_name'; $dir = 'desc'; break;
-            default:
-                $col = 'issued_at'; $dir = 'desc'; break;
+            case 'date_asc':  $col='issued_at'; $dir='asc';  break;
+            default:          $col='issued_at'; $dir='desc'; break;
         }
 
-        $tickets = Ticket::with(['enforcer','violator','vehicle'])
-                         ->select('tickets.*')
-                         ->leftJoin('violators','tickets.violator_id','violators.id')
-                         ->orderBy($col,$dir)
-                         ->paginate(5)
-                         ->appends('sort_option',$sortOption);
+        $q = Ticket::with(['enforcer','violator','vehicle'])
+            ->select('tickets.*')
+            ->leftJoin('violators','tickets.violator_id','=','violators.id');
 
+        // status filter
+        if ($status) {
+            $statusId = TicketStatus::where('name',$status)->value('id');
+            if ($statusId) $q->where('tickets.status_id',$statusId);
+            // If paid, expose latest reference & paid_at
+            if ($status === 'paid') {
+                $q->selectSub(function($sub){
+                    $sub->from('paid_tickets')
+                        ->whereColumn('paid_tickets.ticket_id','tickets.id')
+                        ->orderByDesc('paid_at')->limit(1)->select('reference_number');
+                }, 'paid_reference')
+                ->selectSub(function($sub){
+                    $sub->from('paid_tickets')
+                        ->whereColumn('paid_tickets.ticket_id','tickets.id')
+                        ->orderByDesc('paid_at')->limit(1)->select('paid_at');
+                }, 'paid_at');
+            }
+        }
 
-        // Render the partial view
-        return view('admin.partials.ticketTable', compact('tickets', 'sortOption'));
+        // violation/category filter
+        // if violation chosen, join pivot; else if only category chosen, join violation via pivot and filter category
+        if ($violationId) {
+            $q->join('ticket_violation as tv','tv.ticket_id','=','tickets.id')
+            ->where('tv.violation_id',$violationId);
+        } elseif ($category) {
+            $q->join('ticket_violation as tv','tv.ticket_id','=','tickets.id')
+            ->join('violations as v','v.id','=','tv.violation_id')
+            ->where('v.category',$category);
+        }
+
+        $tickets = $q->orderBy($col,$dir)
+            ->paginate(5)
+            ->appends([
+                'sort_option'=>$sortOption,
+                'status'=>$status,
+                'category'=>$category,
+                'violation_id'=>$violationId
+            ]);
+
+        return view('admin.partials.ticketTable', compact('tickets','sortOption'));
+    }
+    /** AJAX: return violations for a category */
+    public function violationsByCategory(Request $request)
+    {
+        $cat = $request->query('category');
+        if (!$cat) return response()->json([]);
+        $items = Violation::where('category',$cat)
+            ->orderBy('violation_name')
+            ->get(['id','violation_code','violation_name']);
+        return response()->json($items);
     }
     public function updateStatus(Request $request, Ticket $ticket)
     {

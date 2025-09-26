@@ -196,8 +196,3 @@
     </div>
   </div>
   @endsection
-
-  {{-- Scripts --}}
-  @push('scripts')
-    <script src="{{ asset('js/adminIssueTicket.js') }}"></script>
-  @endpush
