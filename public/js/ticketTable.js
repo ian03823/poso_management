@@ -19,16 +19,17 @@
       violationsByCatUrl: r?.dataset.violationsByCatUrl || null
     };
   }
-  
 
   /* ---------------- helpers ---------------- */
   const csrfToken = () => $('meta[name="csrf-token"]').attr('content') || '';
   const getSort = () => ($('#ticket-sort').val() || 'date_desc');
+
+  // Loader must not trap clicks unless active; we also toggle display to be extra safe
   const setLoading = (on) => {
     const ov = document.getElementById('ticketLoading');
     if (!ov) return;
-    if (on) { ov.classList.add('active'); }
-    else    { ov.classList.remove('active'); }
+    if (on) { ov.style.display = 'flex'; ov.classList.add('active'); }
+    else    { ov.classList.remove('active'); ov.style.display = 'none'; }
   };
 
   function readFiltersFromURL() {
@@ -43,7 +44,6 @@
   }
 
   function normalizeParams(params) {
-    // Ensure defaults
     return Object.assign({
       sort_option: getSort(),
       page: 1,
@@ -79,9 +79,7 @@
     $.get(C.ticketPartialUrl + '?' + $.param(opts))
       .done(html => {
         swapHtml($('#ticket-table'), html);
-        if (push) {
-          history.pushState(null, '', '/ticket?' + $.param(opts));
-        }
+        if (push) history.pushState(null, '', '/ticket?' + $.param(opts));
         renderActiveFilters();
       })
       .always(() => setLoading(false));
@@ -94,13 +92,13 @@
       title: msg || 'Updated', timer: 1500, showConfirmButton: false
     });
   }
+
   function hideFilterModalSafely() {
     const el = document.getElementById('ticketFilterModal');
     if (!el) return;
     if (window.bootstrap?.Modal) {
       window.bootstrap.Modal.getOrCreateInstance(el).hide();
     } else {
-      // Hard fallback if BS not present
       document.body.classList.remove('modal-open');
       document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
     }
@@ -120,8 +118,7 @@
     if (el && window.bootstrap?.Modal) window.bootstrap.Modal.getOrCreateInstance(el).hide();
   });
 
-
-  // Maintain previous state so we can revert selects on cancel/error
+  /* ---------------- status helpers ---------------- */
   let _lastSelect = null;
   let _lastValue  = null;
   function revertSelect() {
@@ -129,7 +126,6 @@
     _lastSelect = null; _lastValue = null;
   }
 
-  // POST status as Promise (for Swal preConfirm)
   function postStatusPromise(ticketId, data) {
     const C = cfg();
     return new Promise((resolve, reject) => {
@@ -221,13 +217,11 @@
     if (!document.getElementById('ticket-table')) return;
     const hasTable = !!document.querySelector('#ticket-table table');
     const params = readFiltersFromURL();
-    // If table not rendered (SSR partial omitted), fetch.
     if (!hasTable) {
       loadTable(params, /*push=*/false);
       $('#ticket-sort').val(params.sort_option || 'date_desc');
       history.replaceState(null, '', location.pathname + location.search);
     } else {
-      // If present, still reflect filters chips & sort selector
       $('#ticket-sort').val(params.sort_option || 'date_desc');
       renderActiveFilters();
     }
@@ -327,9 +321,7 @@
       category: $('#filter-category').val() || '',
       violation_id: $('#filter-violation').val() || ''
     };
-    // Close modal safely in SPA
     hideFilterModalSafely();
-    // Reload table with filters (page 1, keep current sort)
     loadTable(Object.assign({ page: 1, sort_option: getSort() }, filters), /*push=*/true);
   });
 

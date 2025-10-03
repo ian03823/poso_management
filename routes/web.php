@@ -193,15 +193,16 @@ Route::middleware('violator')->group(function () {
         ->name('violator.password.update');
 });
 // Forgot password (Violator) – multi-step
-Route::get('/violator/password/forgot', [ViolatorForgotPasswordController::class,'showRequest'])->name('violator.password.forgot.request');
-Route::post('/violator/password/forgot', [ViolatorForgotPasswordController::class,'submitEmail'])->name('violator.password.forgot.submit');
-
-Route::get('/violator/password/confirm', [ViolatorForgotPasswordController::class,'showConfirm'])->name('violator.password.forgot.confirm'); // shows name/address
-Route::post('/violator/password/send-otp', [ViolatorForgotPasswordController::class,'sendOtp'])->name('violator.password.forgot.sendOtp');
-
-Route::get('/violator/password/enter-otp', [ViolatorForgotPasswordController::class,'showEnterOtp'])->name('violator.password.forgot.otp');
-Route::post('/violator/password/verify-otp', [ViolatorForgotPasswordController::class,'verifyOtp'])->name('violator.password.forgot.verify');
-
-Route::get('/violator/password/reset', [ViolatorForgotPasswordController::class,'showReset'])->name('violator.password.forgot.reset');
-Route::post('/violator/password/reset', [ViolatorForgotPasswordController::class,'reset'])->name('violator.password.forgot.update');
-
+Route::middleware('throttle:10,1')->group(function () {
+    Route::get('/violator/password/forgot',  [ViolatorForgotPasswordController::class,'showRequest'])->name('violator.password.forgot.request');
+    Route::post('/violator/password/forgot', [ViolatorForgotPasswordController::class,'submitEmail'])->name('violator.password.forgot.submit');
+    Route::get('/violator/password/confirm', [ViolatorForgotPasswordController::class,'showConfirm'])->name('violator.password.forgot.confirm');
+    Route::post('/violator/password/send-otp', [ViolatorForgotPasswordController::class,'sendOtp'])->name('violator.password.forgot.sendOtp');
+    Route::get('/violator/password/enter-otp', [ViolatorForgotPasswordController::class,'showEnterOtp'])->name('violator.password.forgot.otp');
+    Route::post('/violator/password/verify-otp', [ViolatorForgotPasswordController::class,'verifyOtp'])->name('violator.password.forgot.verify');
+    Route::get('/violator/password/reset', [ViolatorForgotPasswordController::class,'showReset'])->name('violator.password.forgot.reset');
+    Route::post('/violator/password/reset', [ViolatorForgotPasswordController::class,'reset'])->name('violator.password.forgot.update');
+});
+Route::fallback(function () {
+    abort(404);
+});

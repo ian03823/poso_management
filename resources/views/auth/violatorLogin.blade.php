@@ -83,6 +83,9 @@
           Log In
         </button>
       </form>
+      <div class="text-end mt-2">
+        <a href="{{ route('violator.password.forgot.request') }}" class="small">Forgot password?</a>
+      </div>
 
     </div>
   </div>
