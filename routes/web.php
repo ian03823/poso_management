@@ -34,18 +34,36 @@ use Illuminate\Support\Facades\Http;
 Route::get('/ping', fn() => response()->noContent());
 
 Route::get('/_diag/ocr', function () {
-    $ok = [];
-    foreach ([
-        '/wasm/tesseract-core.wasm.js',
-        '/wasm/tesseract-core.wasm',
-        '/wasm/eng.traineddata.gz',
-        '/vendor/tesseract/tesseract.min.js',
-        '/vendor/tesseract/worker.min.js',
-    ] as $u) {
-        $p = public_path(ltrim($u, '/'));
-        $ok[$u] = file_exists($p) ? 'OK (exists)' : 'MISSING';
+    // 1) Check actual files on disk (under public/vendor/tesseract)
+    $files = [
+        'vendor/tesseract/tesseract-core-simd-lstm.wasm.js',
+        'vendor/tesseract/tesseract-core-simd-lstm.wasm',
+        'vendor/tesseract/eng.traineddata.gz',
+        'vendor/tesseract/tesseract.min.js',
+        'vendor/tesseract/worker.min.js',
+    ];
+    $disk = [];
+    foreach ($files as $rel) {
+        $disk[$rel] = file_exists(public_path($rel)) ? 'OK (exists)' : 'MISSING';
     }
-    return response()->json($ok);
+
+    // 2) Check the route endpoints over HTTP (should be 200 if routes are wired)
+    $urls = [
+        'simd_js'   => url('/wasm/tesseract-core-simd-lstm.wasm.js'),
+        'simd_wasm' => url('/wasm/tesseract-core-simd-lstm.wasm'),
+        'eng_gz'    => url('/wasm/eng.traineddata.gz'),
+    ];
+    $http = [];
+    foreach ($urls as $k => $u) {
+        try {
+            $res = Http::timeout(8)->get($u);
+            $http[$k] = 'HTTP ' . $res->status();
+        } catch (\Throwable $e) {
+            $http[$k] = 'ERROR: ' . $e->getMessage();
+        }
+    }
+
+    return response()->json(['disk' => $disk, 'http' => $http, 'urls' => $urls]);
 });
 
 Route::get('/_diag/gas', function () {
@@ -103,6 +121,7 @@ Route::middleware('enforcer')->group(function () {
     Route::get('enforcer/change/password', [EnforcerAuthController::class, 'showChangePassword'])->name('enforcer.password.edit');
     Route::post('enforcer/change/password', [EnforcerAuthController::class, 'changePassword'])->name('enforcer.password.update');
 });
+
 Route::get('/wasm/tesseract-core-simd-lstm.wasm.js', fn () =>
     response()->file(public_path('vendor/tesseract/tesseract-core-simd-lstm.wasm.js'), [
         'Content-Type'  => 'application/javascript',

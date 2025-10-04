@@ -30,7 +30,6 @@
     workerPath: "/vendor/tesseract/worker.min.js",
     // Use the SIMD-LSTM loader for speed; fallback to non-SIMD if needed
     corePathSIMD: "/wasm/tesseract-core-simd-lstm.wasm.js",
-    corePathFallback: "/wasm/tesseract-core.wasm.js", // if you ever add it; else will 404 silently
     langPath: "/wasm",
     gzip: true
   };
@@ -52,7 +51,7 @@
       const tryCreate = async (corePath) => {
         const w = await Tesseract.createWorker({
           workerPath: TESS.workerPath,
-          corePath,
+          corePath: TESS.corePathSIMD,
           langPath: TESS.langPath,
           gzip: TESS.gzip,
           logger: m => (m?.status ? ocrStatus(`OCR: ${m.status} ${Math.round((m.progress||0)*100)}%`) : null)
