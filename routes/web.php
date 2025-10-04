@@ -33,13 +33,19 @@ use Illuminate\Support\Facades\Http;
 /* health check used by isReallyOnline() */
 Route::get('/ping', fn() => response()->noContent());
 
-Route::get('/_diag/otp-driver', function () {
-    return response()->json([
-        'OTP_DRIVER' => env('OTP_DRIVER'),
-        'config.driver' => config('otp.driver'),
-        'webapp.url' => config('otp.gmail_webapp.url'),
-        'has.secret' => config('otp.gmail_webapp.secret') ? true : false,
-    ]);
+Route::get('/_diag/ocr', function () {
+    $ok = [];
+    foreach ([
+        '/wasm/tesseract-core.wasm.js',
+        '/wasm/tesseract-core.wasm',
+        '/wasm/eng.traineddata.gz',
+        '/vendor/tesseract/tesseract.min.js',
+        '/vendor/tesseract/worker.min.js',
+    ] as $u) {
+        $p = public_path(ltrim($u, '/'));
+        $ok[$u] = file_exists($p) ? 'OK (exists)' : 'MISSING';
+    }
+    return response()->json($ok);
 });
 
 Route::get('/_diag/gas', function () {
@@ -96,19 +102,34 @@ Route::middleware('enforcer')->group(function () {
     Route::get('violators/{id}', [TicketController::class, 'show'])->name('enforcer.violators.show');
     Route::get('enforcer/change/password', [EnforcerAuthController::class, 'showChangePassword'])->name('enforcer.password.edit');
     Route::post('enforcer/change/password', [EnforcerAuthController::class, 'changePassword'])->name('enforcer.password.update');
-    Route::get('/wasm/tesseract-core.wasm', function () {
-    return response()->file(public_path('vendor/tesseract/tesseract-core.wasm'), [
-        'Content-Type' => 'application/wasm',
-        'Cache-Control' => 'public, max-age=31536000'
-        ]);
-    });
-    Route::get('/wasm/eng.traineddata.gz', function () {
-        return response()->file(public_path('vendor/tesseract/eng.traineddata.gz'), [
-            'Content-Type' => 'application/gzip',
-            'Cache-Control' => 'public, max-age=31536000'
-        ]);
-    });
 });
+Route::get('/wasm/tesseract-core-simd-lstm.wasm.js', fn () =>
+    response()->file(public_path('vendor/tesseract/tesseract-core-simd-lstm.wasm.js'), [
+        'Content-Type'  => 'application/javascript',
+        'Cache-Control' => 'public, max-age=31536000',
+    ])
+);
+Route::get('/wasm/tesseract-core-simd-lstm.wasm', fn () =>
+    response()->file(public_path('vendor/tesseract/tesseract-core-simd-lstm.wasm'), [
+        'Content-Type'  => 'application/wasm',
+        'Cache-Control' => 'public, max-age=31536000',
+    ])
+);
+
+// Optional fallback to non-SIMD build if ever needed
+Route::get('/wasm/tesseract-core.wasm', fn () =>
+    response()->file(public_path('vendor/tesseract/tesseract-core.wasm'), [
+        'Content-Type'  => 'application/wasm',
+        'Cache-Control' => 'public, max-age=31536000',
+    ])
+);
+
+Route::get('/wasm/eng.traineddata.gz', fn () =>
+    response()->file(public_path('vendor/tesseract/eng.traineddata.gz'), [
+        'Content-Type'  => 'application/gzip',
+        'Cache-Control' => 'public, max-age=31536000',
+    ])
+);
 
 // Admin protected routes
 Route::middleware('admin')->group(function () {

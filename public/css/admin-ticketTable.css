@@ -67,10 +67,6 @@
   #ticketContainer .spinner-border {
     width:2.5rem; height:2.5rem;
   }
-  /* Modal polish */
-#ticketFilterModal .modal-content { border-radius: 16px; }
-#ticketFilterModal .modal-header { border-bottom: 0; }
-#ticketFilterModal .modal-footer { border-top: 0; }
 
 /* Fade swap */
 .swap-area.fade-in { animation: fadeIn .18s ease forwards; }

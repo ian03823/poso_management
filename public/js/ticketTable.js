@@ -1,8 +1,7 @@
-/* ticketTable.js — Admin Issued Tickets
-   - SweetAlert status changes (Paid ref#, Admin PW for others)
-   - Filter modal (status + category -> violations)
+/* ticketTable.js — Bootstrap-free filters (SweetAlert2), SPA-safe
+   - Filter dialog via Swal (no Bootstrap modal = no backdrops, no freeze)
+   - Status change via Swal (Paid -> ref#, Others -> admin PW)
    - AJAX partial reloads with fade, sort, pagination, pushState
-   - SPA-safe: single bind guard, modal cleanup on navigation
 */
 (function ($) {
   if (window.__adminTicketTableInit) return;
@@ -16,20 +15,19 @@
       paidStatusId: Number(r?.dataset.paidStatusId || 0),
       statusUpdateUrl: r?.dataset.statusUpdateUrl || '/ticket',
       ticketPartialUrl: r?.dataset.ticketPartialUrl || null,
-      violationsByCatUrl: r?.dataset.violationsByCatUrl || null
+      violationsByCatUrl: r?.dataset.violationsByCatUrl || null,
+      categories: safeParseJSON(r?.dataset.violationCategories) || [] // array of strings
     };
   }
+  function safeParseJSON(s) { try { return s ? JSON.parse(s) : null; } catch { return null; } }
 
   /* ---------------- helpers ---------------- */
   const csrfToken = () => $('meta[name="csrf-token"]').attr('content') || '';
   const getSort = () => ($('#ticket-sort').val() || 'date_desc');
-
-  // Loader must not trap clicks unless active; we also toggle display to be extra safe
   const setLoading = (on) => {
     const ov = document.getElementById('ticketLoading');
     if (!ov) return;
-    if (on) { ov.style.display = 'flex'; ov.classList.add('active'); }
-    else    { ov.classList.remove('active'); ov.style.display = 'none'; }
+    ov.style.display = on ? 'flex' : 'none';
   };
 
   function readFiltersFromURL() {
@@ -58,7 +56,7 @@
     setTimeout(() => {
       $el.html(html);
       $el.removeClass('fade-out').addClass('fade-in');
-    }, 140);
+    }, 120);
   }
 
   function renderActiveFilters() {
@@ -84,6 +82,7 @@
       })
       .always(() => setLoading(false));
   }
+  window.loadTicketTable = loadTable; // optional global if you need it elsewhere
 
   function toastOk(msg) {
     if (!window.Swal) return;
@@ -93,39 +92,7 @@
     });
   }
 
-  function hideFilterModalSafely() {
-    const el = document.getElementById('ticketFilterModal');
-    if (!el) return;
-    if (window.bootstrap?.Modal) {
-      window.bootstrap.Modal.getOrCreateInstance(el).hide();
-    } else {
-      document.body.classList.remove('modal-open');
-      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-    }
-  }
-
-  // Ensure the page isn’t blocked by loader or lingering backdrop
-  $(document).on('show.bs.modal', '#ticketFilterModal', function () {
-    setLoading(false); // make sure loader is off
-  });
-  $(document).on('hidden.bs.modal', '#ticketFilterModal', function () {
-    // belt & suspenders cleanup in SPA
-    document.body.classList.remove('modal-open');
-    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-  });
-  window.addEventListener('popstate', () => {
-    const el = document.getElementById('ticketFilterModal');
-    if (el && window.bootstrap?.Modal) window.bootstrap.Modal.getOrCreateInstance(el).hide();
-  });
-
-  /* ---------------- status helpers ---------------- */
-  let _lastSelect = null;
-  let _lastValue  = null;
-  function revertSelect() {
-    if (_lastSelect && _lastValue != null) _lastSelect.val(_lastValue);
-    _lastSelect = null; _lastValue = null;
-  }
-
+  // POST status as Promise (for Swal preConfirm)
   function postStatusPromise(ticketId, data) {
     const C = cfg();
     return new Promise((resolve, reject) => {
@@ -138,78 +105,6 @@
       .done(resolve)
       .fail(xhr => reject(xhr?.responseJSON?.message || 'Could not update status.'));
     });
-  }
-
-  async function promptReference(ticketId) {
-    if (window.Swal) {
-      const { isConfirmed } = await Swal.fire({
-        title: 'Enter Reference Number',
-        input: 'text',
-        inputLabel: 'Reference # (required for Paid)',
-        inputPlaceholder: 'e.g., OR-123456',
-        inputAttributes: { autocapitalize: 'off', autocorrect: 'off' },
-        showCancelButton: true,
-        confirmButtonText: 'Submit',
-        showLoaderOnConfirm: true,
-        preConfirm: async (refNo) => {
-          refNo = (refNo || '').trim();
-          if (!refNo) {
-            Swal.showValidationMessage('Reference number is required.');
-            return false;
-          }
-          try {
-            await postStatusPromise(ticketId, { status_id: cfg().paidStatusId, reference_number: refNo });
-          } catch (errMsg) {
-            Swal.showValidationMessage(errMsg);
-            return false;
-          }
-          return true;
-        },
-        allowOutsideClick: () => !Swal.isLoading()
-      });
-      return isConfirmed;
-    } else {
-      const ref = (prompt('Enter Reference Number:') || '').trim();
-      if (!ref) return false;
-      await postStatusPromise(ticketId, { status_id: cfg().paidStatusId, reference_number: ref });
-      return true;
-    }
-  }
-
-  async function promptPassword(ticketId, newStatus) {
-    if (window.Swal) {
-      const { isConfirmed } = await Swal.fire({
-        title: 'Admin Password Required',
-        input: 'password',
-        inputLabel: 'Enter password to confirm',
-        inputPlaceholder: 'Password',
-        inputAttributes: { autocapitalize: 'off', autocorrect: 'off' },
-        showCancelButton: true,
-        confirmButtonText: 'Confirm',
-        showLoaderOnConfirm: true,
-        preConfirm: async (pw) => {
-          pw = (pw || '').trim();
-          if (!pw) {
-            Swal.showValidationMessage('Password is required.');
-            return false;
-          }
-          try {
-            await postStatusPromise(ticketId, { status_id: newStatus, admin_password: pw });
-          } catch (errMsg) {
-            Swal.showValidationMessage(errMsg);
-            return false;
-          }
-          return true;
-        },
-        allowOutsideClick: () => !Swal.isLoading()
-      });
-      return isConfirmed;
-    } else {
-      const pw = (prompt('Enter admin password:') || '').trim();
-      if (!pw) return false;
-      await postStatusPromise(ticketId, { status_id: newStatus, admin_password: pw });
-      return true;
-    }
   }
 
   /* ---------------- initial load ---------------- */
@@ -243,6 +138,73 @@
   });
 
   /* ---------------- status change (SweetAlert) ---------------- */
+  let _lastSelect = null;
+  let _lastValue  = null;
+  function revertSelect() {
+    if (_lastSelect && _lastValue != null) _lastSelect.val(_lastValue);
+    _lastSelect = null; _lastValue = null;
+  }
+
+  async function promptReference(ticketId) {
+    if (!window.Swal) return false;
+    const { isConfirmed } = await Swal.fire({
+      title: 'Enter Reference Number',
+      input: 'text',
+      inputLabel: 'Reference # (required for Paid)',
+      inputPlaceholder: 'e.g., OR-123456',
+      inputAttributes: { autocapitalize: 'off', autocorrect: 'off' },
+      showCancelButton: true,
+      confirmButtonText: 'Submit',
+      showLoaderOnConfirm: true,
+      preConfirm: async (refNo) => {
+        refNo = (refNo || '').trim();
+        if (!refNo) {
+          Swal.showValidationMessage('Reference number is required.');
+          return false;
+        }
+        try {
+          await postStatusPromise(ticketId, { status_id: cfg().paidStatusId, reference_number: refNo });
+        } catch (errMsg) {
+          Swal.showValidationMessage(errMsg);
+          return false;
+        }
+        return true;
+      },
+      allowOutsideClick: () => !Swal.isLoading()
+    });
+    return isConfirmed;
+  }
+
+  async function promptPassword(ticketId, newStatus) {
+    if (!window.Swal) return false;
+    const { isConfirmed } = await Swal.fire({
+      title: 'Admin Password Required',
+      input: 'password',
+      inputLabel: 'Enter password to confirm',
+      inputPlaceholder: 'Password',
+      inputAttributes: { autocapitalize: 'off', autocorrect: 'off' },
+      showCancelButton: true,
+      confirmButtonText: 'Confirm',
+      showLoaderOnConfirm: true,
+      preConfirm: async (pw) => {
+        pw = (pw || '').trim();
+        if (!pw) {
+          Swal.showValidationMessage('Password is required.');
+          return false;
+        }
+        try {
+          await postStatusPromise(ticketId, { status_id: newStatus, admin_password: pw });
+        } catch (errMsg) {
+          Swal.showValidationMessage(errMsg);
+          return false;
+        }
+        return true;
+      },
+      allowOutsideClick: () => !Swal.isLoading()
+    });
+    return isConfirmed;
+  }
+
   $(document).on('change', '.status-select', async function () {
     const $sel      = $(this);
     const ticketId  = +$sel.data('ticket-id');
@@ -256,11 +218,8 @@
 
     try {
       let ok = false;
-      if (newStatus === paidId) {
-        ok = await promptReference(ticketId);
-      } else {
-        ok = await promptPassword(ticketId, newStatus);
-      }
+      if (newStatus === paidId) ok = await promptReference(ticketId);
+      else ok = await promptPassword(ticketId, newStatus);
 
       if (!ok) { revertSelect(); return; }
 
@@ -274,69 +233,112 @@
     }
   });
 
-  /* ---------------- filter modal wiring ---------------- */
-  // Open modal: prefill from URL and load violations if category is present
-  $(document).on('show.bs.modal', '#ticketFilterModal', function () {
-    const f = readFiltersFromURL();
-    $('#filter-status').val(f.status || '');
-    $('#filter-category').val(f.category || '');
+  /* ---------------- Filter dialog via SweetAlert2 (NO Bootstrap) ---------------- */
+  function filterDialogHTML(C, current) {
+    const catOptions = ['<option value="">All</option>']
+      .concat((C.categories || []).map(cat => {
+        const sel = (cat === current.category) ? ' selected' : '';
+        return `<option value="${String(cat)}"${sel}>${String(cat)}</option>`;
+      })).join('');
 
-    const $viol = $('#filter-violation');
-    $viol.prop('disabled', true).html('<option value="">All</option>');
+    return `
+      <div class="text-start">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Status</label>
+          <select id="sw-status" class="form-select">
+            <option value="" ${current.status===''?'selected':''}>All</option>
+            <option value="paid" ${current.status==='paid'?'selected':''}>Paid</option>
+            <option value="unpaid" ${current.status==='unpaid'?'selected':''}>Unpaid</option>
+            <option value="pending" ${current.status==='pending'?'selected':''}>Pending</option>
+            <option value="cancelled" ${current.status==='cancelled'?'selected':''}>Cancelled</option>
+          </select>
+        </div>
 
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Violation Category</label>
+          <select id="sw-category" class="form-select">
+            ${catOptions}
+          </select>
+        </div>
+
+        <div class="mb-1">
+          <label class="form-label fw-semibold">Violation</label>
+          <select id="sw-violation" class="form-select">
+            <option value="">All</option>
+          </select>
+          <div class="form-text">Choose a category first to load specific violations.</div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function openFilterDialog() {
     const C = cfg();
-    if (f.category && C.violationsByCatUrl) {
-      $.get(C.violationsByCatUrl, { category: f.category }).done(items => {
-        items.forEach(it => {
-          $viol.append(`<option value="${it.id}">${it.violation_name} (${it.violation_code})</option>`);
+    const current = readFiltersFromURL();
+
+    const { isConfirmed } = await Swal.fire({
+      title: 'Filter Tickets',
+      html: filterDialogHTML(C, current),
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: 'Apply',
+      width: 600,
+      willOpen: () => {
+        // load violations if a category is already chosen
+        const $v = $('#sw-violation');
+        $v.prop('disabled', true).html('<option value="">All</option>');
+      },
+      didOpen: () => {
+        // Bind change for category → fetch violations
+        $('#sw-category').off('change').on('change', function () {
+          const cat = $(this).val();
+          const $v = $('#sw-violation');
+          $v.prop('disabled', true).html('<option value="">All</option>');
+          if (!cat || !C.violationsByCatUrl) return;
+          $.get(C.violationsByCatUrl, { category: cat }).done(items => {
+            items.forEach(it => {
+              $('#sw-violation').append(
+                `<option value="${it.id}">${it.violation_name} (${it.violation_code})</option>`
+              );
+            });
+            $v.prop('disabled', false);
+          });
         });
-        $viol.prop('disabled', false);
-        if (f.violation_id) $viol.val(String(f.violation_id));
-      });
-    }
-  });
 
-  // Category change -> fetch violations
-  $(document).on('change', '#filter-category', function () {
-    const cat = $(this).val();
-    const $viol = $('#filter-violation');
-    $viol.prop('disabled', true).html('<option value="">All</option>');
-
-    const C = cfg();
-    if (!cat || !C.violationsByCatUrl) return;
-
-    $.get(C.violationsByCatUrl, { category: cat }).done(items => {
-      items.forEach(it => {
-        $viol.append(`<option value="${it.id}">${it.violation_name} (${it.violation_code})</option>`);
-      });
-      $viol.prop('disabled', false);
+        // If there is an existing category, trigger fetch and preselect violation
+        if (current.category) {
+          $('#sw-category').trigger('change');
+          const want = String(current.violation_id || '');
+          if (want) {
+            // wait a tick for the ajax to fill
+            setTimeout(() => $('#sw-violation').val(want), 200);
+          }
+        }
+      },
+      preConfirm: () => {
+        const filters = {
+          status: $('#sw-status').val() || '',
+          category: $('#sw-category').val() || '',
+          violation_id: $('#sw-violation').val() || ''
+        };
+        // keep current sort; reset to page 1
+        loadTable(Object.assign({ page: 1, sort_option: getSort() }, filters), true);
+      }
     });
-  });
 
-  // Apply filters
-  $(document).on('submit', '#ticket-filter-form', function (e) {
+    return isConfirmed;
+  }
+
+  // Open dialog when clicking Filter button (no data-bs-toggle anywhere)
+  $(document).on('click', '#btn-filter, #btn-ticket-filters', function (e) {
     e.preventDefault();
-    const filters = {
-      status: $('#filter-status').val() || '',
-      category: $('#filter-category').val() || '',
-      violation_id: $('#filter-violation').val() || ''
-    };
-    hideFilterModalSafely();
-    loadTable(Object.assign({ page: 1, sort_option: getSort() }, filters), /*push=*/true);
+    openFilterDialog();
   });
 
   // Reset filters
-  $(document).on('click', '#btn-reset-filters', function () {
-    $('#filter-status').val('');
-    $('#filter-category').val('');
-    $('#filter-violation').val('').prop('disabled', true);
-    loadTable({ sort_option: getSort(), page: 1, status: '', category: '', violation_id: '' }, /*push=*/true);
-  });
-
-  // SPA safety: close any open modal on history nav
-  window.addEventListener('popstate', () => {
-    const el = document.getElementById('ticketFilterModal');
-    if (el && window.bootstrap?.Modal) window.bootstrap.Modal.getOrCreateInstance(el).hide();
+  $(document).on('click', '#btn-reset-filters', function (e) {
+    e.preventDefault();
+    loadTable({ sort_option: getSort(), page: 1, status: '', category: '', violation_id: '' }, true);
   });
 
 })(jQuery);

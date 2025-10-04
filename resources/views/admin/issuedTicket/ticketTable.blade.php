@@ -7,7 +7,8 @@
   data-paid-status-id="{{ \App\Models\TicketStatus::where('name','paid')->value('id') }}"
   data-status-update-url="{{ url('ticket') }}"
   data-ticket-partial-url="{{ route('ticket.partial') }}"
-  data-violations-by-cat-url="{{ route('violations.byCategory') }}">
+  data-violations-by-cat-url="{{ route('violations.byCategory') }}"
+  data-violation-categories='@json($violationCategories)'>
 
   {{-- local loader used by ticketTable.js during partial refreshes --}}
   <div class="loading-overlay" id="ticketLoading" style="display:none;">
@@ -22,7 +23,7 @@
     </div>
 
     <div class="d-flex align-items-center gap-2">
-      <button class="btn btn-outline-secondary" id="btn-filter" data-bs-toggle="modal" data-bs-target="#ticketFilterModal">
+      <button class="btn btn-outline-secondary" id="btn-filter">
         <i class="bi bi-funnel me-2"></i>Filter
       </button>
       <button class="btn btn-outline-dark" id="btn-reset-filters">
@@ -56,55 +57,7 @@
     </div>
   </div>
 
-  {{-- Filter Modal --}}
-  <div class="modal fade" id="ticketFilterModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-md">
-      <div class="modal-content shadow-lg">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-funnel me-2"></i>Filter Tickets</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <form id="ticket-filter-form">
-          <div class="modal-body">
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Status</label>
-              <select name="status" id="filter-status" class="form-select">
-                <option value="">All</option>
-                <option value="paid">Paid</option>
-                <option value="unpaid">Unpaid</option>
-                <option value="pending">Pending</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Violation Category</label>
-              <select name="category" id="filter-category" class="form-select">
-                <option value="">All</option>
-                @foreach($violationCategories as $cat)
-                  <option value="{{ $cat }}">{{ $cat }}</option>
-                @endforeach
-              </select>
-            </div>
-
-            <div class="mb-1">
-              <label class="form-label fw-semibold">Violation</label>
-              <select name="violation_id" id="filter-violation" class="form-select" disabled>
-                <option value="">All</option>
-              </select>
-              <div class="form-text">Choose a category first to load specific violations.</div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
-            <button type="submit" class="btn btn-success">
-              <i class="bi bi-check2 me-1"></i>Apply Filters
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
+  {{-- NOTE: Bootstrap modal removed. We now use SweetAlert2 for filters. --}}
 
   @php $paidStatusId = \App\Models\TicketStatus::where('name','paid')->value('id'); @endphp
 </div>

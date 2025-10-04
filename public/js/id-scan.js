@@ -1,94 +1,85 @@
-// public/js/id-scan.js  (OCR-only, direct /vendor paths)
+// public/js/id-scan.js — mobile-first OCR scanner (2025-10-04)
 (() => {
-  console.log('%cID-SCAN v2025-08-30-final','color:#0a0');
+  console.log('%cID-SCAN mobile v2025-10-04','color:#0a0');
 
   // ---------- Utils ----------
+  const q = (sel, r=document) => r.querySelector(sel);
   const notify = (title, text, icon='info') => {
     if (window.Swal) Swal.fire({ icon, title, text });
     else alert(`${title}\n${text||''}`);
   };
   async function closeScanModal() {
-    const m = document.getElementById('scanIdModal');
-    try {
-      if (m && window.bootstrap?.Modal) {
-        window.bootstrap.Modal.getOrCreateInstance(m).hide();
-      }
-    } catch (_) {}
-
-    // manual fallback cleanup
-    if (m) {
-      m.classList.remove('show');
-      m.setAttribute('aria-hidden','true');
-      m.style.display='none';
-    }
+    const m = q('#scanIdModal');
+    try { window.bootstrap?.Modal.getOrCreateInstance(m).hide(); } catch {}
+    // fallback cleanup (in case)
+    if (m) { m.classList.remove('show'); m.setAttribute('aria-hidden','true'); m.style.display='none'; }
     document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
     document.body.classList.remove('modal-open');
     document.body.style.removeProperty('padding-right');
   }
 
-  // Modal lifecycle
-  const modalEl = document.getElementById('scanIdModal');
-  if (modalEl) {
-    if (window.bootstrap?.Modal) {
-      modalEl.addEventListener('shown.bs.modal', () => { startCamera(); getWorker().catch(()=>{}); });
-      modalEl.addEventListener('hidden.bs.modal', async () => { await stopCamera(); });
-    } else {
-      // fallback if Bootstrap JS isn’t present
-      document.getElementById('openScanId')?.addEventListener('click', () => { startCamera(); getWorker().catch(()=>{}); });
-      document.getElementById('scan-close')?.addEventListener('click', async () => { await stopCamera(); closeScanModal(); });
-    }
-  }
-  const setValSmart = (id, name, val) => {
-    if (val == null) return;
-    const v = String(val).trim();
-    let el = document.getElementById(id);
-    if (!el) el = document.querySelector(`[name="${name}"]`);
-    if (el && 'value' in el) el.value = v;
+  // ---------- Status ----------
+  const statusEl = q('#ocr-status');
+  const ocrStatus = (msg, kind='muted') => {
+    if (statusEl) statusEl.innerHTML = `<span class="text-${kind}">${msg||''}</span>`;
   };
-  function fillForm({ firstName, middleName, lastName, address, licenseNumber, birthdate }) {
-    setValSmart('first_name','first_name',firstName);
-    setValSmart('middle_name','middle_name',middleName);
-    setValSmart('last_name','last_name',lastName);
-    setValSmart('address','address',address);
-    setValSmart('license_num','license_num',licenseNumber);   // your field
-    if (birthdate) setValSmart('birthdate','birthdate',birthdate);
-  }
 
-  // ---------- Tesseract worker (DIRECT vendor paths) ----------
-  // These are your actual files under /public/vendor/tesseract
+  // ---------- Tesseract config ----------
   const TESS = {
+    // Load worker from vendor (it references tesseract.min.js already included)
     workerPath: "/vendor/tesseract/worker.min.js",
-    corePath:   "/vendor/tesseract/tesseract-core.wasm",     // <-- DIRECT
-    langPath:   "/vendor/tesseract",                          // <-- DIRECT
-    gzip:       true
+    // Use the SIMD-LSTM loader for speed; fallback to non-SIMD if needed
+    corePathSIMD: "/wasm/tesseract-core-simd-lstm.wasm.js",
+    corePathFallback: "/wasm/tesseract-core.wasm.js", // if you ever add it; else will 404 silently
+    langPath: "/wasm",
+    gzip: true
   };
+
   let worker = null, workerReady = null;
-  const ocrStatus = (msg) => {
-    const el = document.getElementById('ocr-status');
-    if (el) el.innerHTML = `<small class="text-muted">${msg||''}</small>`;
-  };
   async function getWorker() {
     if (worker) return worker;
     if (workerReady) return workerReady;
+    if (!window.Tesseract) {
+      ocrStatus('Tesseract not loaded', 'danger');
+      throw new Error('Tesseract global missing');
+    }
+
     ocrStatus('Loading OCR…');
-    if (window.Tesseract && Tesseract.setLogging) Tesseract.setLogging(true); // verbose
+    if (Tesseract.setLogging) Tesseract.setLogging(false);
 
     workerReady = (async () => {
-      const w = await Tesseract.createWorker({
-        workerPath: TESS.workerPath,
-        corePath:   TESS.corePath,
-        langPath:   TESS.langPath,
-        gzip:       TESS.gzip
-      });
-      await w.loadLanguage('eng');
-      await w.initialize('eng');
-      await w.setParameters({
-        tessedit_pageseg_mode: '6',       // single uniform text block
-        preserve_interword_spaces: '1',
-        user_defined_dpi: '300'
-      });
-      worker = w;
-      ocrStatus('Ready');
+      // prefer SIMD core; if it fails (older iOS), try fallback
+      const tryCreate = async (corePath) => {
+        const w = await Tesseract.createWorker({
+          workerPath: TESS.workerPath,
+          corePath,
+          langPath: TESS.langPath,
+          gzip: TESS.gzip,
+          logger: m => (m?.status ? ocrStatus(`OCR: ${m.status} ${Math.round((m.progress||0)*100)}%`) : null)
+        });
+        await w.loadLanguage('eng');
+        await w.initialize('eng');
+        await w.setParameters({
+          tessedit_pageseg_mode: '6',          // uniform block of text
+          preserve_interword_spaces: '1',
+          user_defined_dpi: '300'
+        });
+        return w;
+      };
+
+      try {
+        worker = await tryCreate(TESS.corePathSIMD);
+      } catch (e) {
+        console.warn('SIMD core failed, retrying non-SIMD…', e);
+        try {
+          worker = await tryCreate(TESS.corePathFallback);
+        } catch (e2) {
+          ocrStatus('Failed to init OCR (core)', 'danger');
+          throw e2;
+        }
+      }
+
+      ocrStatus('OCR ready', 'success');
       return worker;
     })();
 
@@ -96,27 +87,31 @@
   }
 
   // ---------- Camera ----------
-  let stream = null, devices = [], currentIdx = -1;
+  let stream = null, devices = [], currentIdx = -1, videoTrack = null, hasTorch = false;
+
   async function listCameras() {
     try {
       const all = await navigator.mediaDevices.enumerateDevices();
       return all.filter(d => d.kind === 'videoinput');
     } catch { return []; }
   }
+
   function constraintsFor(deviceId) {
-    const v = {
+    const video = {
       width:  { ideal: 1920 },
       height: { ideal: 1080 },
-      facingMode: 'environment',
-      focusMode: 'continuous'
+      facingMode: { ideal: 'environment' },
+      // NB: focusMode isn't standard everywhere; some browsers/phones still honor it
+      advanced: [{ focusMode: 'continuous' }]
     };
-    return deviceId ? { audio:false, video:{ ...v, deviceId:{ exact: deviceId } } }
-                    : { audio:false, video:v };
+    const c = deviceId ? { audio:false, video:{ ...video, deviceId:{ exact: deviceId } } }
+                       : { audio:false, video };
+    return c;
   }
+
   async function startCamera(next=false) {
     await stopCamera();
     if (!devices.length) devices = await listCameras();
-
     if (devices.length) {
       if (currentIdx === -1) {
         const back = devices.findIndex(d => /back|rear|environment/i.test(d.label));
@@ -127,61 +122,88 @@
     }
 
     const deviceId = devices[currentIdx]?.deviceId;
+    const v = q('#ocr-video');
     try {
       stream = await navigator.mediaDevices.getUserMedia(constraintsFor(deviceId));
-      const v = document.getElementById('ocr-video');
-      v.srcObject = stream;
-      await new Promise(res => (v.onloadedmetadata = () => res()));
-      await v.play();
     } catch (e) {
-      console.warn('camera error', e);
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:true });
-        const v = document.getElementById('ocr-video');
-        v.srcObject = stream; await v.play();
-      } catch (e2) {
-        notify('Camera error','Could not open camera. Check HTTPS & permissions.','warning');
-      }
+      console.warn('GUM error, retry generic video', e);
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:true }); }
+      catch (e2) { notify('Camera error','Check HTTPS & permissions.','warning'); return; }
     }
-  }
-  async function stopCamera() {
-    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+
+    v.srcObject = stream;
+    await new Promise(res => (v.onloadedmetadata = () => res()));
+    await v.play();
+
+    // track refs for torch/zoom
+    videoTrack = stream.getVideoTracks()[0] || null;
+    hasTorch = false;
+    try {
+      const caps = videoTrack?.getCapabilities?.();
+      hasTorch = !!(caps && 'torch' in caps);
+      q('#ocr-torch')?.classList.toggle('disabled', !hasTorch);
+    } catch { q('#ocr-torch')?.classList.add('disabled'); }
   }
 
-  // ---------- Preprocess (contrast + threshold) ----------
+  async function stopCamera() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null; videoTrack = null; hasTorch = false;
+  }
+
+  async function toggleTorch() {
+    if (!videoTrack || !videoTrack.getCapabilities) return;
+    const caps = videoTrack.getCapabilities();
+    if (!caps.torch) return;
+    const settings = videoTrack.getSettings();
+    const on = !settings.torch;
+    try { await videoTrack.applyConstraints({ advanced: [{ torch: on }] }); }
+    catch (e) { console.warn('Torch toggle failed', e); }
+  }
+
+  // ---------- Preprocess (light but effective) ----------
   function preprocess(canvas) {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const { width, height } = canvas;
+
+    // downscale to denoise/speed
+    const maxW = 1600;
+    if (width > maxW) {
+      const scale = maxW / width;
+      const tmp = document.createElement('canvas');
+      tmp.width = Math.floor(width * scale);
+      tmp.height = Math.floor(height * scale);
+      tmp.getContext('2d').drawImage(canvas, 0, 0, tmp.width, tmp.height);
+      canvas.width = tmp.width; canvas.height = tmp.height;
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(tmp, 0, 0);
+    }
+
     const img = ctx.getImageData(0,0,canvas.width,canvas.height);
-    const d = img.data;
-    let min=255,max=0;
-    const gray = new Uint8ClampedArray(d.length/4);
-    for (let i=0,j=0;i<d.length;i+=4,j++){
-      const g = 0.2126*d[i] + 0.7152*d[i+1] + 0.0722*d[i+2];
-      gray[j]=g; if(g<min)min=g; if(g>max)max=g;
+    const d = img.data, hist = new Uint32Array(256);
+
+    for (let i=0;i<d.length;i+=4) {
+      const g = (0.2126*d[i] + 0.7152*d[i+1] + 0.0722*d[i+2]) | 0;
+      d[i]=d[i+1]=d[i+2]=g; hist[g]++;
     }
-    const span=Math.max(1,max-min), gamma=0.9;
-    const hist=new Uint32Array(256);
-    for (let j=0;j<gray.length;j++){
-      let v=(gray[j]-min)*(255/span);
-      v=255*Math.pow(v/255,gamma); hist[v|0]++;
-    }
-    let sum=0,sumB=0,wB=0,wF=0,maxBetween=0,th=127,total=gray.length;
-    for(let t=0;t<256;t++) sum+=t*hist[t];
-    for(let t=0;t<256;t++){
-      wB+=hist[t]; if(!wB)continue;
-      wF=total-wB; if(!wF)break;
+
+    // Otsu threshold
+    let sum=0,sumB=0,wB=0,wF=0,max=0,th=127,total=d.length/4;
+    for (let t=0;t<256;t++) sum+=t*hist[t];
+    for (let t=0;t<256;t++){
+      wB+=hist[t]; if(!wB) continue;
+      wF=total-wB; if(!wF) break;
       sumB+=t*hist[t];
-      const mB=sumB/wB,mF=(sum-sumB)/wF,between=wB*wF*(mB-mF)*(mB-mF);
-      if(between>maxBetween){maxBetween=between; th=t;}
+      const mB=sumB/wB, mF=(sum-sumB)/wF, between=wB*wF*(mB-mF)*(mB-mF);
+      if (between>max){ max=between; th=t; }
     }
     for (let i=0;i<d.length;i+=4){
-      const v = d[i]*0.2126 + d[i+1]*0.7152 + d[i+2]*0.0722;
-      const t = v>th?255:0; d[i]=d[i+1]=d[i+2]=t;
+      const v = d[i]; const t = v>th ? 255 : 0;
+      d[i]=d[i+1]=d[i+2]=t;
     }
     ctx.putImageData(img,0,0);
   }
 
-  // ---------- PH ID parsing ----------
+  // ---------- PH ID parsing (kept from your version) ----------
   function parseOCRText(raw) {
     const text=(raw||'').replace(/\u00A0/g,' ').replace(/[|]/g,' ');
     const lines=text.split('\n').map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);
@@ -243,46 +265,80 @@
     return { firstName, middleName, lastName, address, licenseNumber, birthdate };
   }
 
+  const setValSmart = (id, name, val) => {
+    if (val == null) return;
+    const v = String(val).trim();
+    let el = document.getElementById(id);
+    if (!el) el = document.querySelector(`[name="${name}"]`);
+    if (el && 'value' in el) el.value = v;
+  };
+  function fillForm({ firstName, middleName, lastName, address, licenseNumber, birthdate }) {
+    setValSmart('first_name','first_name',firstName);
+    setValSmart('middle_name','middle_name',middleName);
+    setValSmart('last_name','last_name',lastName);
+    setValSmart('address','address',address);
+    setValSmart('license_num','license_num',licenseNumber);
+    if (birthdate) setValSmart('birthdate','birthdate',birthdate);
+  }
+
   // ---------- Capture & OCR ----------
   async function captureAndOCR() {
-    const v=document.getElementById('ocr-video');
-    if(!v || !v.videoWidth) return notify('Hold up','Camera not ready yet.','info');
+    const v = q('#ocr-video');
+    if (!v || !v.videoWidth) return notify('Hold up','Camera not ready yet.','info');
 
-    const c=document.getElementById('ocr-canvas');
-    c.width=v.videoWidth; c.height=v.videoHeight;
-    const ctx=c.getContext('2d'); ctx.drawImage(v,0,0,c.width,c.height);
+    const c = q('#ocr-canvas');
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(v, 0, 0, c.width, c.height);
     preprocess(c);
 
     ocrStatus('Reading…');
-    const w=await getWorker();
-    let text='';
-    try { const r=await w.recognize(c); text=r?.data?.text||''; }
-    catch(e){ console.error('Tesseract error',e); notify('OCR error','Could not read text.', 'warning'); ocrStatus(''); return; }
-    ocrStatus('');
+    let text = '';
+    try {
+      const w = await getWorker();
+      const r = await w.recognize(c);
+      text = r?.data?.text || '';
+    } catch (e) {
+      console.error('Tesseract error', e);
+      ocrStatus('OCR error (see console)', 'danger');
+      notify('OCR error','Could not read text. Check Tesseract paths & console.','warning');
+      return;
+    } finally {
+      ocrStatus('');
+    }
 
-    const dbg=document.getElementById('ocr-debug'); if(dbg) dbg.textContent=text;
-    const parsed=parseOCRText(text);
+    const parsed = parseOCRText(text);
     fillForm(parsed);
-    notify('Captured!','Fields have been auto-filled from the ID.','success');
 
-    await stopCamera();
-    await closeScanModal();
+    const anyField = parsed.firstName || parsed.lastName || parsed.licenseNumber || parsed.birthdate || parsed.address;
+    if (anyField) {
+      notify('Captured!','Fields have been auto-filled from the ID.','success');
+      await stopCamera();
+      await closeScanModal();
+    } else {
+      notify('No readable text','Try again: fill the frame, steady hands, use flash.','info');
+    }
   }
 
-  // ---------- Modal / events ----------
-  const modal=document.getElementById('scanIdModal');
-  if(modal){
-    modal.addEventListener('shown.bs.modal', ()=>{ startCamera(); getWorker().catch(()=>{}); });
-    modal.addEventListener('hidden.bs.modal', async ()=>{ await stopCamera(); closeScanModal(); });
+  // ---------- Modal wiring ----------
+  const modalEl = q('#scanIdModal');
+  if (modalEl) {
+    modalEl.addEventListener('shown.bs.modal', () => { startCamera(); getWorker().catch(()=>{}); });
+    modalEl.addEventListener('hidden.bs.modal', async () => { await stopCamera(); });
+  } else {
+    // Fallback if BS isn't present for some reason
+    q('#openScanId')?.addEventListener('click', () => { startCamera(); getWorker().catch(()=>{}); });
+    q('#scan-close')?.addEventListener('click', async () => { await stopCamera(); closeScanModal(); });
   }
-  document.getElementById('ocr-capture')?.addEventListener('click', captureAndOCR);
-  document.getElementById('ocr-switch')?.addEventListener('click', async ()=>{ await startCamera(true); });
+  q('#ocr-capture')?.addEventListener('click', captureAndOCR);
+  q('#ocr-switch')?.addEventListener('click', async () => { await startCamera(true); });
+  q('#ocr-torch')?.addEventListener('click', async () => { await toggleTorch(); });
 
-  // console smoke (await in console: await window.ocrSmoke())
+  // Debug helper
   window.ocrSmoke = async () => {
     const w = await getWorker();
     const tiny="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAPElEQVQYV2P8z8Dwn4EIwDiQkJAFGJgYjKRDUMiEQg0QW0gGmQYQ0jQYBzYkCqCw0QBrYwBgaQkAE3AigAAbJjB5nJ8l1QAAAABJRU5ErkJggg==";
     const r=await w.recognize(tiny);
-    return (r?.data?.text||'').trim(); // expect "TEST"
+    return (r?.data?.text||'').trim();
   };
 })();

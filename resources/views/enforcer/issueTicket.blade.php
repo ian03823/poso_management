@@ -198,42 +198,87 @@
 <div class="modal fade" id="scanIdModal" tabindex="-1" aria-labelledby="scanIdModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
     <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title fw-semibold" id="scanIdModalLabel">Scan Violator ID (OCR)</h5>
+      <div class="modal-header py-2">
+        <h5 class="modal-title fw-semibold" id="scanIdModalLabel">Scan Violator ID</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="scan-close"></button>
       </div>
 
-      <div class="modal-body">
+      <div class="modal-body p-0">
         <style>
-          .camera-box{display:grid;place-items:center;width:100%}
-          .camera-frame{width:min(92vw,520px);border-radius:14px;overflow:hidden;
-            box-shadow:0 8px 24px rgba(0,0,0,.15);background:#000}
-          .camera-frame video{width:100%;height:auto;object-fit:contain;background:#000}
-          .overlay-guide{position:absolute;inset:0;pointer-events:none;border:2px dashed rgba(255,255,255,.45);
-            border-radius:12px;margin:10%}
+          /* --- Camera Layout (mobile-first) --- */
+          .scan-wrap { display:flex; flex-direction:column; height: 80vh; }
+          @media (min-width: 576px){ .scan-wrap { height: 70vh; } }
+          .camera-area {
+            position: relative;
+            flex: 1 1 auto;
+            display: grid;
+            place-items: center;
+            background: #000;
+            overflow: hidden;
+          }
+          .camera-frame {
+            width: 100%;
+            max-width: 520px;
+            aspect-ratio: 3 / 2;
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 12px 32px rgba(0,0,0,.35);
+            transform: translateZ(0); /* GPU layer to keep video smooth */
+          }
+          .camera-frame video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* fill nicely on mobile */
+            background: #000;
+          }
+          .overlay-guide {
+            position:absolute; inset:6%;
+            border: 2px dashed rgba(255,255,255,.5);
+            border-radius: 12px;
+            pointer-events: none;
+          }
+
+          .scan-toolbar {
+            padding: .75rem;
+            gap: .5rem;
+            display:flex;
+            align-items:center;
+          }
+
+          .scan-toolbar .btn {
+            touch-action: manipulation;
+          }
+
+          .scan-status { min-width: 160px; text-align:right; }
         </style>
 
-        <div class="camera-box position-relative">
-          <div class="camera-frame">
-            <video id="ocr-video" playsinline autoplay muted></video>
+        <div class="scan-wrap">
+          <div class="camera-area">
+            <div class="camera-frame">
+              <video id="ocr-video" playsinline autoplay muted></video>
+              <div class="overlay-guide d-none d-sm-block"></div>
+              <canvas id="ocr-canvas" class="d-none"></canvas>
+            </div>
           </div>
-          <div class="overlay-guide d-none d-sm-block"></div>
-          <canvas id="ocr-canvas" class="d-none"></canvas>
-        </div>
 
-        <div class="d-flex gap-2 mt-3 align-items-center">
-          <button class="btn btn-success" id="ocr-capture">Capture & OCR</button>
-          <button class="btn btn-outline-secondary" id="ocr-switch">Switch Camera</button>
-          <div class="ms-auto" id="ocr-status" style="min-width:160px;"></div>
+          <div class="scan-toolbar">
+            <button class="btn btn-success flex-fill" id="ocr-capture">
+              <i class="bi bi-camera"></i> Capture & OCR
+            </button>
+            <button class="btn btn-outline-secondary" id="ocr-switch" title="Switch Camera">
+              <i class="bi bi-arrow-repeat"></i>
+            </button>
+            <button class="btn btn-outline-dark" id="ocr-torch" title="Toggle Flash">
+              <i class="bi bi-lightning-charge"></i>
+            </button>
+            <div class="ms-auto small scan-status" id="ocr-status"></div>
+          </div>
         </div>
-
-        <!-- Optional debug:
-        <div class="form-text mt-2">OCR raw text:</div>
-        <pre id="ocr-debug" class="bg-light p-2 small" style="max-height:160px;overflow:auto"></pre> -->
       </div>
 
-      <div class="modal-footer">
-        <small class="text-muted">Works offline once cached. Best in bright, even light.</small>
+      <div class="modal-footer py-2">
+        <small class="text-muted">Tip: hold the ID flat, fill the frame, use flash in low light.</small>
       </div>
     </div>
   </div>
@@ -260,6 +305,10 @@
 @endsection
 
 @push('scripts')
+  {{-- Tesseract core (must load BEFORE id-scan.js) --}}
+  <script defer src="{{ asset('vendor/tesseract/tesseract.min.js') }}"></script>
+  {{-- optional: if you want to control worker path strictly --}}
+  <script defer src="{{ asset('vendor/tesseract/worker.min.js') }}"></script>
   <script src="{{ asset('js/issueTicket.js') }}?v={{ filemtime(public_path('js/issueTicket.js')) }}"></script>
   <script src="{{ asset('js/id-scan.js')}}?v={{ filemtime(public_path('js/id-scan.js')) }}"></script>
 @endpush
