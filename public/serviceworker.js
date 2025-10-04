@@ -2,7 +2,7 @@
    Place this file in: /public/serviceworker.js
 */
 
-const SW_VERSION   = 'v2025-09-24'; // bump each deploy
+const SW_VERSION   = 'v2025-10-04'; // bump each deploy
 const ORIGIN       = self.location.origin;
 
 const STATIC_CACHE  = `pwa-static-${SW_VERSION}`;
@@ -76,23 +76,25 @@ async function drainQueueOnce() {
 
 // ---------- pre-cache ----------
 const filesToCache = [
-  '/', '/css/app.css', '/js/app.js',
-  '/js/id-scan.js', '/js/issueTicket.js',
+  '/', 
+  '/css/app.css', 
+  '/js/app.js',
+  '/js/issueTicket.js',
+  '/js/id-scan.js', 
   // Dexie lib used by SW
   '/vendor/dexie/dexie.min.js',
   '/vendor/sweetalert2/sweetalert2.all.min.js',
   '/vendor/bootstrap/bootstrap.bundle.min.js',
 
-  // OCR assets (both paths if you use either)
+  // --- OCR (SIMD build only) ---
   '/vendor/tesseract/tesseract.min.js',
   '/vendor/tesseract/worker.min.js',
-  '/vendor/tesseract/tesseract-core.wasm',
-  '/vendor/tesseract/eng.traineddata.gz',
-  '/wasm/tesseract-core.wasm',
+  '/wasm/tesseract-core-simd-lstm.wasm.js',
+  '/wasm/tesseract-core-simd-lstm.wasm',
   '/wasm/eng.traineddata.gz',
 
   // icons (keep those that exist)
-  '/images/icons/POSO-Logo.png',
+  '/images/icons/POSO-Logo.png',  
   '/images/icons/icon-72x72.png',
   '/images/icons/icon-96x96.png',
   '/images/icons/icon-128x128.png',
@@ -101,9 +103,6 @@ const filesToCache = [
   '/images/icons/icon-192x192.png',
   '/images/icons/icon-384x384.png',
   '/images/icons/icon-512x512.png',
-
-  // only if you have it:
-  // '/offline',
 ];
 
 // ---------- background sync ----------

@@ -18,6 +18,16 @@
     document.body.style.removeProperty('padding-right');
   }
 
+  function whenTesseractReady(timeoutMs = 8000) {
+    return new Promise((resolve, reject) => {
+      const t0 = Date.now();
+      (function poll(){
+        if (window.Tesseract?.createWorker) return resolve();
+        if (Date.now() - t0 > timeoutMs) return reject(new Error('Tesseract not loaded in time'));
+        setTimeout(poll, 50);
+      })();
+    });
+  }
   // ---------- Status ----------
   const statusEl = q('#ocr-status');
   const ocrStatus = (msg, kind='muted') => {
@@ -44,7 +54,7 @@
     }
 
     ocrStatus('Loading OCR…');
-    if (Tesseract.setLogging) Tesseract.setLogging(false);
+    if (Tesseract.setLogging) Tesseract.setLogging(true);
 
     workerReady = (async () => {
       // prefer SIMD core; if it fails (older iOS), try fallback
@@ -322,7 +332,17 @@
   // ---------- Modal wiring ----------
   const modalEl = q('#scanIdModal');
   if (modalEl) {
-    modalEl.addEventListener('shown.bs.modal', () => { startCamera(); getWorker().catch(()=>{}); });
+    modalEl.addEventListener('shown.bs.modal', async () => {
+      try {
+        await whenTesseractReady();
+        startCamera();
+        getWorker().catch(()=>{});
+      } catch (e) {
+        console.error(e);
+        ocrStatus('OCR library missing', 'danger');
+        notify('OCR error', 'Tesseract library did not load. Check script order.', 'warning');
+      }
+    });
     modalEl.addEventListener('hidden.bs.modal', async () => { await stopCamera(); });
   } else {
     // Fallback if BS isn't present for some reason

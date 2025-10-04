@@ -305,10 +305,10 @@
 @endsection
 
 @push('scripts')
-  {{-- Tesseract core (must load BEFORE id-scan.js) --}}
+  {{-- Load Tesseract first --}}
   <script defer src="{{ asset('vendor/tesseract/tesseract.min.js') }}"></script>
-  {{-- optional: if you want to control worker path strictly --}}
   <script defer src="{{ asset('vendor/tesseract/worker.min.js') }}"></script>
-  <script src="{{ asset('js/issueTicket.js') }}?v={{ filemtime(public_path('js/issueTicket.js')) }}"></script>
-  <script src="{{ asset('js/id-scan.js')}}?v={{ filemtime(public_path('js/id-scan.js')) }}"></script>
+  {{-- Your app scripts (also deferred so Tesseract is guaranteed loaded) --}}
+  <script defer src="{{ asset('js/issueTicket.js') }}?v={{ filemtime(public_path('js/issueTicket.js')) }}"></script>
+  <script defer src="{{ asset('js/id-scan.js')}}?v={{ filemtime(public_path('js/id-scan.js')) }}"></script>
 @endpush
