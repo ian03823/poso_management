@@ -251,7 +251,7 @@ async function openHotspot(lat, lng, area){
           cId.textContent = `#${r.id ?? ''}`;
 
           const cName = document.createElement('div');
-          cName.className = 'swal-grid-wrap-normal';
+          cName.className = 'swal-grid-wrap-normal';  
           cName.textContent = r.name || 'Unknown';
 
           const cVeh = document.createElement('div');

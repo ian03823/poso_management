@@ -109,26 +109,78 @@ class AnalyticsController extends Controller
         ]);
 
         [$from, $to] = $this->parseDateRange($request->input('from'), $request->input('to'));
+        $status = strtolower((string)$request->input('status', '')); // '', 'paid', 'unpaid'
         $violationIds = collect($request->input('violations', []))->filter()->map('intval')->values();
 
-        $q = DB::table('tickets')
-            ->whereBetween('issued_at', [$from, $to])
-            ->where('latitude', $request->lat)
-            ->where('longitude', $request->lng)
-            ->select('id','issued_at','location','status_id');
+        // center point (clicked hotspot)
+        $lat = (float) $request->lat;
+        $lng = (float) $request->lng;
 
+        // Haversine radius in kilometers (0.15 km ≈ 150 m)
+        $radiusKm = 0.15;
+
+        $q = DB::table('tickets')
+            ->whereBetween('tickets.issued_at', [$from, $to])
+            // only tickets with coordinates
+            ->whereNotNull('tickets.latitude')
+            ->whereNotNull('tickets.longitude')
+            // distance filter
+            ->whereRaw("
+                (6371 * 2 * ASIN(
+                    SQRT(
+                        POWER(SIN(RADIANS(? - tickets.latitude) / 2), 2) +
+                        COS(RADIANS(?)) * COS(RADIANS(tickets.latitude)) *
+                        POWER(SIN(RADIANS(? - tickets.longitude) / 2), 2)
+                    )
+                )) <= ?
+            ", [$lat, $lat, $lng, $radiusKm])
+            // joins based on YOUR schema
+            ->leftJoin('violators', 'violators.id', '=', 'tickets.violator_id')
+            ->leftJoin('vehicles',  'vehicles.vehicle_id', '=', 'tickets.vehicle_id')
+            ->select([
+                'tickets.id',
+                'tickets.issued_at',
+                'tickets.status_id',
+                'violators.first_name',
+                'violators.middle_name',
+                'violators.last_name',
+                'vehicles.plate_number',
+                'vehicles.vehicle_type',
+                'vehicles.owner_name',
+                'vehicles.is_owner',
+            ]);
+
+        // optional status filter
+        if ($status === 'paid')   $q->where('tickets.status_id', 2);
+        if ($status === 'unpaid') $q->where('tickets.status_id', 1);
+
+        // optional pivot filter (only apply if user selected violations AND the pivot exists)
         if ($violationIds->isNotEmpty() && Schema::hasTable('ticket_violation')) {
             $q->join('ticket_violation', 'ticket_violation.ticket_id', '=', 'tickets.id')
-              ->whereIn('ticket_violation.violation_id', $violationIds);
+            ->whereIn('ticket_violation.violation_id', $violationIds);
         }
 
-        $rows = $q->orderByDesc('issued_at')->limit(50)->get()
-            ->map(function($r){
+        $rows = $q->orderByDesc('tickets.issued_at')
+            ->limit(100)
+            ->get()
+            ->map(function ($r) {
+                $name = trim(collect([$r->first_name, $r->middle_name, $r->last_name])
+                            ->filter(fn($p) => $p && trim($p) !== '')
+                            ->implode(' '));
+
+                $vehBits = [];
+                if (!empty($r->vehicle_type)) $vehBits[] = $r->vehicle_type;
+                if (!is_null($r->is_owner))   $vehBits[] = 'Owner: '.((int)$r->is_owner === 1 ? 'Yes' : 'No');
+                if (!empty($r->owner_name))   $vehBits[] = 'Owner Name: '.$r->owner_name;
+                $vehMeta = $vehBits ? ' ('.implode(' • ', $vehBits).')' : '';
+                $vehicle = ($r->plate_number ?: 'N/A') . $vehMeta;
+
                 return [
-                    'id'        => $r->id,
-                    'issued_at' => Carbon::parse($r->issued_at)->format('Y-m-d H:i'),
-                    'location'  => $r->location ?? 'Unknown',
-                    'status'    => (int)$r->status_id === 2 ? 'Paid' : 'Unpaid',
+                    'id'        => (int) $r->id,
+                    'name'      => $name !== '' ? $name : 'Unknown',
+                    'vehicle'   => $vehicle,
+                    'issued_at' => \Carbon\Carbon::parse($r->issued_at)->format('Y-m-d H:i'),
+                    'status'    => ((int)$r->status_id === 2 ? 'Paid' : 'Unpaid'),
                 ];
             });
 
