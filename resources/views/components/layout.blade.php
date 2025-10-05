@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   {{-- Minimalist admin layout CSS --}}
   <link rel="stylesheet" href="{{ asset('css/admin-layout.css')}}">
+  <link rel="stylesheet" href="{{ asset('css/admin-analytics.css')}}">
   <link rel="stylesheet" href="{{ asset('css/admin-dashboard.css') }}">
   <link rel="stylesheet" href="{{ asset('css/admin-ticketTable.css') }}">
   <link rel="stylesheet" href="{{ asset('css/admin-violationTable.css') }}">
