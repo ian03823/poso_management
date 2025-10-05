@@ -4,33 +4,29 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class EmailOtp
 {
     /**
      * Issue an OTP and email it via Brevo API.
      *
-     * @param string $purpose  e.g. 'email_confirm' | 'pwd_reset'
-     * @param int|string $subjectId the user id
-     * @param string $toEmail
-     * @param string $title
+     * @param string            $purpose    e.g. 'email_confirm' | 'pwd_reset'
+     * @param int|string        $subjectId  user id (violator id)
+     * @param string            $toEmail
+     * @param string            $title
      * @return bool
      */
     public static function issue(string $purpose, $subjectId, string $toEmail, string $title = 'Your verification code'): bool
     {
-        // 1) generate & store
+        // 1) generate & store in cache with TTL
         $code   = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $ttlMin = (int) env('BREVO_OTP_TTL_MINUTES', 10);
         $key    = self::key($purpose, $subjectId);
 
-        Cache::put($key, [
-            'code' => $code,
-            'tries'=> 0,
-        ], now()->addMinutes($ttlMin));
+        Cache::put($key, ['code' => $code, 'tries' => 0], now()->addMinutes($ttlMin));
 
-        // 2) email via Brevo API (HTTPS)
+        // 2) build Brevo payload
         $payload = [
             'sender'      => [
                 'email' => config('services.brevo.from_email'),
@@ -43,15 +39,29 @@ class EmailOtp
         ];
 
         try {
-            Http::withHeaders([
+            $res = Http::withHeaders([
                 'api-key'      => config('services.brevo.key'),
                 'content-type' => 'application/json',
                 'accept'       => 'application/json',
-            ])->post('https://api.brevo.com/v3/smtp/email', $payload)->throw();
+            ])->post('https://api.brevo.com/v3/smtp/email', $payload);
+
+            if ($res->failed()) {
+                Log::error('Brevo send failed', [
+                    'status' => $res->status(),
+                    'body'   => $res->body(),
+                    'to'     => $toEmail,
+                    'sender' => config('services.brevo.from_email'),
+                ]);
+                return false;
+            }
 
             return true;
         } catch (\Throwable $e) {
-            // Optional: log $e->getMessage()
+            Log::error('Brevo send exception', [
+                'error'  => $e->getMessage(),
+                'to'     => $toEmail,
+                'sender' => config('services.brevo.from_email'),
+            ]);
             return false;
         }
     }
@@ -61,13 +71,12 @@ class EmailOtp
      */
     public static function verify(string $purpose, $subjectId, string $code): bool
     {
-        $key = self::key($purpose, $subjectId);
+        $key  = self::key($purpose, $subjectId);
         $data = Cache::get($key);
         if (!$data || !isset($data['code'])) {
             return false;
         }
 
-        // (optional) restrict wrong attempts
         $maxTries = 5;
         if (($data['tries'] ?? 0) >= $maxTries) {
             Cache::forget($key);
@@ -79,14 +88,11 @@ class EmailOtp
             return true;
         }
 
-        // increment tries and keep TTL
+        // wrong code → increment tries, keep TTL if any
         $data['tries'] = (int) ($data['tries'] ?? 0) + 1;
-        $ttl = self::remainingTtl($key);
-        if ($ttl > 0) {
-            Cache::put($key, $data, now()->addSeconds($ttl));
-        } else {
-            Cache::forget($key);
-        }
+        // we cannot easily read remaining TTL from Cache; keep a short grace so repeated wrongs are limited
+        Cache::put($key, $data, now()->addSeconds(120));
+
         return false;
     }
 
@@ -95,13 +101,6 @@ class EmailOtp
     protected static function key(string $purpose, $subjectId): string
     {
         return "otp:{$purpose}:{$subjectId}";
-    }
-
-    protected static function remainingTtl(string $key): int
-    {
-        // Cache doesn't expose TTL directly; re-store is simplest.
-        // Here we just return a small default to keep it simple.
-        return 120; // seconds fallback; adequate for incrementing tries
     }
 
     protected static function htmlTemplate(string $title, string $code, int $ttlMin): string
@@ -113,7 +112,7 @@ class EmailOtp
   <p>Your {$app} verification code is:</p>
   <p style="font-size:28px;letter-spacing:6px;margin:16px 0;"><strong>{$code}</strong></p>
   <p>This code expires in <strong>{$ttlMin} minute(s)</strong>.</p>
-  <p>If you didn’t request this, you can ignore this email.</p>
+  <p>If you didn’t request this, please ignore this email.</p>
 </body></html>
 HTML;
     }

@@ -16,7 +16,7 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        'pwa/sync/ticket'
+        'pwa/sync/ticket',
     ];
     
 }

@@ -66,6 +66,8 @@ Route::get('/_diag/ocr', function () {
     return response()->json(['disk' => $disk, 'http' => $http, 'urls' => $urls]);
 });
 
+
+
 Route::get('/_diag/gas', function () {
     $url = config('otp.gmail_webapp.url');
     $secret = config('otp.gmail_webapp.secret');
@@ -242,7 +244,4 @@ Route::middleware('throttle:10,1')->group(function () {
     Route::post('/violator/password/verify-otp', [ViolatorForgotPasswordController::class,'verifyOtp'])->name('violator.password.forgot.verify');
     Route::get('/violator/password/reset', [ViolatorForgotPasswordController::class,'showReset'])->name('violator.password.forgot.reset');
     Route::post('/violator/password/reset', [ViolatorForgotPasswordController::class,'reset'])->name('violator.password.forgot.update');
-});
-Route::fallback(function () {
-    abort(404);
 });

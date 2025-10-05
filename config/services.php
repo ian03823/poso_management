@@ -34,5 +34,10 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'brevo' => [
+        'key'        => env('BREVO_API_KEY'),
+        'from_email' => env('BREVO_FROM_EMAIL', 'no-reply@yourdomain.com'),
+        'from_name'  => env('BREVO_FROM_NAME', env('APP_NAME', 'App')),
+    ],
 
 ];
