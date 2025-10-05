@@ -10,8 +10,6 @@
   $violationOpts = \App\Models\Violation::select('id','violation_name')->orderBy('violation_name')->limit(50)->get();
 @endphp
 
-<link rel="stylesheet" href="{{ asset('css/admin-analytics.css') }}"/>
-
 <div class="container-fluid py-3" 
      id="analyticsRoot"
      data-latest-endpoint="{{ route('dataAnalytics.latest') }}"
@@ -115,26 +113,28 @@
   {{-- Charts + Big Map --}}
   <div class="row g-3">
     <div class="col-lg-6">
+      {{-- Paid vs Unpaid --}}
       <div class="card shadow-sm h-100">
         <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
           <span>Paid vs Unpaid</span>
           <span class="spinner-border spinner-border-sm d-none" id="spinPie"></span>
         </div>
         <div class="card-body">
-          <div class="ratio ratio-4x3">
+          <div class="chart-box">
             <canvas id="chartPie"></canvas>
           </div>
           <div class="text-muted small mt-2" id="pieEmpty" style="display:none">No data to display.</div>
         </div>
       </div>
 
+      {{-- Tickets by Month --}}
       <div class="card shadow-sm h-100 mt-3">
         <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
           <span>Tickets by Month</span>
           <span class="spinner-border spinner-border-sm d-none" id="spinBar"></span>
         </div>
         <div class="card-body">
-          <div class="ratio ratio-4x3">
+          <div class="chart-box">
             <canvas id="chartBar"></canvas>
           </div>
           <div class="text-muted small mt-2" id="barEmpty" style="display:none">No data to display.</div>
@@ -143,6 +143,7 @@
     </div>
 
     <div class="col-lg-6">
+      {{-- Hotspot Map --}}
       <div class="card shadow-sm h-100">
         <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
           <span>Hotspot Map</span>
@@ -163,17 +164,19 @@
   {{-- Insights + Export --}}
   <div class="row g-3 mt-3">
     <div class="col-lg-8">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
-          <span>Data Insights (auto-generated)</span>
+      <div class="card shadow-sm insights-card h-100">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <span class="fw-semibold">Data Insights (auto-generated)</span>
           <button id="btnCopyInsights" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-clipboard"></i> Copy
           </button>
         </div>
         <div class="card-body">
-          <textarea id="insightsBox" class="form-control" rows="8"
+          <textarea id="insightsBox" class="form-control flex-grow-1" rows="10"
             placeholder="Insights will appear here; you can edit them before exporting."></textarea>
-          <div class="text-muted small mt-2" id="insightsHint">Tips: adjust filters above to update the insights.</div>
+          <div class="text-muted small mt-2" id="insightsHint">
+            Tips: adjust filters above to update the insights.
+          </div>
         </div>
       </div>
     </div>
@@ -188,21 +191,6 @@
             <i class="bi bi-file-earmark-word"></i> Download Word
           </a>
         </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-{{-- Drill-down Modal --}}
-<div class="modal fade" id="hotspotModal" tabindex="-1" aria-labelledby="hotspotModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h6 class="modal-title" id="hotspotModalLabel">Hotspot Tickets</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div id="hotspotBody" class="text-center text-muted py-4">Loading…</div>
       </div>
     </div>
   </div>

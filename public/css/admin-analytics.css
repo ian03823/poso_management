@@ -1,11 +1,14 @@
 /* public/css/admin-analytics.css */
 
+/* --- Toolbar --- */
 .analytics-toolbar .btn-check:checked + .btn {
   box-shadow: inset 0 0 0 2px rgba(25,135,84,.35);
 }
 
+/* --- KPI --- */
 .kpi-card .card-body { min-height: 86px; }
 
+/* --- Heat Legend --- */
 .heat-legend .heat-dot {
   display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px;
 }
@@ -13,15 +16,106 @@
 .heat-mid  { background:#feb24c; }
 .heat-high { background:#f03b20; }
 
-/* Bigger map */
+/* --- Charts & Map sizing (desktop-first coordination) --- */
+:root {
+  --chart-h-lg: 300px;   /* height for each chart on >=992px */
+  --chart-gap: 1rem;     /* visual gap similar to .mt-3 */
+}
+
+/* Chart container for Chart.js canvases */
+.chart-box {
+  position: relative;
+  height: 260px;     /* default (mobile/tablet) */
+  width: 100%;
+}
+
+.chart-box canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* Bigger map (mobile default) */
 .analytics-map {
-  height: 480px;          /* ← larger map */
+  height: 420px;
   border: 1px solid #e9ecef;
 }
 
-/* Insights area */
+/* On large screens: make each chart 300px tall and the map roughly the sum of both */
+@media (min-width: 992px) {
+  .chart-box { height: var(--chart-h-lg); }
+  .analytics-map {
+    /* 2 charts stacked (~600px) minus some padding/header */
+    height: calc(var(--chart-h-lg) * 2 + var(--chart-gap));
+  }
+}
+
+/* --- Insights area --- */
+.insights-card .card-body {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  min-height: 320px;   /* gives it presence even with little content */
+}
+
 #insightsBox {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
   line-height: 1.45;
   white-space: pre-wrap;
+  resize: vertical;     /* allow resizing if needed */
 }
+/* SweetAlert list layout for hotspot drilldown */
+.swal2-container .swal-listwrap .list-group-item {
+  padding: .75rem 1rem;
+}
+.swal2-container .swal-listwrap .list-group-item + .list-group-item {
+  border-top: 1px solid rgba(0,0,0,.05);
+}
+
+
+.swal-gridwrap {
+  --swal-cols: 120px 1fr 2fr 160px 110px; /* TicketID | Name | Vehicle | Issued | Status */
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: .5rem;
+  background: #fff;
+}
+
+.swal-grid-header,
+.swal-grid-row {
+  display: grid;
+  grid-template-columns: var(--swal-cols);
+  align-items: center;
+  gap: .5rem;
+}
+
+.swal-grid-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8f9fa;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  padding: .5rem .75rem;
+  font-weight: 600;
+  color: #212529;
+}
+
+.swal-grid-row {
+  padding: .5rem .75rem;
+  border-bottom: 1px solid rgba(0,0,0,.04);
+}
+
+.swal-grid-row:last-child { border-bottom: 0; }
+
+.swal-grid-row > div {
+  min-width: 0;              /* allow text wrap within each cell */
+  color: #212529;
+  font-size: .95rem;
+}
+
+.swal-grid-wrap-nowrap { white-space: nowrap; }
+.swal-grid-wrap-normal { white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
+
+.swal-grid-status { text-align: left; }           /* status column */
+.swal-grid-issued { text-align: left; }           /* issued column */
+.swal-grid-id     { font-weight: 600; }           /* id column emphasis */
