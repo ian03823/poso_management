@@ -56,6 +56,11 @@
                     </div>
                 @endif
             </form>
+            <div class="text-right mt-2">
+                <a href="{{ route('admin.password.forgot.request') }}" class="text-sm text-green-700 hover:text-green-800">
+                    Forgot password?
+                </a>
+            </div>
         </div>
     </div>
 </div>

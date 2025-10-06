@@ -82,11 +82,10 @@
         <button id="loginBtn" type="submit" class="btn btn-success w-100 py-2 fw-semibold mb-3" style="border-radius: 12px;"  >
           Log In
         </button>
-      </form>
-      <div class="text-end mt-2">
-        <a href="{{ route('violator.password.forgot.request') }}" class="small">Forgot password?</a>
-      </div>
-
+        </form>
+        <div class="text-end mt-2">
+          <a href="{{ route('violator.password.forgot.request') }}" class="small">Forgot password?</a>
+        </div>
     </div>
   </div>
 </div>

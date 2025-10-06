@@ -75,6 +75,12 @@
   </table>
 @endif
 
-<div class="p-3 d-flex justify-content-center">
-  {{ $tickets->links() }}
+<div class="vtr-pager d-flex justify-content-between align-items-center mt-3">
+    <div class="d-none d-md-block small text-muted">
+      Showing {{ $tickets->firstItem() }} to {{ $tickets->lastItem() }} of {{ $tickets->total() }} results
+    </div>
+    <div class="w-100 d-flex justify-content-center">
+      {{ $tickets->links() }}
+    </div>
+  </div>
 </div>

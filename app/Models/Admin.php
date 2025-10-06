@@ -2,19 +2,23 @@
 
 namespace App\Models;
 
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-class Admin extends Authenticatable
+use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
+use Illuminate\Auth\Passwords\CanResetPassword;
+class Admin extends Authenticatable implements CanResetPasswordContract
 {
     //
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, CanResetPassword;
     protected $table = 'admins';
     protected $fillable = [
         'name',
         'username',
+        'email',
         'password',
     ];
 

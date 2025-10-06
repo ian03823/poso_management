@@ -18,6 +18,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\ViolatorEmailController;
 use App\Http\Controllers\ViolatorForgotPasswordController;
+use App\Http\Controllers\AdminForgotPasswordController;
 use Illuminate\Support\Facades\Mail;
 use App\Http\Controllers\ViolatorPhoneController;
 use Illuminate\Support\Facades\DB;
@@ -244,4 +245,9 @@ Route::middleware('throttle:10,1')->group(function () {
     Route::post('/violator/password/verify-otp', [ViolatorForgotPasswordController::class,'verifyOtp'])->name('violator.password.forgot.verify');
     Route::get('/violator/password/reset', [ViolatorForgotPasswordController::class,'showReset'])->name('violator.password.forgot.reset');
     Route::post('/violator/password/reset', [ViolatorForgotPasswordController::class,'reset'])->name('violator.password.forgot.update');
+    
+    Route::get('/admin/password/forgot',  [AdminForgotPasswordController::class, 'showRequest'])->name('admin.password.forgot.request');
+    Route::post('/admin/password/forgot', [AdminForgotPasswordController::class, 'submitEmail'])->name('admin.password.forgot.submit');
+    Route::get('/admin/password/reset',   [AdminForgotPasswordController::class, 'showReset'])->name('admin.password.reset.view');
+    Route::post('/admin/password/reset',  [AdminForgotPasswordController::class, 'reset'])->name('admin.password.reset');
 });
