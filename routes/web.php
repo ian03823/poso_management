@@ -18,7 +18,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\ViolatorEmailController;
 use App\Http\Controllers\ViolatorForgotPasswordController;
-use App\Http\Controllers\AdminForgotPasswordController;
+use App\Http\Controllers\AdminForgotPasswordOtpController;
 use Illuminate\Support\Facades\Mail;
 use App\Http\Controllers\ViolatorPhoneController;
 use Illuminate\Support\Facades\DB;
@@ -245,12 +245,15 @@ Route::middleware('throttle:10,1')->group(function () {
     Route::post('/violator/password/verify-otp', [ViolatorForgotPasswordController::class,'verifyOtp'])->name('violator.password.forgot.verify');
     Route::get('/violator/password/reset', [ViolatorForgotPasswordController::class,'showReset'])->name('violator.password.forgot.reset');
     Route::post('/violator/password/reset', [ViolatorForgotPasswordController::class,'reset'])->name('violator.password.forgot.update');
-<<<<<<< HEAD
+
+    Route::get('/admin/password/forgot',        [AdminForgotPasswordOtpController::class, 'showRequest'])->name('admin.password.forgot.request');
+    Route::post('/admin/password/forgot',       [AdminForgotPasswordOtpController::class, 'submitEmail'])->name('admin.password.forgot.submit');
+    Route::get('/admin/password/confirm',       [AdminForgotPasswordOtpController::class, 'showConfirm'])->name('admin.password.forgot.confirm');
+    Route::post('/admin/password/send-otp',     [AdminForgotPasswordOtpController::class, 'sendOtp'])->name('admin.password.forgot.sendOtp');
+    Route::get('/admin/password/enter-otp',     [AdminForgotPasswordOtpController::class, 'showEnterOtp'])->name('admin.password.forgot.otp');
+    Route::post('/admin/password/verify-otp',   [AdminForgotPasswordOtpController::class, 'verifyOtp'])->name('admin.password.forgot.verify');
+    Route::get('/admin/password/reset',         [AdminForgotPasswordOtpController::class, 'showReset'])->name('admin.password.forgot.reset');
+    Route::post('/admin/password/reset',        [AdminForgotPasswordOtpController::class, 'reset'])->name('admin.password.forgot.update');
     
-=======
->>>>>>> fix-detached
-    Route::get('/admin/password/forgot',  [AdminForgotPasswordController::class, 'showRequest'])->name('admin.password.forgot.request');
-    Route::post('/admin/password/forgot', [AdminForgotPasswordController::class, 'submitEmail'])->name('admin.password.forgot.submit');
-    Route::get('/admin/password/reset',   [AdminForgotPasswordController::class, 'showReset'])->name('admin.password.reset.view');
-    Route::post('/admin/password/reset',  [AdminForgotPasswordController::class, 'reset'])->name('admin.password.reset');
+    
 });
