@@ -116,4 +116,66 @@ class EmailOtp
 </body></html>
 HTML;
     }
+
+    /**
+     * Send any HTML email via Brevo (no OTP logic). Returns true/false.
+     */
+    public static function sendHtml(string $toEmail, string $subject, string $html, array $tags = []): bool
+    {
+        $payload = [
+            'sender'      => [
+                'email' => config('services.brevo.from_email'),
+                'name'  => config('services.brevo.from_name', config('app.name')),
+            ],
+            'to'          => [['email' => $toEmail]],
+            'subject'     => $subject,
+            'htmlContent' => $html,
+            'tags'        => $tags,
+        ];
+
+        try {
+            $res = Http::withHeaders([
+                'api-key'      => config('services.brevo.key'),
+                'content-type' => 'application/json',
+                'accept'       => 'application/json',
+            ])->post('https://api.brevo.com/v3/smtp/email', $payload);
+
+            if ($res->failed()) {
+                Log::error('Brevo sendHtml failed', [
+                    'status' => $res->status(),
+                    'body'   => $res->body(),
+                    'to'     => $toEmail,
+                ]);
+                return false;
+            }
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('Brevo sendHtml exception', [
+                'error' => $e->getMessage(),
+                'to'    => $toEmail,
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Convenience: send a password reset link email (no OTP).
+     */
+    public static function sendResetLink(string $toEmail, string $resetUrl, ?string $subject = null, ?string $appName = null): bool
+    {
+        $app = $appName ?: config('app.name');
+        $subject = $subject ?: ($app.' – Reset your password');
+
+        $html = <<<HTML
+    <!doctype html><html><body style="font-family:Arial,sans-serif">
+    <h2>{$app}: Password Reset</h2>
+    <p>We received a request to reset your password. Click the button below:</p>
+    <p><a href="{$resetUrl}" style="display:inline-block;padding:10px 16px;border-radius:6px;
+        background:#0d6efd;color:#fff;text-decoration:none;">Reset Password</a></p>
+    <p>If you didn’t request this, please ignore this email.</p>
+    </body></html>
+    HTML;
+
+        return self::sendHtml($toEmail, $subject, $html, ['password-reset']);
+    }
 }
