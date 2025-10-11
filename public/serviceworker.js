@@ -1,6 +1,6 @@
 /* serviceworker.js — PWA runtime + OCR + background sync (unified) */
 
-const SW_VERSION   = 'v2025-10-11g'; // bump each deploy
+const SW_VERSION   = 'v2025-10-11h'; // bump each deploy
 const ORIGIN       = self.location.origin;
 
 const STATIC_CACHE  = `pwa-static-${SW_VERSION}`;

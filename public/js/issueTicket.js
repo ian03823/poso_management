@@ -19,6 +19,14 @@ async function loadImage(url) {
     img.src = url;
   });
 }
+const rand = (n=6)=>crypto.getRandomValues(new Uint32Array(1))[0].toString(36).slice(-n);
+const last4 = s => (s||'').replace(/\D/g,'').slice(-4).padStart(4,'0');
+const tempTicketNo = ()=>`TEMP-${new Date().toISOString().slice(2,10).replace(/-/g,'')}-${rand(4)}`;
+function makeOfflineCreds() {
+  const u = 'user' + (Math.floor(1000 + Math.random()*9000));      // user1234
+  const rawPwd = 'violator' + (Math.floor(1000 + Math.random()*9000)); // violator5678
+  return { username: u, password: rawPwd, default_password: rawPwd };
+}
 
 function drawToCanvas(img, maxWidth = 360) {
   const scale = Math.min(1, maxWidth / img.width);

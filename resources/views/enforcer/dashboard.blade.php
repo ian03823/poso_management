@@ -75,7 +75,39 @@
 </div>
 @endsection
 @push('scripts')
+<script src="{{ asset('vendor/dexie/dexie.min.js') }}"></script>
 <script src="{{ asset('js/enforcer.offline.auth.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const u = sessionStorage.getItem('pending_login_user');
+    const p = sessionStorage.getItem('pending_login_pass');
+
+    if (u && p && window.EnforcerOfflineAuth) {
+      const profile = {
+        id:        {{ auth('enforcer')->id() ?? 'null' }},
+        badge_num: @json(optional(auth('enforcer')->user())->badge_num),
+        fname:     @json(optional(auth('enforcer')->user())->fname),
+        lname:     @json(optional(auth('enforcer')->user())->lname),
+      };
+      try { await EnforcerOfflineAuth.cacheLogin(u, p, profile); }
+      catch (e) { console.warn('cacheLogin failed:', e); }
+      sessionStorage.removeItem('pending_login_user');
+      sessionStorage.removeItem('pending_login_pass');
+    }
+  });
+
+  // Optional: when back online later, refresh cached profile
+  window.addEventListener('online', () => {
+    const user = {{ auth('enforcer')->check() ? json_encode(strtolower(auth('enforcer')->user()->badge_num)) : 'null' }};
+    if (user && window.EnforcerOfflineAuth) {
+      EnforcerOfflineAuth.revalidateOnline(user, {
+        badge_num: @json(optional(auth('enforcer')->user())->badge_num),
+        fname:     @json(optional(auth('enforcer')->user())->fname),
+        lname:     @json(optional(auth('enforcer')->user())->lname),
+      });
+    }
+  });
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const input       = document.getElementById('violator-search');
@@ -152,21 +184,6 @@ document.addEventListener('DOMContentLoaded', () => {
       suggestions.innerHTML = '';
     }
   });
-});
-document.addEventListener('DOMContentLoaded', async () => {
-  const u = sessionStorage.getItem('pending_login_user');
-  const p = sessionStorage.getItem('pending_login_pass');
-  if (u && p && window.EnforcerOfflineAuth) {
-    const profile = @json([
-      'id'        => auth('enforcer')->id(),
-      'badge_num' => auth('enforcer')->user()->badge_num,
-      'fname'     => auth('enforcer')->user()->fname,
-      'lname'     => auth('enforcer')->user()->lname,
-    ]);
-    await window.EnforcerOfflineAuth.cacheLogin(u, p, profile);
-    sessionStorage.removeItem('pending_login_user');
-    sessionStorage.removeItem('pending_login_pass');
-  }
 });
 
 // When back online from offline mode, silently refresh the cache

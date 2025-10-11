@@ -138,7 +138,9 @@
 </script>
 @endif
 @endsection
+
 @push('scripts')
+<script src="{{ asset('vendor/dexie/dexie.min.js') }}"></script>
 <script src="{{ asset('js/enforcer.offline.auth.js') }}"></script>
 <script>
   function togglePassword() {
@@ -147,35 +149,42 @@
     if (pwd.type === 'password') { pwd.type = 'text'; icon.classList.replace('bi-eye-slash', 'bi-eye'); }
     else { pwd.type = 'password'; icon.classList.replace('bi-eye', 'bi-eye-slash'); }
   }
-  // remove the red glow on typing
   document.querySelectorAll('#badge_num, #password').forEach(el=>{
     el.addEventListener('input',()=> el.classList.remove('is-invalid'));
   });
-  document.addEventListener('DOMContentLoaded', () => {
-  const f = document.getElementById('enforcerLoginForm');
-  if (!f) return;
 
-  f.addEventListener('submit', async (e) => {
-    // OFFLINE → try offline cache-based login
-    if (!navigator.onLine) {
-      e.preventDefault();
+  document.addEventListener('DOMContentLoaded', () => {
+    const f = document.getElementById('enforcerLoginForm');
+    if (!f) return;
+
+    f.addEventListener('submit', async (e) => {
       const u = f.badge_num.value.trim();
       const p = f.password.value;
-      const res = await window.EnforcerOfflineAuth.offlineLogin(u, p, 7);
-      if (res.ok) {
-        // Go to the PWA start page (your Issue Ticket page is fine)
-        window.location.href = "{{ route('pwa') }}";
-      } else {
-        alert('Offline login unavailable. Connect once to cache your login.');
-      }
-      return;
-    }
 
-    // ONLINE → stash creds for caching post-redirect
-    sessionStorage.setItem('pending_login_user', f.badge_num.value.trim());
-    sessionStorage.setItem('pending_login_pass', f.password.value);
+      // If we can reach the server → proceed online & stash creds for post-redirect caching
+      try {
+        const pong = await fetch('/ping', { cache: 'no-store' });
+        if (pong.ok) {
+          sessionStorage.setItem('pending_login_user', u);
+          sessionStorage.setItem('pending_login_pass', p);
+          return; // allow normal submit
+        }
+      } catch (_) {}
+
+      // Offline → try cached login
+      e.preventDefault();
+      if (window.EnforcerOfflineAuth) {
+        const profile = await EnforcerOfflineAuth.tryOfflineLogin(u, p);
+        if (profile) {
+          // mark an offline session if you need it
+          localStorage.setItem('enforcer_offline_active', '1');
+          window.location.href = "{{ url('/enforcer/dashboard') }}";
+          return;
+        }
+      }
+      alert('Offline login unavailable. Connect once to cache your login.');
+    });
   });
-});
 
 </script>
 @endpush
