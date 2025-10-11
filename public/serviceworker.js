@@ -1,41 +1,38 @@
-/* serviceworker.js — PWA runtime + OCR + background sync (unified)
-   Place this file in: /public/serviceworker.js
-*/
+/* serviceworker.js — PWA runtime + OCR + background sync (unified) */
 
-const SW_VERSION   = 'v2025-10-04'; // bump each deploy
+const SW_VERSION   = 'v2025-10-11g'; // bump each deploy
 const ORIGIN       = self.location.origin;
 
 const STATIC_CACHE  = `pwa-static-${SW_VERSION}`;
 const PAGES_CACHE   = `pwa-pages-${SW_VERSION}`;
 const RUNTIME_CACHE = `pwa-runtime-${SW_VERSION}`;
 
-// ---------- Dexie in SW (local with CDN fallback) ----------
+// Dexie in SW
 (async () => {
-  try {
-    importScripts('/vendor/dexie/dexie.min.js');
-  } catch (e) {
-    // local missing — try CDN (CORS-enabled)
+  try { importScripts('/vendor/dexie/dexie.min.js'); }
+  catch (e) {
     try { importScripts('https://unpkg.com/dexie@3.2.4/dist/dexie.min.js'); }
-    catch (e2) { /* final fallback: no Dexie in SW, we’ll ping the page instead */ }
+    catch (e2) {}
   }
 })();
 
+const DB_NAME    = 'ticketDB';
+const DB_VERSION = 221; // match page
+const DB_SCHEMA  = { tickets: '++id,client_uuid,created_at' };
 let db = null;
 function initDexie() {
   if (self.Dexie && !db) {
-    db = new Dexie('ticketDB');
-    // align with page schema
-    db.version(2).stores({ tickets: '++id,client_uuid,created_at' });
+    db = new Dexie(DB_NAME);
+    db.version(DB_VERSION).stores(DB_SCHEMA).upgrade(()=>{});
   }
 }
 initDexie();
 
-// ---------- helpers ----------
+// helpers
 async function broadcast(msg) {
   const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   clients.forEach(c => c.postMessage(msg));
 }
-
 async function queueCount() {
   try { initDexie(); return db ? await db.tickets.count() : 0; } catch { return 0; }
 }
@@ -43,7 +40,6 @@ async function queueCount() {
 async function drainQueueOnce() {
   initDexie();
   if (!db) {
-    // no Dexie in SW → ask pages to handle sync
     await broadcast({ type: 'SYNC_TICKETS' });
     return;
   }
@@ -51,22 +47,23 @@ async function drainQueueOnce() {
   const records = await db.tickets.toArray();
   for (const rec of records) {
     try {
+      const uuid = rec.client_uuid || rec.payload?.client_uuid || '';
       const resp = await fetch(`${ORIGIN}/pwa/sync/ticket`, {
         method: 'POST',
-        credentials: 'include',
+        credentials: 'omit',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'X-Idempotency-Key': rec.client_uuid || rec.payload?.client_uuid || ''
+          'X-Idempotency-Key': uuid
         },
         body: JSON.stringify(rec.payload)
       });
       if (resp.ok) {
         await db.tickets.delete(rec.id);
+        await broadcast({ type: 'SYNC_TICKET_OK', client_uuid: uuid }); // <- defined uuid
       }
     } catch (e) {
-      // keep it for next round
-      // console.warn('[SW] Sync failed', rec.id, e);
+      // keep for next round
     }
   }
 
@@ -74,45 +71,27 @@ async function drainQueueOnce() {
   await broadcast({ type: 'QUEUE_COUNT', count: await queueCount() });
 }
 
-// ---------- pre-cache ----------
+// pre-cache
 const filesToCache = [
-  '/', 
-  '/css/app.css', 
-  '/js/app.js',
-  '/js/issueTicket.js',
-  '/js/id-scan.js', 
-  // Dexie lib used by SW
+  '/', '/css/app.css', '/js/app.js', '/js/issueTicket.js', '/js/id-scan.js',
   '/vendor/dexie/dexie.min.js',
   '/vendor/sweetalert2/sweetalert2.all.min.js',
   '/vendor/bootstrap/bootstrap.bundle.min.js',
-
-  // --- OCR (SIMD build only) ---
-  '/vendor/tesseract/tesseract.min.js',
-  '/vendor/tesseract/worker.min.js',
-  '/wasm/tesseract-core-simd-lstm.wasm.js',
-  '/wasm/tesseract-core-simd-lstm.wasm',
+  '/vendor/tesseract/tesseract.min.js', '/vendor/tesseract/worker.min.js',
+  '/wasm/tesseract-core-simd-lstm.wasm.js', '/wasm/tesseract-core-simd-lstm.wasm',
   '/wasm/eng.traineddata.gz',
-
-  // icons (keep those that exist)
-  '/images/icons/POSO-Logo.png',  
-  '/images/icons/icon-72x72.png',
-  '/images/icons/icon-96x96.png',
-  '/images/icons/icon-128x128.png',
-  '/images/icons/icon-144x144.png',
-  '/images/icons/icon-152x152.png',
-  '/images/icons/icon-192x192.png',
-  '/images/icons/icon-384x384.png',
-  '/images/icons/icon-512x512.png',
+  '/images/icons/POSO-Logo.png',
+  '/images/icons/icon-72x72.png','/images/icons/icon-96x96.png','/images/icons/icon-128x128.png',
+  '/images/icons/icon-144x144.png','/images/icons/icon-152x152.png','/images/icons/icon-192x192.png',
+  '/images/icons/icon-384x384.png','/images/icons/icon-512x512.png',
 ];
 
-// ---------- background sync ----------
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-tickets') {
     event.waitUntil(drainQueueOnce());
   }
 });
 
-// ---------- install ----------
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil((async () => {
@@ -126,7 +105,6 @@ self.addEventListener('install', (event) => {
   })());
 });
 
-// ---------- activate ----------
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
@@ -136,78 +114,53 @@ self.addEventListener('activate', (event) => {
       }
     }));
     await self.clients.claim();
-    // tell pages initial count
     await broadcast({ type: 'QUEUE_COUNT', count: await queueCount() });
   })());
 });
 
-// ---------- fetch ----------
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // === HARD BYPASS RULES ===
-  // 1) Never intercept non-GET (POST/PUT/PATCH/DELETE/etc.) — let the browser hit Laravel directly
   if (req.method !== 'GET') return;
-
-  // 2) Ignore cross-origin requests
   if (url.origin !== self.location.origin) return;
 
-  // 3) Bypass sensitive/auth/OTP/session endpoints even for GET
-  //    (add more paths here if needed)
   const path = url.pathname;
   const bypassPrefixes = [
-    '/violator/phone',
-    '/violator/otp/verify',
-    '/violator/otp/resend',
-    '/vlogin', '/vlogout',
-    '/alogin', '/plogin',
-    '/pwa/sync' // any other sync endpoints you use
+    '/violator/phone','/violator/otp/verify','/violator/otp/resend',
+    '/vlogin','/vlogout','/alogin','/plogin','/pwa/sync'
   ];
   if (bypassPrefixes.some(p => path.startsWith(p))) return;
 
-  // === Your existing logic below (unchanged) ===
-
   const isNavigate = req.mode === 'navigate' || req.destination === 'document';
-
-  // OCR assets → cache-first
   const isOCR = path.startsWith('/vendor/tesseract/') || path.startsWith('/wasm/');
-
-  // critical JS → network-first (pick up new deploys quickly)
   const isCriticalJS =
-    path.endsWith('/js/issueTicket.js') ||
-    path.endsWith('/js/id-scan.js') ||
-    path.endsWith('/js/app.js');
+    path.endsWith('/js/issueTicket.js') || path.endsWith('/js/id-scan.js') || path.endsWith('/js/app.js');
 
   if (isNavigate || isCriticalJS) {
     event.respondWith(networkFirst(req, isNavigate ? PAGES_CACHE : RUNTIME_CACHE, isNavigate ? '/offline' : null));
     return;
   }
-  if (isOCR) {
-    event.respondWith(cacheFirst(req, STATIC_CACHE));
-    return;
-  }
+  if (isOCR) { event.respondWith(cacheFirst(req, STATIC_CACHE)); return; }
   if (['script','style','image','font','worker'].includes(req.destination)) {
-    event.respondWith(staleWhileRevalidate(req, RUNTIME_CACHE));
-    return;
+    event.respondWith(staleWhileRevalidate(req, RUNTIME_CACHE)); return;
   }
+  const isAnalyticsReport =
+    url.pathname.endsWith('.docx') || url.pathname.endsWith('.xlsx') || url.pathname.includes('/reports/download');
+  if (isAnalyticsReport) { event.respondWith(fetch(event.request)); return; }
+
   event.respondWith(cacheFirstWithFallback(req, isNavigate ? '/offline' : null));
 });
 
-
-// ---------- messages: SYNC_NOW, QUEUE_POLL, notif bridge ----------
+// messages
 self.addEventListener('message', (e) => {
   const data = e.data || {};
-  if (data.type === 'SYNC_NOW') {
-    e.waitUntil(drainQueueOnce());
-  } else if (data.type === 'QUEUE_POLL') {
-    e.waitUntil(queueCount().then(count => broadcast({ type: 'QUEUE_COUNT', count })));
-  } else if (data.title) {
-    self.registration.showNotification(data.title, data.options || {});
-  }
+  if (data.type === 'SYNC_NOW')       e.waitUntil(drainQueueOnce());
+  else if (data.type === 'QUEUE_POLL') e.waitUntil(queueCount().then(count => broadcast({ type: 'QUEUE_COUNT', count })));
+  else if (data.title)                 self.registration.showNotification(data.title, data.options || {});
 });
 
-/* ===== fetch helpers ===== */
+/* fetch helpers */
 async function networkFirst(request, cacheName, offlinePath = null) {
   try {
     const res = await fetch(request, { cache: 'no-cache' });
@@ -235,18 +188,15 @@ async function cacheFirst(request, cacheName) {
 async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(request);
-  const networkPromise = fetch(request).then((res) => {
-    cache.put(request, res.clone());
-    return res;
-  }).catch(() => null);
+  const networkPromise = fetch(request).then((res) => { cache.put(request, res.clone()); return res; })
+    .catch(() => null);
   return cached || networkPromise || fetch(request);
 }
 async function cacheFirstWithFallback(request, offlinePath = null) {
   const cached = await caches.match(request);
   if (cached) return cached;
-  try {
-    return await fetch(request);
-  } catch (err) {
+  try { return await fetch(request); }
+  catch (err) {
     if (offlinePath && (request.mode === 'navigate' || request.destination === 'document')) {
       const offline = await caches.match(offlinePath);
       if (offline) return offline;

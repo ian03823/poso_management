@@ -15,7 +15,7 @@ async function loadImage(url) {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = reject;
-    img.crossOrigin = 'anonymous'; // harmless if same-origin
+    img.crossOrigin = 'anonymous';
     img.src = url;
   });
 }
@@ -25,11 +25,10 @@ function drawToCanvas(img, maxWidth = 360) {
   const w = Math.floor(img.width * scale);
   const h = Math.floor(img.height * scale);
   const c = document.createElement('canvas');
-  c.width = w % 8 === 0 ? w : w + (8 - (w % 8)); // width must be multiple of 8
+  c.width = w % 8 === 0 ? w : w + (8 - (w % 8));
   c.height = h;
   const ctx = c.getContext('2d');
   ctx.drawImage(img, 0, 0, w, h);
-  // pad right area to white if we extended width
   if (c.width > w) {
     ctx.fillStyle = '#fff';
     ctx.fillRect(w, 0, c.width - w, h);
@@ -37,38 +36,30 @@ function drawToCanvas(img, maxWidth = 360) {
   return c;
 }
 
-// Simple Floyd–Steinberg dithering to B/W
+// Floyd–Steinberg dithering to 1bpp
 function ditherToMono(ctx, w, h) {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
   const gray = new Float32Array(w*h);
-  for (let i=0, j=0; i<d.length; i+=4, j++) {
-    gray[j] = (0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]); // 0..255
-  }
+  for (let i=0, j=0; i<d.length; i+=4, j++) gray[j] = (0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]);
   for (let y=0; y<h; y++) {
     for (let x=0; x<w; x++) {
-      const i = y*w + x;
-      const old = gray[i];
-      const newVal = old < 128 ? 0 : 255;
-      const err = old - newVal;
-      gray[i] = newVal;
-      // diffuse
+      const i = y*w + x, old = gray[i], nv = old < 128 ? 0 : 255, err = old - nv;
+      gray[i] = nv;
       if (x+1 < w) gray[i+1] += err*7/16;
       if (x-1 >=0 && y+1 < h) gray[i+w-1] += err*3/16;
       if (y+1 < h) gray[i+w] += err*5/16;
       if (x+1 < w && y+1 < h) gray[i+w+1] += err*1/16;
     }
   }
-  // pack 1bpp
-  const bytesPerRow = Math.ceil(w/8);
-  const out = new Uint8Array(bytesPerRow * h);
+  const bytesPerRow = Math.ceil(w/8), out = new Uint8Array(bytesPerRow * h);
   let p = 0;
   for (let y=0; y<h; y++) {
     for (let bx=0; bx<bytesPerRow; bx++) {
       let byte = 0;
       for (let bit=0; bit<8; bit++) {
         const x = bx*8 + bit;
-        const v = (x < w && gray[y*w + x] === 0) ? 1 : 0; // 1 = black
+        const v = (x < w && gray[y*w + x] === 0) ? 1 : 0;
         byte |= (v << (7 - bit));
       }
       out[p++] = byte;
@@ -77,26 +68,17 @@ function ditherToMono(ctx, w, h) {
   return { data: out, bytesPerRow };
 }
 
-// Build ESC/POS raster: GS v 0 m xL xH yL yH [data]
+// GS v 0 m xL xH yL yH [data]
 function escposRasterBytes(mono, w, h, mode = 0) {
   const bytesPerRow = Math.ceil(w/8);
   const xL = bytesPerRow & 0xFF, xH = (bytesPerRow >> 8) & 0xFF;
   const yL = h & 0xFF, yH = (h >> 8) & 0xFF;
   const header = Uint8Array.of(0x1D, 0x76, 0x30, mode, xL, xH, yL, yH);
   const out = new Uint8Array(header.length + mono.data.length);
-  out.set(header, 0);
-  out.set(mono.data, header.length);
+  out.set(header, 0); out.set(mono.data, header.length);
   return out;
 }
 
-/**
- * Print an image URL to the BLE printer (centered).
- * NOTE: uses a *chunked* writer for BLE reliability.
- * @param {string} url
- * @param {Function} writeChunked  function(u8[, chunk]) -> Promise
- * @param {Function} ALIGN
- * @param {number}   maxW
- */
 async function printImageUrl(url, writeChunked, ALIGN, maxW = 360) {
   try {
     const img = await loadImage(url);
@@ -104,13 +86,8 @@ async function printImageUrl(url, writeChunked, ALIGN, maxW = 360) {
     const ctx = c.getContext('2d');
     const { data } = ditherToMono(ctx, c.width, c.height);
     const raster = escposRasterBytes({ data }, c.width, c.height, 0);
-
-    await writeChunked(ALIGN(1));   // center
-    await writeChunked(raster);     // send bytes in BLE-safe chunks
-    await writeChunked(ALIGN(0));   // back to left
-  } catch (e) {
-    console.warn('[printImageUrl] failed:', e);
-  }
+    await writeChunked(ALIGN(1)); await writeChunked(raster); await writeChunked(ALIGN(0));
+  } catch (e) { console.warn('[printImageUrl] failed:', e); }
 }
 
 /* one-time guard */
@@ -124,30 +101,57 @@ if (window.__ISSUE_TICKET_WIRED__) {
   const FORM_ENDPOINT = '/enforcerTicket';
   const SYNC_TAG      = 'sync-tickets';
 
-  // Dexie config (MUST match serviceworker.js)
-  const DB_NAME    = 'ticketDB';
-  const DB_VERSION = 221;                          // <— match your SW
-  const DB_SCHEMA  = { tickets: '++id,client_uuid,created_at' };
+  // Dexie (must match SW)
+  const DB_NAME = 'ticketDB';
+  const DB_VERSION = 221;
+  const DB_SCHEMA = { tickets: '++id,client_uuid,created_at' };
 
-  /* ---- Dexie (with localStorage fallback) ---- */
+  /* ---- Dexie (with LocalStorage fallback) ---- */
   const hasDexie = !!window.Dexie;
   if (hasDexie && !window.ticketDB) {
     try {
       window.ticketDB = new Dexie(DB_NAME);
       window.ticketDB.version(DB_VERSION).stores(DB_SCHEMA).upgrade(()=>{});
-    } catch (e) {
-      console.warn('[Dexie init failed]', e);
-    }
+    } catch (e) { console.warn('[Dexie init failed]', e); }
   }
   const LS_KEY = 'offline_tickets';
   const lsRead  = ()=>{ try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; } };
   const lsWrite = (a)=>{ try { localStorage.setItem(LS_KEY, JSON.stringify(a)); } catch {} };
 
+  // remove queued item by client_uuid from BOTH Dexie & LocalStorage
+  async function removeQueuedByUuid(uuid){
+    if (!uuid) return;
+    try { await window.ticketDB?.tickets?.where('client_uuid').equals(uuid).delete(); } catch {}
+    try {
+      const keep = lsRead().filter(r => (r.client_uuid || r.payload?.client_uuid) !== uuid);
+      lsWrite(keep);
+    } catch {}
+  }
+
+  // optional: migrate LS leftovers into Dexie once (no-op if none)
+  async function migrateLocalToDexie(){
+    if (!window.ticketDB?.tickets) return;
+    const ls = lsRead(); if (!ls.length) return;
+    for (const rec of ls) {
+      const uuid = rec.client_uuid || rec.payload?.client_uuid || String(Date.now());
+      const exists = await window.ticketDB.tickets.where('client_uuid').equals(uuid).count();
+      if (!exists) {
+        await window.ticketDB.tickets.add({
+          client_uuid: uuid,
+          payload: rec.payload || rec,
+          created_at: rec.created_at || Date.now()
+        });
+      }
+    }
+    lsWrite([]); // clear LS after migration
+  }
+  migrateLocalToDexie().catch(()=>{});
+
   /* ---- small helpers ---- */
   const byId  = (id)=>document.getElementById(id);
   const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
   const getCSRF = ()=> document.querySelector('meta[name="csrf-token"]')?.content
-                || document.querySelector('input[name="_token"]')?.value || '';
+              || document.querySelector('input[name="_token"]')?.value || '';
 
   async function isReallyOnline(){
     if (!navigator.onLine) return false;
@@ -190,7 +194,6 @@ if (window.__ISSUE_TICKET_WIRED__) {
   async function refreshQueueBadge(){
     const el = byId('queueCount');
     if (!el) return;
-
     let dexieCount = 0, lsCount = 0;
     try { dexieCount = await window.ticketDB?.tickets?.count() ?? 0; } catch {}
     try { lsCount = lsRead().length; } catch {}
@@ -200,25 +203,42 @@ if (window.__ISSUE_TICKET_WIRED__) {
   window.addEventListener('DOMContentLoaded', refreshQueueBadge);
   window.addEventListener('online', refreshQueueBadge);
 
+  // listen for SW messages to auto-prune & refresh
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      const msg = e.data || {};
+      if (msg.type === 'SYNC_TICKET_OK' && msg.client_uuid) {
+        removeQueuedByUuid(msg.client_uuid).then(refreshQueueBadge);
+      }
+      if (msg.type === 'QUEUE_COUNT') {
+        const el = document.getElementById('queueCount');
+        if (el) el.textContent = String(msg.count || 0);
+      }
+      if (msg.type === 'SYNC_TICKETS_DONE') {
+        refreshQueueBadge();
+      }
+      if (msg.type === 'SYNC_TICKETS') {
+        window.syncOfflineTickets?.();
+      }
+    });
+  }
+
   /* ---- queue add ---- */
   async function enqueueTicket(payload){
     const uuid = payload.client_uuid;
-
     if (hasDexie && window.ticketDB?.tickets) {
       const exists = await window.ticketDB.tickets.where('client_uuid').equals(uuid).count();
       if (!exists) await window.ticketDB.tickets.add({ client_uuid: uuid, payload, created_at: Date.now() });
     } else {
       const list = lsRead();
-      if (!list.some(r => r.client_uuid === uuid)) {
+      if (!list.some(r => (r.client_uuid || r.payload?.client_uuid) === uuid)) {
         list.push({ id: Date.now(), client_uuid: uuid, payload, created_at: Date.now() });
         lsWrite(list);
       }
     }
-
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
       try { const reg = await navigator.serviceWorker.ready; await reg.sync.register(SYNC_TAG); } catch {}
     }
-
     Notify.info('Saved offline');
     byId('ticketForm')?.reset();
     refreshQueueBadge();
@@ -238,7 +258,11 @@ if (window.__ISSUE_TICKET_WIRED__) {
             headers:{'Content-Type':'application/json','Accept':'application/json','X-Requested-With':'XMLHttpRequest','X-Idempotency-Key':uuid},
             body: JSON.stringify(rec.payload)
           });
-          if (res.ok) await window.ticketDB.tickets.delete(rec.id);
+          if (res.ok) {
+            await removeQueuedByUuid(uuid);   // << prune both stores
+          } else {
+            console.warn('[sync] non-OK', res.status, await res.text());
+          }
         } catch { /* keep for later */ }
       }
     } else {
@@ -251,7 +275,11 @@ if (window.__ISSUE_TICKET_WIRED__) {
             headers:{'Content-Type':'application/json','Accept':'application/json','X-Requested-With':'XMLHttpRequest','X-Idempotency-Key':uuid},
             body: JSON.stringify(rec.payload)
           });
-          if (!res.ok) keep.push(rec);
+          if (res.ok) {
+            await removeQueuedByUuid(uuid);  // << prune both stores
+          } else {
+            keep.push(rec);
+          }
         } catch { keep.push(rec); }
       }
       lsWrite(keep);
@@ -392,11 +420,10 @@ if (window.__ISSUE_TICKET_WIRED__) {
       const {isConfirmed} = await Notify.modal({ title:'Confirm Details', html, width:600, showCancelButton:true, confirmButtonText:'Save & Print' });
       if (!isConfirmed) return;
 
-      // === BLE printing (your working logic kept) ===
+      // === BLE printing (unchanged) ===
       await (async function printTwoCopies(p) {
         const S_MAIN='49535343-fe7d-4ae5-8fa9-9fafd205e455', C_MAIN='49535343-8841-43f4-a8d4-ecbe34729bb3';
         const S_FFE0='0000ffe0-0000-1000-8000-00805f9b34fb', C_FFE1='0000ffe1-0000-1000-8000-00805f9b34fb';
-
         const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [S_MAIN, S_FFE0] });
         let server = await dev.gatt.connect();
         let svcUUID=S_MAIN, chrUUID=C_MAIN, ch;
@@ -406,13 +433,11 @@ if (window.__ISSUE_TICKET_WIRED__) {
         const enc=new TextEncoder(), NL='\x0A';
         const ALIGN=(n)=>Uint8Array.of(0x1B,0x61,n), FEED=(n)=>Uint8Array.of(0x1B,0x64,n);
 
-        // tiny-command writer (OK for ESC/POS commands and short text)
         const write = async (u8) => {
           if (ch.writeValueWithoutResponse) await ch.writeValueWithoutResponse(u8);
           else await ch.writeValue(u8);
           await sleep(60);
         };
-        // NEW: chunked writer for binary/image data (BLE 20-byte MTU)
         const writeChunked = async (u8, chunk = 20, tries = 3) => {
           for (let i = 0; i < u8.length; i += chunk) {
             const slice = u8.slice(i, i + chunk);
@@ -423,40 +448,26 @@ if (window.__ISSUE_TICKET_WIRED__) {
                 else await ch.writeValue(slice);
                 ok = true;
               } catch (e) {
-                attempt++;
-                if (attempt >= tries) throw e;
-                await sleep(30 * attempt);
+                attempt++; if (attempt >= tries) throw e; await sleep(30 * attempt);
               }
             }
             await sleep(10);
           }
         };
-
-        const send = async (s) => {
-          const b = enc.encode(s);
-          for (let i=0;i<b.length;i+=20) { await write(b.slice(i,i+20)); }
-        };
+        const send = async (s) => { const b = enc.encode(s); for (let i=0;i<b.length;i+=20) await write(b.slice(i,i+20)); };
         const safe = (s)=>String(s??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/₱/g,'Php').replace(/[–—]/g,'-').replace(/[“”]/g,'"').replace(/[‘’]/g,"'");
         const L = async (k,v='')=>send(k + safe(v) + NL);
         const nameLine=[p.violator.first_name,p.violator.middle_name,p.violator.last_name].filter(Boolean).join(' ');
-
-        // Header
-        await write(Uint8Array.of(0x1B,0x40)); // init
+        await write(Uint8Array.of(0x1B,0x40));
         await write(ALIGN(1));
-
-        // >>> QR ABOVE HEADER (centered) – from /public/qr.png (cache-busted)
         await printImageUrl('/qr.png?v=1', writeChunked, ALIGN, 384);
         await send('https://tinyurl.com/posoVlogin'+NL);
         await write(FEED(1));
-
-        // Header Text
         await send('City of San Carlos'+NL);
         await send('Public Order and Safety Office'+NL);
         await send('(POSO)'+NL+NL);
         await send('Traffic Citation Ticket'+NL);
         await write(ALIGN(0));
-        
-        // Copy 1
         await L('Ticket #: ', p.ticket.ticket_number);
         await L('Date issued: ', p.ticket.issued_at);
         await write(FEED(1));
@@ -480,8 +491,6 @@ if (window.__ISSUE_TICKET_WIRED__) {
         await L('Badge No: ', p.enforcer.badge_num);
         await send('*UNOFFICIAL RECEIPT*. Please present this to cashiers officer at City Hall'+NL);
         await write(FEED(3));
-
-        // Copy 2 (reprint header + summary)
         await write(ALIGN(1));
         await send('City of San Carlos'+NL);
         await send('Public Order and Safety Office'+NL);

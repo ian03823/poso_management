@@ -64,16 +64,24 @@ class TicketController extends Controller
         // ✅ Relaxed rules to match what you actually send during offline
         $data = $req->validate([
             'first_name'     => 'required|string',
+            'middle_name'      => 'required|string',
             'last_name'      => 'required|string',
+            'address' => 'nullable|string',
+            'birthdate'      => 'nullable|date',
             'license_number' => 'nullable|string',
             'plate_number'   => 'nullable|string',
             'vehicle_type'   => 'required|string',
+            'is_owner'       => 'nullable|boolean',
+            'owner_name'     => 'nullable|string|max:255',
+            'flags'         => 'array',           // you can also validate an incoming flags[] if you switch to that
+            'flags.*'       => 'exists:flags,id',
             'violations'     => 'array|min:1',
-            'location'       => 'nullable|string',     // was required — loosened
+            'location'       => 'nullable|string|max:255',     // was required — loosened
             'latitude'       => 'nullable|numeric',
             'longitude'      => 'nullable|numeric',
+            'confiscation_type_id' => 'nullable|exists:confiscation_types,id',
             'client_uuid'    => 'nullable|string|max:64', // don’t force uuid()
-            'enforcer_id'    => 'nullable|integer',       // ✅ accept from payload
+            'enforcer_id'    => 'required|integer|exists:enforcers,id',
         ]);
 
         // ✅ No-session fallback (offline sync)
@@ -115,31 +123,49 @@ class TicketController extends Controller
             ]
         );
 
-        $ticket = DB::transaction(function () use ($req, $violator, $vehicle, $uuid, $enforcerId) {
+        $ticket = DB::transaction(function () use ($req, $data, $violator, $vehicle, $uuid) {
+             $enf = Enforcer::lockForUpdate()->findOrFail($data['enforcer_id']);
+
+            // Find the last ticket number used by this enforcer
+            $last = Ticket::where('enforcer_id', $enf->id)
+                        ->lockForUpdate()
+                        ->max('ticket_number');
+            $next = $last !== null ? ($last + 1) : $enf->ticket_start;
+            if ($next > $enf->ticket_end) {
+                // Return a 422 so the client can show a friendly message & keep the record queued
+                throw ValidationException::withMessages([
+                    'ticket_number' => "Allocated range exhausted ({$enf->ticket_start}–{$enf->ticket_end}).",
+                ]);
+            }
             $t = Ticket::create([
                 'violator_id'  => $violator->id,
-                'vehicle_id'   => $vehicle->id,
-                'ticket_number'=> 'SC-' . now()->format('YmdHis') . '-' . mt_rand(100,999),
+                'vehicle_id'   => $vehicle->getKey(),
+                'ticket_number'=> $next,
                 'issued_at'    => now(),
-                'location'     => $req->input('location'),
-                'latitude'     => $req->input('latitude'),
-                'longitude'    => $req->input('longitude'),
-                'enforcer_id'  => $enforcerId,          // ✅ never NULL now
+                'location'     => $data['location'] ?? null,
+                'latitude'     => $data['latitude'] ?? null,
+                'longitude'    => $data['longitude'] ?? null,
+                'enforcer_id'  => $enf->id,          // ✅ never NULL now
                 'client_uuid'  => $uuid,
                 'is_impounded' => (bool)$req->boolean('is_impounded'),
+                'confiscation_type_id' => $data['confiscation_type_id'] ?? null,
+                'offline'              => true,
+                'status_id'   => TicketStatus::where('name','pending')->value('id'),
+                 // Keep JSON snapshot if you still use it elsewhere:
+                'violation_codes'      => json_encode($data['violations']),
             ]);
 
-            $codes = (array)$req->input('violations', []);
-            if ($codes) {
-                $viols = Violation::whereIn('violation_code', $codes)->get();
-                $t->violations()->sync($viols->pluck('id'));
+            // Attach violations via pivot
+            $codes = (array)$data['violations'];
+            if (!empty($codes)) {
+                $viols = Violation::whereIn('violation_code', $codes)->pluck('id')->all();
+                $t->violations()->sync($viols);
             }
             return $t;
         });
 
         return response()->json($this->printerPayload($ticket), 201);
     }
-
     private function printerPayload(\App\Models\Ticket $ticket): array
     {
         $ticket->load(['violator','vehicle','violations','enforcer']);
@@ -171,8 +197,8 @@ class TicketController extends Controller
         ])->values(),
         // generate or fetch if you already created them:
         'credentials' => [
-            'username' => $ticket->username ?? 'N/A',
-            'password' => $ticket->password ?? 'N/A',
+            'username' => $ticket->violator->username ?? 'N/A',
+            'password' => $ticket->violator->password ?? 'N/A',
         ],
         'last_apprehended_at' => null,
         'enforcer' => [
@@ -365,7 +391,7 @@ class TicketController extends Controller
                 'enforcer_id'            => $enf->id,
                 'ticket_number'          => $next,
                 'violator_id'            => $violator->id,
-                'vehicle_id'             => $vehicle->vehicle_id,
+                'vehicle_id'             => $vehicle->getKey(),
                 'violation_codes'        => json_encode($d['violations']),
                 'location'               => $d['location'],
                 'issued_at'              => now(),

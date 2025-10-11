@@ -9,7 +9,8 @@ class Vehicle extends Model
 {
     //
     protected $primaryKey = 'vehicle_id';
-
+    public $incrementing = true;
+    protected $keyType = 'int';
     protected $fillable = [
         'violator_id',
         'plate_number',

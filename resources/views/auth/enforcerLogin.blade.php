@@ -54,7 +54,7 @@
       <h3 class="auth-title">Enforcers Login</h3>
 
       {{-- Form --}}
-      <form method="POST" action="{{ route('enforcer.login') }}">
+      <form method="POST" action="{{ route('enforcer.login') }}" id="enforcerLoginForm">
         @csrf
 
         {{-- Badge Number --}}
@@ -137,8 +137,9 @@
 })();
 </script>
 @endif
-
+@endsection
 @push('scripts')
+<script src="{{ asset('js/enforcer.offline.auth.js') }}"></script>
 <script>
   function togglePassword() {
     const pwd = document.getElementById('password');
@@ -150,6 +151,31 @@
   document.querySelectorAll('#badge_num, #password').forEach(el=>{
     el.addEventListener('input',()=> el.classList.remove('is-invalid'));
   });
+  document.addEventListener('DOMContentLoaded', () => {
+  const f = document.getElementById('enforcerLoginForm');
+  if (!f) return;
+
+  f.addEventListener('submit', async (e) => {
+    // OFFLINE → try offline cache-based login
+    if (!navigator.onLine) {
+      e.preventDefault();
+      const u = f.badge_num.value.trim();
+      const p = f.password.value;
+      const res = await window.EnforcerOfflineAuth.offlineLogin(u, p, 7);
+      if (res.ok) {
+        // Go to the PWA start page (your Issue Ticket page is fine)
+        window.location.href = "{{ route('pwa') }}";
+      } else {
+        alert('Offline login unavailable. Connect once to cache your login.');
+      }
+      return;
+    }
+
+    // ONLINE → stash creds for caching post-redirect
+    sessionStorage.setItem('pending_login_user', f.badge_num.value.trim());
+    sessionStorage.setItem('pending_login_pass', f.password.value);
+  });
+});
+
 </script>
 @endpush
-@endsection

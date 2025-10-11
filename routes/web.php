@@ -19,6 +19,7 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\ViolatorEmailController;
 use App\Http\Controllers\ViolatorForgotPasswordController;
 use App\Http\Controllers\AdminForgotPasswordOtpController;
+use App\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Mail;
 use App\Http\Controllers\ViolatorPhoneController;
 use Illuminate\Support\Facades\DB;
@@ -89,9 +90,10 @@ Route::get('/_diag/gas', function () {
     }
 });
 
-// background sync JSON submit (CSRF exempt)
-Route::post('/pwa/sync/ticket', [TicketController::class, 'storeJson'])->name('ticket.sync');
-
+Route::post('pwa/sync/ticket', [TicketController::class, 'storeJson'])
+    ->name('ticket.sync')
+    ->withoutMiddleware(['web'])   // <- CSRF off
+    ->middleware('throttle:60,1');  
 
 // Admin login routes
 Route::get('/alogin', [AuthController::class, 'showLogin'])->name('admin.showLogin');
@@ -210,9 +212,11 @@ Route::middleware('admin')->group(function () {
     Route::get('/logs/activity', [ActivityLogController::class, 'index'])->name('logs.activity');
 
     // On-demand report downloads
-    Route::get('reports/download/{format}', [AnalyticsController::class,'download'])
-        ->where('format','xlsx|docx')
-        ->name('reports.download');
+    Route::get('/analytics/download',       [AnalyticsController::class, 'download'])->name('analytics.download');       // DOCX
+    Route::get('/analytics/download-excel', [AnalyticsController::class, 'downloadExcel'])->name('analytics.downloadExcel');
+
+    Route::get('/analytics/docx-smoke', [AnalyticsController::class, 'docxSmoke']);
+    Route::get('/analytics/docx-logo-smoke', [AnalyticsController::class, 'docxLogoSmoke']);
 
     Route::get('/superadmin/activity-logs', [ActivityLogController::class, 'index'])
         ->name('admin.activity-logs.index');

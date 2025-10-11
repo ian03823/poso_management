@@ -184,10 +184,10 @@
     <div class="col-lg-4">
       <div class="card shadow-sm h-100">
         <div class="card-body d-flex flex-column gap-2">
-          <a id="btnExportXlsx" class="btn btn-success" href="{{ route('reports.download','xlsx') }}" data-no-ajax>
+          <a id="btnExportXlsx" class="btn btn-success" href="{{ route('analytics.downloadExcel') }}" data-no-ajax>
             <i class="bi bi-file-earmark-spreadsheet"></i> Monthly Report Excel
           </a>
-          <a id="btnExportDocx" class="btn btn-primary" href="{{ route('reports.download','docx') }}" data-no-ajax>
+          <a id="btnExportDocx" class="btn btn-primary" href="{{ route('analytics.download') }}" data-no-ajax>
             <i class="bi bi-file-earmark-word"></i> Download Word
           </a>
         </div>

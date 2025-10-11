@@ -3,7 +3,8 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use app\Services\LogActivity;
+use App\Http\Controllers\Concerns\WithActivityLogs;
+use App\Services\LogActivity;
 use App\Models\Violation;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,7 @@ use Illuminate\Validation\Rule;
 
 class ViolationController extends Controller
 {
+    use WithActivityLogs;
     /**
      * Display a listing of the resource.
      */
@@ -89,9 +91,18 @@ class ViolationController extends Controller
             'category'    => 'required|string|max:100',
         ]);
 
+
         $v = Violation::create($data);
 
-        // SPA: return JSON so the table JS can simply reload the partial
+        // Activity log (after successful commit)
+        $this->logCreated($v, 'violation', [
+            'violation_id'   => $v->id,
+            'violation_code' => $v->violation_code,
+            'violation_name' => $v->violation_name,
+            'fine_amount'    => $v->fine_amount,
+            'category'       => $v->category,
+        ]);
+        
         return response()->json([
             'success' => true,
             'message' => 'Violation added successfully.',
@@ -130,7 +141,26 @@ class ViolationController extends Controller
 
         ]);
 
+        $original = $v->getOriginal();
+        $v->fill($data);
+        $dirty = $v->getDirty();
+
         $v->update($data);
+
+        $diff = [];
+        foreach ($dirty as $field => $newVal) {
+            $diff[$field] = [
+                'from' => $original[$field] ?? null,
+                'to'   => $newVal,
+            ];
+        }
+
+        // 🔎 Activity log (after successful commit)
+        $this->logUpdated($v, 'violation', [
+            'violation_id'   => $v->id,
+            'violation_code' => $v->violation_code,
+            'diff'           => $diff, // explicit diff so it’s accurate
+        ]);
 
         return response()->json([
             'success' => true,

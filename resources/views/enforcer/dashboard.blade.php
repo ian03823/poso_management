@@ -73,8 +73,9 @@
     </a>
   </div>
 </div>
-
+@endsection
 @push('scripts')
+<script src="{{ asset('js/enforcer.offline.auth.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const input       = document.getElementById('violator-search');
@@ -152,6 +153,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+document.addEventListener('DOMContentLoaded', async () => {
+  const u = sessionStorage.getItem('pending_login_user');
+  const p = sessionStorage.getItem('pending_login_pass');
+  if (u && p && window.EnforcerOfflineAuth) {
+    const profile = @json([
+      'id'        => auth('enforcer')->id(),
+      'badge_num' => auth('enforcer')->user()->badge_num,
+      'fname'     => auth('enforcer')->user()->fname,
+      'lname'     => auth('enforcer')->user()->lname,
+    ]);
+    await window.EnforcerOfflineAuth.cacheLogin(u, p, profile);
+    sessionStorage.removeItem('pending_login_user');
+    sessionStorage.removeItem('pending_login_pass');
+  }
+});
+
+// When back online from offline mode, silently refresh the cache
+window.addEventListener('online', () => {
+  window.EnforcerOfflineAuth?.revalidateOnline?.();
+});
 </script>
 @endpush
-@endsection

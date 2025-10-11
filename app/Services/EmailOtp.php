@@ -105,7 +105,7 @@ class EmailOtp
 
     protected static function htmlTemplate(string $title, string $code, int $ttlMin): string
     {
-        $app = e(config('app.name'));
+        $app = e(config('app.name'));   
         return <<<HTML
         <!doctype html><html><body style="font-family:Arial,sans-serif">
         <h2>{$title}</h2>

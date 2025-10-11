@@ -82,9 +82,5 @@
     <div class="w-100 d-flex justify-content-center">
       {{ $tickets->links() }}
     </div>
-<<<<<<< HEAD
   </div>
 </div>
-=======
-</div>
->>>>>>> fix-detached
