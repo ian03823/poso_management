@@ -22,12 +22,10 @@
       --card-shadow: 0 10px 30px rgba(0,0,0,.06);
       --radius-xl: 18px;
     }
-
     html, body {
       height: 100%;
       background: var(--bg);
     }
-
     .pw-page {
       min-height: 100vh;
       padding: 16px;
