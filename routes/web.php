@@ -212,8 +212,8 @@ Route::middleware('admin')->group(function () {
     Route::get('/logs/activity', [ActivityLogController::class, 'index'])->name('logs.activity');
 
     // On-demand report downloads
-    Route::get('/analytics/download',       [AnalyticsController::class, 'download'])->name('analytics.download');       // DOCX
-    Route::get('/analytics/download-excel', [AnalyticsController::class, 'downloadExcel'])->name('analytics.downloadExcel');
+    Route::get('/analytics/download-pdf', [AnalyticsController::class, 'downloadPdf'])->name('analytics.downloadPdf');
+    Route::get('/analytics/download-excel', [AnalyticsController::class, 'downloadRegisterExcel'])->name('analytics.downloadExcel');
 
     Route::get('/analytics/docx-smoke', [AnalyticsController::class, 'docxSmoke']);
     Route::get('/analytics/docx-logo-smoke', [AnalyticsController::class, 'docxLogoSmoke']);

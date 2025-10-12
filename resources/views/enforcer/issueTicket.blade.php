@@ -58,26 +58,32 @@
             {{-- Name --}}
             <div class="col-6 col-md-6 form-floating">
               <input type="text" class="form-control" id="first_name" name="first_name"
-                     placeholder="First Name" value="{{ $v->first_name ?? old('first_name') }}">
+                     placeholder="First Name" value="{{ $v->first_name ?? old('first_name') }}"  autocomplete="name" autocapitalize="words" inputmode="text" maxlength="50" pattern="^[A-Za-zÀ-ÖØ-öø-ÿ\s.\-']+$" required>
               <label for="first_name">First Name</label>
+              <div class="invalid-feedback">Letters only (spaces, dot, apostrophe, hyphen allowed).</div>
             </div>
             <div class="col-6 col-md-6 form-floating">
               <input type="text" class="form-control" id="middle_name" name="middle_name"
-                     placeholder="Middle Name" value="{{ $v->middle_name ?? old('middle_name') }}">
+                     placeholder="Middle Name" value="{{ $v->middle_name ?? old('middle_name') }}" autocapitalize="words" inputmode="text" maxlength="50" pattern="^[A-Za-zÀ-ÖØ-öø-ÿ\s.\-']+$">
               <label for="middle_name">Middle Name</label>
+              <div class="invalid-feedback">Letters only (spaces, dot, apostrophe, hyphen allowed).</div>
             </div>
             <div class="col-6 col-md-6 form-floating">
               <input type="text" class="form-control" id="last_name" name="last_name"
-                     placeholder="Last Name" value="{{ $v->last_name ?? old('last_name') }}">
+                     placeholder="Last Name" value="{{ $v->last_name ?? old('last_name') }}" autocomplete="family-name" autocapitalize="words" inputmode="text" maxlength="50" pattern="^[A-Za-zÀ-ÖØ-öø-ÿ\s.\-']+$" required>
               <label for="last_name">Last Name</label>
+              <div class="invalid-feedback">Letters only (spaces, dot, apostrophe, hyphen allowed).</div>
             </div>
 
             {{-- License No. --}}
             <div class="col-6 col-md-6 form-floating">
               <input type="text" class="form-control" id="license_num" name="license_num"
-                     placeholder="License number" autocomplete="off"
-                     value="{{ $v->license_number ?? old('license_num') }}">
+                    placeholder="License number" autocomplete="off"
+                    value="{{ $v->license_number ?? old('license_num') }}"
+                    inputmode="text" maxlength="13"
+                    pattern="^[A-Z]\d{2}-\d{2}-\d{6}$" required>
               <label for="license_num">License No.</label>
+              <div class="invalid-feedback">Format must be like <strong>A12-34-567890</strong>.</div>
             </div>
 
             {{-- Address --}}
@@ -135,8 +141,11 @@
             {{-- Owner Name --}}
             <div class="col-12 col-md-6 form-floating">
               <input type="text" class="form-control" id="owner_name" name="owner_name"
-                     placeholder="Owner name" value="{{ old('owner_name') }}">
+                    placeholder="Owner name" value="{{ old('owner_name') }}"
+                    autocapitalize="words" inputmode="text" maxlength="80"
+                    pattern="^[A-Za-zÀ-ÖØ-öø-ÿ\s.\-']+$">
               <label for="owner_name">Owner Name</label>
+              <div class="invalid-feedback">Letters only (spaces, dot, apostrophe, hyphen allowed).</div>
             </div>
           </div>
 

@@ -7,6 +7,7 @@ use App\Models\Vehicle;
 use App\Models\Violator;
 use App\Models\Enforcer;
 use Illuminate\Http\Request;
+use App\Http\Requests\StoreTicketRequest;
 use App\Models\Violation;
 use App\Models\TicketStatus;
 use App\Models\ConfiscationType;
@@ -286,9 +287,9 @@ class TicketController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(StoreTicketRequest $request)
     {
-         $d = $request->validate([
+         $d = $request->validated([
             'first_name'    => 'nullable|string|max:50',
             'middle_name'   => 'nullable|string|max:50',
             'last_name'     => 'nullable|string|max:50',
@@ -318,7 +319,7 @@ class TicketController extends Controller
             $violator->birthdate = $d['birthdate'];
         }
         $violator->save();
-
+        /** @var \App\Http\Requests\StoreTicketRequest|\Illuminate\Http\Request $request */
         $existingPlate = Vehicle::where('plate_number', $d['plate_num'])->first();
         if ($existingPlate && $existingPlate->violator_id !== $violator->id) {
             if ($request->expectsJson()) {

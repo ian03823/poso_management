@@ -1,14 +1,17 @@
 <?php
 
 namespace App\Http\Controllers;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Carbon\Carbon;
-
+use App\Exports\PosoRegisterWorkbookExport;
+use Illuminate\Support\Str;
 // Excel export
 use App\Exports\FormalStatsExport;
 use Maatwebsite\Excel\Facades\Excel;
@@ -38,7 +41,7 @@ class AnalyticsController extends Controller
 
         return view('admin.analytics.index', compact('defaultLat','defaultLng','violationOptions'));
     }
-
+    
     public function latest(Request $request)
     {
         [$from, $to] = $this->parseDateRange($request->input('from'), $request->input('to'));
@@ -47,8 +50,10 @@ class AnalyticsController extends Controller
 
         $q = DB::table('tickets')->whereBetween('issued_at', [$from, $to]);
 
+        if ($status === 'pending') $q->where('status_id', 1);
         if ($status === 'paid')   $q->where('status_id', 2);
-        if ($status === 'unpaid') $q->where('status_id', 1);
+        if ($status === 'unpaid') $q->where('status_id', 3);
+        if ($status === 'cancelled') $q->where('status_id', 4);
 
         if ($violationIds->isNotEmpty() && Schema::hasTable('ticket_violation')) {
             $q->join('ticket_violation', 'ticket_violation.ticket_id', '=', 'tickets.id')
@@ -56,7 +61,7 @@ class AnalyticsController extends Controller
         }
 
         $paid   = (clone $q)->where('status_id', 2)->count();
-        $unpaid = (clone $q)->where('status_id', 1)->count();
+        $unpaid = (clone $q)->where('status_id', 3)->count();
 
         $monthly = (clone $q)
             ->selectRaw('DATE_FORMAT(issued_at, "%Y-%m") as ym, COUNT(*) as c')
@@ -236,90 +241,220 @@ private function smartSuggestion(string $place, int $count, array &$used): strin
     // Shared data (for both Excel & Word)
     private function gatherAnalyticsData(Request $request): array
     {
-        $from    = $request->date('from');
-        $to      = $request->date('to');
-        $status  = $request->input('status');     // 'paid' | 'unpaid' | numeric id
-        $viocode = $request->input('violation');  // code or name
-        $area    = $request->input('area');
+        // --- robust date parsing like your API ---
+    [$from, $to] = (function (?string $f, ?string $t): array {
+        $defaultTo   = \Carbon\Carbon::now()->endOfDay();
+        $defaultFrom = (clone $defaultTo)->copy()->subMonths(2)->startOfMonth();
 
-        $paidStatusId = \App\Models\TicketStatus::where('name','paid')->value('id');
+        $F = $f
+            ? (strlen($f) === 7
+                ? \Carbon\Carbon::parse($f . '-01')->startOfMonth()
+                : \Carbon\Carbon::parse($f)->startOfDay())
+            : $defaultFrom;
 
-        $q = \App\Models\Ticket::query();
-        if ($from) { $q->whereDate('issued_at', '>=', $from); }
-        if ($to)   { $q->whereDate('issued_at', '<=', $to); }
+        $T = $t
+            ? (strlen($t) === 7
+                ? \Carbon\Carbon::parse($t . '-01')->endOfMonth()
+                : \Carbon\Carbon::parse($t)->endOfDay())
+            : $defaultTo;
 
-        if ($status) {
-            if (is_numeric($status))       $q->where('status_id', (int)$status);
-            elseif ($status === 'paid')    $q->where('status_id', $paidStatusId);
-            elseif ($status === 'unpaid')  $q->where('status_id', '!=', $paidStatusId);
-        }
+        return [$F, $T];
+    })($request->input('from'), $request->input('to'));
 
-        if ($viocode) {
-            $code = trim($viocode);
-            $q->where(function ($qq) use ($code) {
-                $qq->whereJsonContains('violation_codes', $code)
-                   ->orWhereHas('violations', function ($v) use ($code) {
-                       $v->where('violation_code', $code)
-                         ->orWhere('violation_name', 'like', "%{$code}%");
-                   });
-            });
-        }
+    $viocode = $request->input('violation');
+    $area    = $request->input('area');
 
-        if ($area) { $q->where('location', 'like', "%{$area}%"); }
+    // status names map, e.g. [1=>'pending', 2=>'paid', 3=>'unpaid', 4=>'cancelled']
+    $statusMap = \App\Models\TicketStatus::pluck('name','id')
+        ->map(fn($v)=>strtolower($v))->toArray();
 
-        $rows = $q->get(['location','latitude','longitude','status_id']);
+    $paidStatusId   = array_search('paid',   $statusMap, true) ?: null;
+    $unpaidStatusId = array_search('unpaid', $statusMap, true) ?: null;
 
-        $paid   = $rows->where('status_id', $paidStatusId)->count();
-        $unpaid = $rows->where('status_id', '!=', $paidStatusId)->count();
-        $total  = $rows->count();
+    // ---------- BASE: only date/violation/area (NO status filter) ----------
+    $base = \App\Models\Ticket::query()
+        ->whereBetween('issued_at', [$from, $to]);
 
-        // Hotspots as objects (area + count), top 10
-        $hotspots = $rows
-            ->map(function ($t) {
-                $area = $t->location ?: (
-                    (!is_null($t->latitude) && !is_null($t->longitude))
-                        ? sprintf('%.5f, %.5f', $t->latitude, $t->longitude)
-                        : 'Unknown'
-                );
-                return (object)['area' => $area, 'c' => 1];
-            })
-            ->groupBy('area')
-            ->map(function ($g) {
-                return (object)['area' => $g->first()->area, 'c' => $g->count()];
-            })
-            ->sortByDesc('c')
-            ->take(10)
-            ->values()
-            ->all();
+    if ($viocode) {
+        $code = trim($viocode);
+        $base->where(function ($qq) use ($code) {
+            $qq->whereJsonContains('violation_codes', $code)
+               ->orWhereHas('violations', function ($v) use ($code) {
+                   // your pivot uses violations.id (numeric), but we allow code or name in filter
+                   $v->where('violation_code', $code)
+                     ->orWhere('violation_name', 'like', "%{$code}%");
+               });
+        });
+    }
+    if ($area) {
+        $base->where('location', 'like', "%{$area}%");
+    }
 
-        $cover     = ($from ? $from->format('Y-m-d') : '—') . ' to ' . ($to ? $to->format('Y-m-d') : '—');
-        $generated = now()->format('F d, Y — h:i A');
+    // minimal columns for counting + hotspots
+    $rows = $base->get(['id','location','latitude','longitude','status_id']);
 
-        // Filters single line (for Word)
-        $filters = [];
-        if ($from || $to) { $filters[] = "Date: ".($from? $from->format('Y-m-d'):'—')." to ".($to? $to->format('Y-m-d'):'—'); }
-        if ($status)      { $filters[] = 'Status: '.(is_numeric($status) ? "#{$status}" : ucfirst($status)); }
-        if ($viocode)     { $filters[] = 'Violation: '.$this->xmlSafe($viocode); }   // sanitize
-        if ($area)        { $filters[] = 'Area: '.$this->xmlSafe($area); }  
-        if (!$filters)    { $filters[] = 'None (All data)'; }
-        $filtersLine = implode('    •    ', $filters);
+    // ---------- TOTALS ----------
+    $totalAll = $rows->count();
+    $paid     = $paidStatusId   ? $rows->where('status_id', $paidStatusId)->count()   : 0;
+    $unpaid   = $unpaidStatusId ? $rows->where('status_id', $unpaidStatusId)->count() : 0;
 
-        return [
-            'paid'         => $paid,
-            'unpaid'       => $unpaid,
-            'total'        => $total,
-            'hotspots'     => $hotspots,  // array of stdClass {area,c}
-            'cover'        => $cover,
-            'generated_on' => $generated,
-            'filters_line' => $filtersLine,
-        ];
+    // ---------- REVENUE (sum fines of violations for PAID tickets only) ----------
+    // IMPORTANT: pivot links to violations.ID (numeric), not violation_code
+    $revQuery = \App\Models\Ticket::query()
+        ->whereBetween('issued_at', [$from, $to]);
+
+    if ($viocode) {
+        $code = trim($viocode);
+        $revQuery->where(function ($qq) use ($code) {
+            $qq->whereJsonContains('violation_codes', $code)
+               ->orWhereHas('violations', function ($v) use ($code) {
+                   $v->where('violation_code',$code)
+                     ->orWhere('violation_name','like',"%{$code}%");
+               });
+        });
+    }
+    if ($area) {
+        $revQuery->where('location','like',"%{$area}%");
+    }
+    if ($paidStatusId) {
+        $revQuery->where('status_id',$paidStatusId);
+    }
+
+    $revenue = $revQuery
+        ->join('ticket_violation', 'ticket_violation.ticket_id', '=', 'tickets.id')
+        ->join('violations', 'violations.id', '=', 'ticket_violation.violation_id') // <-- FIXED
+        ->sum('violations.fine_amount');
+
+    // ---------- HOTSPOTS (status-agnostic; objects to avoid array/object mixups) ----------
+    $hotspots = $rows
+        ->map(function ($t) {
+            $place = trim((string)($t->location ?? ''));
+            if ($place === '') {
+                if (!is_null($t->latitude) && !is_null($t->longitude)) {
+                    $place = sprintf('%.5f, %.5f', $t->latitude, $t->longitude);
+                } else {
+                    $place = 'Unknown';
+                }
+            }
+            return (object) ['area' => $place, 'c' => 1];
+        })
+        ->groupBy('area')
+        ->map(fn ($g) => (object)['area' => $g->first()->area, 'c' => $g->count()])
+        ->sortByDesc('c')
+        ->values()
+        ->take(3)
+        ->all();
+
+    // filters line for header
+    $filters = [];
+    $filters[] = 'Date: '.$from->format('Y-m-d').' to '.$to->format('Y-m-d');
+    if ($viocode) $filters[] = "Violation: {$viocode}";
+    if ($area)    $filters[] = "Area: {$area}";
+    $filtersLine = implode('    •    ', $filters);
+
+    return [
+        'total_all'    => $totalAll,
+        'paid'         => $paid,
+        'unpaid'       => $unpaid,
+        'revenue'      => (float)$revenue,
+        'hotspots'     => $hotspots, // objects {area, c}
+        'generated_on' => now()->format('F d, Y — h:i A'),
+        'filters_line' => $filtersLine,
+    ];
     }
     // Excel (XLSX) – unchanged (your exporter)
-    public function downloadExcel(Request $request): BinaryFileResponse
+    public function downloadRegisterExcel(Request $request)
     {
-        $data = $this->gatherAnalyticsData($request);
-        $file = 'POSO_Analytics_' . now()->format('Ymd_His') . '.xlsx';
-        return Excel::download(new FormalStatsExport($data), $file);
+        // Parse date range (month-aware)
+        [$from, $to] = $this->parseDateRange($request->input('from'), $request->input('to'));
+
+        // Pull tickets in range + eager load needed relations
+        $tickets = \App\Models\Ticket::with(['violator', 'violations', 'paidTickets', 'status'])
+            ->whereBetween('issued_at', [$from, $to])
+            ->orderBy('issued_at')
+            ->get();
+
+        // Normalize each ticket to a flat row for the sheet
+        $rows = $tickets->map(function ($t) {
+            // driver name (first + middle + last, fallback to username/name)
+            $v = $t->violator;
+            $driver = trim(collect([
+                optional($v)->first_name,
+                optional($v)->middle_name,
+                optional($v)->last_name,
+            ])->filter()->implode(' '));
+            if ($driver === '' && $v) {
+                $driver = $v->name ?: $v->username ?: 'Unknown';
+            }
+
+            // address
+            $address = optional($v)->address ?: '';
+
+            // violations as readable names (uses your accessor if available)
+            $violations = method_exists($t, 'getViolationNamesAttribute')
+                ? ($t->violation_names ?? '')
+                : $t->violations->pluck('violation_name')->implode(', ');
+
+            // paid info (take latest payment if many)
+            $payment   = $t->paidTickets->sortByDesc('created_at')->first();
+            $orNumber  = $payment->or_number ?? null;        // adjust field if different
+            $amount    = $payment->amount    ?? null;        // adjust field if different
+
+            return [
+                'ym'         => \Carbon\Carbon::parse($t->issued_at)->format('Y-m'),
+                'date'       => \Carbon\Carbon::parse($t->issued_at),
+                'driver'     => $driver,
+                'address'    => $address,
+                'tct'        => $t->ticket_number,
+                'violations' => $violations,
+                'or_number'  => $orNumber,
+                'amount'     => $amount,
+                'status'     => optional($t->status)->name ?? '',
+            ];
+        });
+
+        // Group rows by month (YYYY-MM)
+        $byMonth = $rows->groupBy('ym');
+
+        // Build and download workbook
+        $file = 'POSO_Register_' . now()->format('Ymd_His') . '.xlsx';
+        return Excel::download(new PosoRegisterWorkbookExport($byMonth->all()), $file);
+    }
+    public function downloadPdf(Request $request): HttpResponse
+    {
+         $data = $this->gatherAnalyticsData($request);
+
+        // build top-3 rows with smart suggestions (status-agnostic)
+        $used = [];
+        $top3 = [];
+        foreach ($data['hotspots'] as $h) {
+            $place = $h->area ?? 'Unknown';
+            $cnt   = (int)($h->c ?? 0);
+            $top3[] = [
+                'place' => $place,
+                'count' => $cnt,
+                'reco'  => $this->smartSuggestion($place, $cnt, $used),
+            ];
+        }
+
+        $viewData = [
+            'title'        => 'Public Order and Safety Office (POSO) San Carlos City, Pangasinan.',
+            'generated_on' => $data['generated_on'],
+            'filters_line' => $data['filters_line'],
+            'total_all'    => $data['total_all'],
+            'paid'         => $data['paid'],
+            'unpaid'       => $data['unpaid'],
+            'revenue'      => number_format($data['revenue'], 2),    // format for display
+            'top3'         => $top3,
+            // DomPDF needs absolute file path prefixed with file://
+            'logo_url'     => 'file://' . public_path('images/POSO-Logo.png'),
+            // Blade condition:
+            'logo_exists'  => file_exists(public_path('images/POSO-Logo.png')),
+        ];
+
+        $pdf  = Pdf::loadView('admin.analytics.report', $viewData)->setPaper('a4','portrait');
+        $file = 'POSO_Analytics_' . now()->format('Ymd_His') . '.pdf';
+        return $pdf->download($file);
     }
 
     // Word (DOCX) – robust builder (NO watermark API, NO template processing)

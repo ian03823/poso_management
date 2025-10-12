@@ -2,7 +2,7 @@
   if (window.EnforcerOfflineAuth) return;
 
   const DB_NAME = 'enforcerAuthDB';
-  const DB_VER  = 1;
+  const DB_VER  = 221;
   const STORE   = 'logins';
   const hasDexie = !!window.Dexie;
 

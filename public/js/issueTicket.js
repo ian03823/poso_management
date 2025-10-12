@@ -9,6 +9,119 @@ const Notify = {
   info(m){this.toast({icon:'info',title:m})}, ok(m){this.toast({icon:'success',title:m})},
   warn(m){this.toast({icon:'warning',title:m})}, err(m){this.toast({icon:'error',title:m})}
 };
+/* ---------- Input Security: Name Sanitizer + License Mask ---------- */
+
+// allow letters (incl. accents), spaces, dot, apostrophe, hyphen
+const NAME_ALLOWED_RE = /[^A-Za-z\u00C0-\u024F\s.'-]+/g;
+function sanitizeName(el) {
+  const before = el.value;
+  let v = before
+    .replace(NAME_ALLOWED_RE, '')       // strip disallowed
+    .replace(/\s{2,}/g, ' ')            // collapse spaces
+    .replace(/^[\s.-']+/, '');          // no leading punctuation
+  // optional: capitalize words
+  v = v.replace(/\b([a-zà-öø-ÿ])/g, m => m.toUpperCase());
+  if (v !== before) el.value = v;
+  // HTML5 pattern still enforces; clear any customValidity we set elsewhere
+  el.setCustomValidity('');
+}
+
+// Mask to A12-34-567890 as the user types
+function maskLicense(el) {
+  const raw = (el.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  let out = '';
+
+  // L
+  if (raw.length > 0) {
+    if (/[A-Z]/.test(raw[0])) out += raw[0];
+    else out += ''; // first must be letter; will fail pattern if not provided
+  }
+  // D D
+  if (raw.length > 1) out += (raw[1] || '');
+  if (raw.length > 2) out += (raw[2] || '');
+  if (out.length >= 3) out = out.slice(0,3);
+
+  if (out.length >= 3) out += '-';
+
+  // D D
+  if (raw.length > 3) out += (raw[3] || '');
+  if (raw.length > 4) out += (raw[4] || '');
+  if (out.length >= 6) out = out.slice(0,6);
+
+  if (out.length >= 6) out += '-';
+
+  // D D D D D D
+  if (raw.length > 5) out += (raw[5] || '');
+  if (raw.length > 6) out += (raw[6] || '');
+  if (raw.length > 7) out += (raw[7] || '');
+  if (raw.length > 8) out += (raw[8] || '');
+  if (raw.length > 9) out += (raw[9] || '');
+  if (raw.length > 10) out += (raw[10] || '');
+  out = out.slice(0, 13); // max length including dashes
+
+  if (el.value !== out) el.value = out;
+
+  // If user leaves the field, validate strictly
+  const FULL_RE = /^[A-Z]\d{2}-\d{2}-\d{6}$/;
+  if (document.activeElement !== el) {
+    if (!FULL_RE.test(out)) {
+      el.setCustomValidity('License must match A12-34-567890');
+    } else {
+      el.setCustomValidity('');
+    }
+  } else {
+    el.setCustomValidity('');
+  }
+}
+
+(function wireInputSecurity(){
+  const first  = document.getElementById('first_name');
+  const middle = document.getElementById('middle_name');
+  const last   = document.getElementById('last_name');
+  const owner  = document.getElementById('owner_name');
+  const lic    = document.getElementById('license_num');
+  const form   = document.getElementById('ticketForm');
+
+  [first, middle, last, owner].forEach(el=>{
+    if (!el) return;
+    el.addEventListener('input', ()=> sanitizeName(el));
+    el.addEventListener('blur',  ()=> sanitizeName(el));
+  });
+
+  if (lic) {
+    lic.addEventListener('input', ()=> maskLicense(lic));
+    lic.addEventListener('blur',  ()=> maskLicense(lic));
+    // normalize once on page load (e.g., old values)
+    maskLicense(lic);
+  }
+
+  // gate all submits with HTML5 validity first (keeps your offline/online flow)
+  if (form) {
+    form.addEventListener('submit', (e)=>{
+      // run one last sanitize/mask before validate
+      [first, middle, last, owner].forEach(el=> el && sanitizeName(el));
+      lic && maskLicense(lic);
+
+      if (!form.checkValidity()) {
+        e.preventDefault();
+        e.stopPropagation();
+        form.classList.add('was-validated');
+        const firstInvalid = form.querySelector(':invalid');
+        if (firstInvalid) {
+          firstInvalid.focus({preventScroll:false});
+          if (window.Swal) {
+            Swal.fire({icon:'error', title:'Please fix invalid fields', timer:1800, showConfirmButton:false});
+          }
+        } else {
+          alert('Please fix invalid fields.');
+        }
+        return;
+      }
+      // otherwise allow your existing submit handler below to proceed
+    }, {capture:true}); // capture ensures this runs before your submit logic
+  }
+})();
+
 
 async function loadImage(url) {
   return new Promise((resolve, reject)=>{
