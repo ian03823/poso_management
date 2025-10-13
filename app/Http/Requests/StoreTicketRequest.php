@@ -38,7 +38,8 @@ class StoreTicketRequest extends FormRequest
 
             'is_owner'    => ['nullable','boolean'],
             'owner_name'  => ['nullable','string','max:80',"regex:$nameRegex"],
-
+            'flags'         => 'array',           // you can also validate an incoming flags[] if you switch to that
+            'flags.*'       => 'exists:flags,id',
             'confiscation_type_id' => ['nullable','integer','exists:confiscation_types,id'],
 
             'location'    => ['required','string','max:120'],

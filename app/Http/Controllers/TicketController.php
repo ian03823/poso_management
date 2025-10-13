@@ -289,25 +289,7 @@ class TicketController extends Controller
      */
     public function store(StoreTicketRequest $request)
     {
-         $d = $request->validated([
-            'first_name'    => 'nullable|string|max:50',
-            'middle_name'   => 'nullable|string|max:50',
-            'last_name'     => 'nullable|string|max:50',
-            'address'       => 'nullable|string|min:2',
-            'birthdate'     => 'nullable|date',
-            'license_num'   => 'nullable|string|max:50|min:8',
-            'plate_num'     => 'required|string|max:50|min:5',
-            'vehicle_type'  => 'required|string',
-            'is_owner'      => 'sometimes|boolean',
-            'flags'         => 'array',           // you can also validate an incoming flags[] if you switch to that
-            'flags.*'       => 'exists:flags,id',
-            'owner_name'    => 'nullable|string|max:255',
-            'violations'    => 'required|array|min:1',
-            'location'      => 'nullable|string',
-            'latitude'      => 'nullable|numeric',
-            'longitude'    => 'nullable|numeric',
-            'confiscation_type_id'   => 'nullable|exists:confiscation_types,id',
-        ]);
+         $d = $request->validated();
         // 2) Violator (firstOrNew then save)
 
         $violator = Violator::firstOrNew(['license_number' => $d['license_num']]);
@@ -408,9 +390,11 @@ class TicketController extends Controller
         });
 
         // public function violations() { return $this->belongsToMany(Violation::class,'ticket_violation','ticket_id','violation_code','id','violation_code'); }
-        $violationIds = Violation::whereIn('violation_code', $d['violations'])
-                         ->pluck('id')
-                         ->all();
+        $violationIds = Violation::whereIn(
+            'violation_code',
+            (array) ($d['violations'] ?? [])
+        )->pluck('id')->all();
+
         $ticket->violations()->sync($violationIds);
         // Get actor/role/name
         // actor/role/name
