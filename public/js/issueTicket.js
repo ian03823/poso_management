@@ -18,7 +18,7 @@ function sanitizeName(el) {
   let v = before
     .replace(NAME_ALLOWED_RE, '')       // strip disallowed
     .replace(/\s{2,}/g, ' ')            // collapse spaces
-    .replace(/^[\s.-']+/, '');          // no leading punctuation
+    .replace(/^[\s.'-]+/, '');        // no leading punctuation
   // optional: capitalize words
   v = v.replace(/\b([a-zà-öø-ÿ])/g, m => m.toUpperCase());
   if (v !== before) el.value = v;

@@ -397,7 +397,7 @@ class TicketController extends Controller
                 'location'               => $d['location'],
                 'issued_at'              => now(),
                 'offline'                => false,
-                'status_id'              => TicketStatus::where('name','pending')->value('id'),
+                'status_id'              => TicketStatus::where('name','unpaid')->value('id'),
                 'latitude'               => $d['latitude'] ?? null,
                 'longitude'              => $d['longitude'] ?? null,
                 'confiscation_type_id'   => $d['confiscation_type_id'],

@@ -13,7 +13,7 @@
 
   {{-- Match header color for Android status bar --}}
   <meta name="theme-color" content="#0b8a5d">
-
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('POSO-Logo.png') }}">
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

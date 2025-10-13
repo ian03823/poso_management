@@ -1,6 +1,6 @@
 /* serviceworker.js — PWA runtime + OCR + background sync (unified) */
 
-const SW_VERSION   = 'v2025-10-11j'; // bump each deploy
+const SW_VERSION   = 'v2025-10-13'; // bump each deploy
 const ORIGIN       = self.location.origin;
 
 const STATIC_CACHE  = `pwa-static-${SW_VERSION}`;
@@ -74,6 +74,7 @@ async function drainQueueOnce() {
 // pre-cache
 const filesToCache = [
   '/', '/css/app.css', '/js/app.js', '/js/issueTicket.js', '/js/id-scan.js',
+  '/js/enforcer.offline.auth.js',
   '/vendor/dexie/dexie.min.js',
   '/vendor/sweetalert2/sweetalert2.all.min.js',
   '/vendor/bootstrap/bootstrap.bundle.min.js',

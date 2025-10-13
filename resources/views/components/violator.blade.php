@@ -6,8 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>@yield('title')</title>
-    <link rel="icon" type="image/png" sizes="32x32"
-      href="{{ asset('POSO-Logo.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('POSO-Logo.png') }}">
     <link rel="manifest" href="/pwa-manifest.json">
     <meta name="theme-color" content="#ffffff">
     <script>

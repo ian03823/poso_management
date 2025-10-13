@@ -34,9 +34,9 @@
       </button>
 
       {{-- Sync Now --}}
-      <button type="button" class="btn btn-outline-primary me-2" id="syncNowBtn">
+      {{-- <button type="button" class="btn btn-outline-primary me-2" id="syncNowBtn">
        Sync now
-      </button>
+      </button> --}}
 
       <button type="button" class="btn btn-outline-success ms-auto" data-bs-toggle="modal" data-bs-target="#scanIdModal" id="openScanId">
          Scan ID
@@ -167,7 +167,7 @@
           {{-- Flags & Location --}}
           <div class="row g-3 mt-2">
             <div class="col-12">
-              <div class="flags-row">
+              <div class="flags-row"> 
                 @foreach($allFlags as $flag)
                   <div class="form-check">
                     <input class="form-check-input" type="checkbox" id="{{ $flag->key }}" name="flags[]" value="{{ $flag->id }}"
@@ -318,6 +318,6 @@
   <script defer src="{{ asset('vendor/tesseract/tesseract.min.js') }}"></script>
   <script defer src="{{ asset('vendor/tesseract/worker.min.js') }}"></script>
   {{-- Your app scripts (also deferred so Tesseract is guaranteed loaded) --}}
-  <script defer src="{{ asset('js/issueTicket.js') }}?v={{ filemtime(public_path('js/issueTicket.js')) }}"></script>
+  <script defer src="{{ asset('js/issueTicket.js') }}"></script>
   <script defer src="{{ asset('js/id-scan.js')}}?v={{ filemtime(public_path('js/id-scan.js')) }}"></script>
 @endpush
