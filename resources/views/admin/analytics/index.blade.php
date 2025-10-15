@@ -123,24 +123,20 @@
           <div class="chart-box">
             <canvas id="chartPie"></canvas>
           </div>
+          <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+            <span>Tickets by Month</span>
+            <span class="spinner-border spinner-border-sm d-none" id="spinBar"></span>
+          </div>
+          <div class="card-body">
+              <div class="chart-box">
+                <canvas id="chartBar"></canvas>
+              </div>
+          </div>
           <div class="text-muted small mt-2" id="pieEmpty" style="display:none">No data to display.</div>
         </div>
       </div>
-
-      {{-- Tickets by Month --}}
-      <div class="card shadow-sm h-100 mt-3">
-        <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
-          <span>Tickets by Month</span>
-          <span class="spinner-border spinner-border-sm d-none" id="spinBar"></span>
-        </div>
-        <div class="card-body">
-          <div class="chart-box">
-            <canvas id="chartBar"></canvas>
-          </div>
-          <div class="text-muted small mt-2" id="barEmpty" style="display:none">No data to display.</div>
-        </div>
-      </div>
     </div>
+
 
     <div class="col-lg-6">
       {{-- Hotspot Map --}}
@@ -185,10 +181,10 @@
       <div class="card shadow-sm h-100">
         <div class="card-body d-flex flex-column gap-2">
           <a id="btnExportXlsx" class="btn btn-success" href="{{ route('analytics.downloadExcel', request()->query()) }}" data-no-ajax>
-            <i class="bi bi-file-earmark-spreadsheet"></i> Monthly Report Excel
+            <i class="bi bi-file-earmark-spreadsheet"></i> Download Excel
           </a>
           <a id="btnExportDocx" class="btn btn-primary" href="{{ route('analytics.downloadPdf', request()->query()) }}" data-no-ajax>
-            <i class="bi bi-file-earmark-word"></i> Download Word
+            <i class="bi bi-file-earmark-word"></i> Download PDF
           </a>
         </div>
       </div>

@@ -1,155 +1,168 @@
-/* public/js/enforcer.js — SPA + SweetAlert edit form (no Bootstrap modals) */
+/* public/js/enforcer.js — SPA table (filters/pagination) + SweetAlert edit + activate/inactivate */
 (function () {
   if (window.__enforcerBound) return;
   window.__enforcerBound = true;
 
-  // ----- helpers -----
+  // ---------- helpers ----------
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   const $ = (sel, root = document) => root.querySelector(sel);
-  const $all = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const abs = (u) => { try { return new URL(u, location.origin).href; } catch { return u; } };
 
   function root() { return document.getElementById('enforcerContainer'); }
   function partialUrl() { return root()?.dataset.partialUrl || '/enforcer/partial'; }
 
   function setLoading(on) {
-    const wrap = $('#table-container');
-    if (wrap) wrap.classList.toggle('is-loading', !!on);
+    // prefer a dedicated overlay if present
+    const ov = document.getElementById('enfLoading');
+    if (ov) { ov.style.display = on ? 'flex' : 'none'; return; }
+    // fallback: add a class on #table-container
+    $('#table-container')?.classList.toggle('is-loading', !!on);
   }
 
-  function injectTable(html, targetUrlForHistory) {
+  // ---- URL state
+  function getParams() {
+    const p = new URLSearchParams(location.search);
+    // prefer current inputs when available (keeps changes before push)
+    const show   = $('#show_filter')?.value || p.get('show') || 'active';
+    const sort   = $('#sort_table')?.value || p.get('sort_option') || 'date_desc';
+    const search = $('#search_input')?.value ?? p.get('search') ?? '';
+    const page   = p.get('page') || '1';
+    return { show, sort, search, page };
+  }
+  function pushUrl({ show, sort, search, page }) {
+    const p = new URLSearchParams();
+    if (show && show !== 'active') p.set('show', show);
+    if (sort && sort !== 'date_desc') p.set('sort_option', sort);
+    if (search) p.set('search', search);
+    if (page && page !== '1') p.set('page', page);
+    history.pushState(null, '', `${location.pathname}?${p}`);
+  }
+
+  // ---- rendering
+  function inject(html, pushTo) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const partial = doc.querySelector('#table-container');
+    const inner = doc.querySelector('#table-container')?.innerHTML || html;
     const wrap = $('#table-container');
-    if (!wrap) return;
-    wrap.innerHTML = partial ? partial.innerHTML : html;
-    if (targetUrlForHistory) history.pushState({}, '', targetUrlForHistory);
+    if (wrap) wrap.innerHTML = inner;
+    if (pushTo) pushUrl(pushTo);
   }
 
-  function currentQuery() {
-    const url = new URL(location.href);
-    const show  = url.searchParams.get('show') || 'active';
-    const sort  = $('#sort_table')?.value || url.searchParams.get('sort_option') || 'date_desc';
-    const search = $('#search_input')?.value ?? url.searchParams.get('search') ?? '';
-
-    const q = new URLSearchParams();
-    q.set('show', show);
-    q.set('sort_option', sort);
-    if (search) q.set('search', search);
-    return q;
-  }
-
-  function loadTable(pushState = true) {
-    const q = currentQuery();
-    const url = '/enforcer?' + q.toString();
+  // ---- AJAX load
+  function loadPage(page = '1', push = true) {
+    const { show, sort, search } = getParams();
+    const q = new URLSearchParams({ show, sort_option: sort, search, page });
 
     setLoading(true);
-    fetch(partialUrl() + '?' + q.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    fetch(`${partialUrl()}?${q.toString()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(r => r.text())
-      .then(html => injectTable(html, pushState ? url : null))
+      .then(html => inject(html, push ? { show, sort, search, page } : null))
       .catch(console.error)
       .finally(() => setLoading(false));
   }
 
+  // Debounce helper for responsive typing
+  let typingTimer;
+  const debounce = (fn, ms = 250) => (...args) => { clearTimeout(typingTimer); typingTimer = setTimeout(() => fn(...args), ms); };
+
+  // ---- init on hard load and SPA nav
+  function initPage() {
+    if (!root()) return;
+    // hydrate inputs from URL once
+    const p = getParams();
+    if ($('#show_filter')) $('#show_filter').value = p.show;
+    if ($('#sort_table')) $('#sort_table').value = p.sort;
+    if ($('#search_input')) $('#search_input').value = p.search;
+
+    // if table not present, fetch initial
+    if (!$('#table-container table')) loadPage(p.page, /*push=*/false);
+  }
+  document.addEventListener('DOMContentLoaded', initPage);
+  document.addEventListener('page:loaded', initPage);
+  window.addEventListener('popstate', () => { if (root()) loadPage(getParams().page, /*push=*/false); });
+
+  // ---------- filters
+  document.addEventListener('change', (e) => {
+    if (!root()) return;
+    if (e.target.matches('#enforcerContainer #show_filter'))  { loadPage('1'); }
+    if (e.target.matches('#enforcerContainer #sort_table'))   { loadPage('1'); }
+  });
+  document.addEventListener('click', (e) => {
+    if (!root()) return;
+    if (e.target.closest('#enforcerContainer #search_btn')) { e.preventDefault(); loadPage('1'); }
+  });
+  document.addEventListener('input', debounce((e) => {
+    if (!root()) return;
+    if (e.target && e.target.matches('#enforcerContainer #search_input')) loadPage('1');
+  }, 280));
+
+  // ---------- pagination
+  document.addEventListener('click', (e) => {
+    if (!root()) return;
+    const a = e.target.closest('#enforcerContainer .pagination a, #table-container .pagination a');
+    if (!a) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const page = new URL(a.href, location.origin).searchParams.get('page') || '1';
+    loadPage(page);
+  });
+
+  // =========================================
+  // EDIT via SweetAlert
+  // =========================================
   function toastOk(msg) {
     if (!window.Swal) return;
     Swal.fire({ toast:true, position:'top-end', icon:'success', title: msg || 'Saved', timer:1500, showConfirmButton:false });
   }
 
-  // ----- page init (hard load + SPA) -----
-  function initPage(){
-    if (!root()) return;
-    // if server already rendered the table, no need to reload now
-    // else fetch initial list with current params
-    if (!$('#table-container table')) loadTable(false);
-  }
-  document.addEventListener('DOMContentLoaded', initPage);
-  document.addEventListener('page:loaded', initPage);
-
-  // ----- Filters -----
-  document.addEventListener('click', (e) => {
-    if (e.target.closest('#enforcerContainer #search_btn')) { e.preventDefault(); loadTable(true); }
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.target && e.target.matches('#enforcerContainer #search_input') && e.key === 'Enter') {
-      e.preventDefault(); loadTable(true);
-    }
-  });
-  document.addEventListener('change', (e) => {
-    if (e.target && e.target.matches('#enforcerContainer #sort_table')) loadTable(true);
-  });
-
-  // ----- Pagination -----
-  document.addEventListener('click', (e) => {
-    const a = e.target.closest('#enforcerContainer .pagination a');
-    if (!a) return;
-    e.preventDefault();
-    setLoading(true);
-    fetch(a.href.replace('/enforcer', partialUrl()), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(r => r.text())
-      .then(html => {
-        // keep history in sync with the real URL (not the partial)
-        injectTable(html, a.href);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  });
-
-
-
-  // Back/forward
-  window.addEventListener('popstate', () => { if (root()) loadTable(false); });
-
-  // =========================================
-  // EDIT via SweetAlert (no Bootstrap modal)
-  // =========================================
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('#enforcerContainer .editBtn');
     if (!btn) return;
     e.preventDefault();
 
-    const data = {
-      url: btn.getAttribute('data-url'),
-      badge_num: btn.getAttribute('data-badge') || '',
-      fname: btn.getAttribute('data-fname') || '',
-      mname: btn.getAttribute('data-mname') || '',
-      lname: btn.getAttribute('data-lname') || '',
-      phone: btn.getAttribute('data-phone') || '',
+    const init = {
+      url:          abs(btn.getAttribute('data-url')),
+      badge_num:    btn.getAttribute('data-badge') || '',
+      fname:        btn.getAttribute('data-fname') || '',
+      mname:        btn.getAttribute('data-mname') || '',
+      lname:        btn.getAttribute('data-lname') || '',
+      phone:        btn.getAttribute('data-phone') || '',
       ticket_start: btn.getAttribute('data-ticket-start') || '',
-      ticket_end: btn.getAttribute('data-ticket-end') || '',
+      ticket_end:   btn.getAttribute('data-ticket-end') || '',
     };
 
-    const formHtml = `
+    const html = `
       <div class="text-start">
         <div class="mb-2">
           <label class="form-label">Badge #</label>
-          <input id="sw_badge" class="form-control" maxlength="4" value="${data.badge_num}" disabled>
+          <input id="sw_badge" class="form-control" maxlength="5" value="${init.badge_num}" disabled>
         </div>
         <div class="row g-2">
           <div class="col-md-4 mb-2">
             <label class="form-label">First Name</label>
-            <input id="sw_fname" class="form-control" value="${data.fname}">
+            <input id="sw_fname" class="form-control" value="${init.fname}">
           </div>
           <div class="col-md-4 mb-2">
             <label class="form-label">Middle Name</label>
-            <input id="sw_mname" class="form-control" value="${data.mname}">
+            <input id="sw_mname" class="form-control" value="${init.mname}">
           </div>
           <div class="col-md-4 mb-2">
             <label class="form-label">Last Name</label>
-            <input id="sw_lname" class="form-control" value="${data.lname}">
+            <input id="sw_lname" class="form-control" value="${init.lname}">
           </div>
         </div>
         <div class="mb-2">
           <label class="form-label">Phone (11 digits)</label>
-          <input id="sw_phone" class="form-control" maxlength="11" value="${data.phone}">
+          <input id="sw_phone" class="form-control" maxlength="11" value="${init.phone}">
         </div>
         <div class="row g-2">
           <div class="col-md-6 mb-2">
             <label class="form-label">Ticket Start</label>
-            <input id="sw_tstart" class="form-control" value="${data.ticket_start}" disabled>
+            <input id="sw_tstart" class="form-control" value="${init.ticket_start}" disabled>
           </div>
           <div class="col-md-6 mb-2">
             <label class="form-label">Ticket End</label>
-            <input id="sw_tend" class="form-control" value="${data.ticket_end}" disabled>
+            <input id="sw_tend" class="form-control" value="${init.ticket_end}" disabled>
           </div>
         </div>
         <div class="mb-1">
@@ -164,13 +177,12 @@
 
     Swal.fire({
       title: 'Edit Enforcer',
-      html: formHtml,
+      html,
       focusConfirm: false,
       showCancelButton: true,
       confirmButtonText: 'Save',
       didOpen: () => {
-        const gen = document.getElementById('sw_gen');
-        gen?.addEventListener('click', () => {
+        $('#sw_gen')?.addEventListener('click', () => {
           const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*';
           const len = 12;
           let out = '';
@@ -179,24 +191,22 @@
           } else {
             for (let i=0;i<len;i++) out += chars[Math.floor(Math.random()*chars.length)];
           }
-          document.getElementById('sw_pwd').value = out;
+          $('#sw_pwd').value = out;
         });
       },
       preConfirm: async () => {
-        // basic validation
-        const badge = document.getElementById('sw_badge').value.trim();
-        const fname = document.getElementById('sw_fname').value.trim();
-        const mname = document.getElementById('sw_mname').value.trim();
-        const lname = document.getElementById('sw_lname').value.trim();
-        const phone = document.getElementById('sw_phone').value.trim();
-        const tstart= document.getElementById('sw_tstart').value.trim();
-        const tend  = document.getElementById('sw_tend').value.trim();
-        const pwd   = document.getElementById('sw_pwd').value.trim();
+        const badge = $('#sw_badge').value.trim();
+        const fname = $('#sw_fname').value.trim();
+        const mname = $('#sw_mname').value.trim();
+        const lname = $('#sw_lname').value.trim();
+        const phone = $('#sw_phone').value.trim();
+        const tstart= $('#sw_tstart').value.trim();
+        const tend  = $('#sw_tend').value.trim();
+        const pwd   = $('#sw_pwd').value.trim();
 
         if (!fname || !lname) { Swal.showValidationMessage('First and Last name are required'); return false; }
         if (phone && !/^\d{11}$/.test(phone)) { Swal.showValidationMessage('Phone must be 11 digits'); return false; }
 
-        // submit
         const fd = new FormData();
         fd.set('_method','PUT');
         if (badge)  fd.set('badge_num', badge);
@@ -209,7 +219,7 @@
         if (pwd)    fd.set('password', pwd);
 
         try {
-          const res = await fetch(data.url, {
+          const res = await fetch(init.url, {
             method: 'POST',
             headers: { 'X-Requested-With':'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
             body: fd
@@ -219,8 +229,7 @@
             try { const j = await res.json(); msg = j.message || msg; } catch { msg = await res.text() || msg; }
             throw new Error(msg);
           }
-          const payload = await res.json().catch(()=>({}));
-          return payload;
+          return await res.json().catch(()=> ({}));
         } catch (err) {
           Swal.showValidationMessage(String(err.message || err));
           return false;
@@ -230,116 +239,80 @@
     }).then((result) => {
       if (!result.isConfirmed) return;
       toastOk('Updated');
-      loadTable(false);
+      const { page } = getParams();
+      loadPage(page);
       if (result.value?.raw_password) {
-        Swal.fire({
-          icon:'info',
-          title:'Password Reset',
-          html:`<div class="text-start"><strong>New Password:</strong> ${result.value.raw_password}</div>`
-        });
+        Swal.fire({ icon:'info', title:'Password Reset', html:`<div class="text-start"><strong>New Password:</strong> ${result.value.raw_password}</div>` });
       }
     });
   });
+
   // ====== CREATE (Add Enforcer) with "Add another?" ======
-document.addEventListener('submit', async (e) => {
-  const form = e.target.closest('#addEnforcerForm');
-  if (!form) return;
+  document.addEventListener('submit', async (e) => {
+    const form = e.target.closest('#addEnforcerForm');
+    if (!form) return;
+    e.preventDefault();
 
-  e.preventDefault();
+    const fd = new FormData(form);
 
-  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
-  const fd = new FormData(form);
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+        body: fd
+      });
 
-  try {
-    const res = await fetch(form.action, {
-      method: 'POST',
-      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
-      body: fd
-    });
-
-    // handle validation errors
-    if (res.status === 422) {
-      let msg = 'Please check your inputs.';
-      try {
-        const j = await res.json();
-        if (j.errors) msg = Object.values(j.errors).flat().join('\n');
-        else if (j.message) msg = j.message;
-      } catch {}
-      await Swal.fire({ icon:'error', title:'Validation error', text: msg });
-      return;
-    }
-
-    if (!res.ok) {
-      const t = await res.text().catch(()=> '');
-      throw new Error(t || 'Request failed.');
-    }
-
-    const payload = await res.json().catch(()=> ({}));
-
-    // success + ask if user wants to add another
-    const ask = await Swal.fire({
-      icon: 'success',
-      title: 'Enforcer added',
-      html: payload.raw_password
-        ? `<div class="text-start"><strong>Temporary Password:</strong> ${payload.raw_password}</div>
-           <div class="mt-2">Add another?</div>`
-        : `Add another?`,
-      showCancelButton: true,
-      confirmButtonText: 'Add another',
-      cancelButtonText: 'Go to list',
-      reverseButtons: true
-    });
-
-    if (ask.isConfirmed) {
-      // OPTION A: quick reset (instant)
-      form.reset();
-
-      // Try to refresh auto-generated numbers (badge/ticket range) from server.
-      // Your controller returns a partial on AJAX for /enforcer/create.
-      try {
-        const html = await fetch('/enforcer/create', {
-          headers: { 'X-Requested-With':'XMLHttpRequest' }
-        }).then(r => r.text());
-
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const freshForm = doc.querySelector('#addEnforcerForm');
-        if (freshForm) {
-          // Replace the whole form so next badge / ticket range update correctly
-          form.outerHTML = freshForm.outerHTML;
-        } else {
-          // fallback: just focus the first input
-          (document.querySelector('#addEnforcerForm input, #addEnforcerForm select') || {}).focus?.();
-        }
-      } catch {
-        // fallback already handled by form.reset()
+      if (res.status === 422) {
+        let msg = 'Please check your inputs.';
+        try { const j = await res.json(); msg = j.errors ? Object.values(j.errors).flat().join('\n') : (j.message || msg); } catch {}
+        await Swal.fire({ icon:'error', title:'Validation error', text: msg });
+        return;
       }
-    } else {
-      // Go back to list (use partial reload if list is present)
-      const listRoot = document.getElementById('enforcerContainer');
-      if (listRoot && typeof loadTable === 'function') {
-        history.pushState({}, '', '/enforcer');
-        loadTable(false);
+      if (!res.ok) throw new Error((await res.text().catch(()=>'')) || 'Request failed.');
+
+      const payload = await res.json().catch(()=> ({}));
+
+      const ask = await Swal.fire({
+        icon: 'success',
+        title: 'Enforcer added',
+        html: payload.raw_password
+          ? `<div class="text-start"><strong>Temporary Password:</strong> ${payload.raw_password}</div>
+             <div class="mt-2">Add another?</div>`
+          : `Add another?`,
+        showCancelButton: true,
+        confirmButtonText: 'Add another',
+        cancelButtonText: 'Go to list',
+        reverseButtons: true
+      });
+
+      if (ask.isConfirmed) {
+        form.reset();
+        // refresh server-suggested next badge/ticket range
+        try {
+          const html = await fetch('/enforcer/create', { headers:{ 'X-Requested-With':'XMLHttpRequest' } }).then(r => r.text());
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          const fresh = doc.querySelector('#addEnforcerForm');
+          if (fresh) form.outerHTML = fresh.outerHTML;
+        } catch {}
       } else {
-        location.href = '/enforcer';
+        history.pushState({}, '', '/enforcer');
+        loadPage('1');
       }
+    } catch (err) {
+      console.error(err);
+      await Swal.fire({ icon:'error', title:'Error', text: err.message || String(err) });
     }
-
-  } catch (err) {
-    console.error(err);
-    await Swal.fire({ icon:'error', title:'Error', text: err.message || String(err) });
-  }
-});
-
+  });
 
   // =========================================
-  // Activate / Inactivate (already SweetAlert)
+  // Activate / Inactivate
   // =========================================
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('#enforcerContainer .status-btn');
     if (!btn) return;
     e.preventDefault();
 
-    const action = btn.getAttribute('data-action');
+    const action = abs(btn.getAttribute('data-action'));
     const method = (btn.getAttribute('data-method') || 'POST').toUpperCase();
 
     const { isConfirmed, value: adminPwd } = await Swal.fire({
@@ -362,20 +335,24 @@ document.addEventListener('submit', async (e) => {
     try {
       const res = await fetch(action, {
         method: 'POST',
-        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+        headers: { 'X-Requested-With':'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
         body: fd
       });
       if (!res.ok) {
         let msg = 'Action failed.';
         try { const j = await res.json(); msg = j.message || msg; } catch { msg = await res.text() || msg; }
-        await Swal.fire({ icon:'error', title:'Error', text: msg }); return;
+        await Swal.fire({ icon:'error', title:'Error', text: msg });
+        return;
       }
       await Swal.fire({ icon:'success', title: method === 'DELETE' ? 'Enforcer Inactivated' : 'Enforcer Activated', timer:1200, showConfirmButton:false });
-      loadTable(false);
+      const { page } = getParams();
+      loadPage(page);
     } catch (err) {
       console.error(err);
       await Swal.fire({ icon:'error', title:'Network Error', text:'Please try again.' });
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   });
 
 })();

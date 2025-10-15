@@ -152,7 +152,7 @@ function drawToCanvas(img, maxWidth = 360) {
   ctx.drawImage(img, 0, 0, w, h);
   if (c.width > w) {
     ctx.fillStyle = '#fff';
-    ctx.fillRect(w, 0, c.width - w, h);
+    ctx.fillRect(w, 0, c.width - w, h)
   }
   return c;
 }
@@ -505,6 +505,54 @@ if (window.__ISSUE_TICKET_WIRED__) {
     const form = e.target;
     const fd   = new FormData(form);
     const uuid = ensureClientUuid(form);
+
+    /* ===== PRE-SUBMISSION CONFIRMATION (blocks on Cancel) ===== */
+    try {
+      const violatorName = [fd.get('first_name'), fd.get('middle_name'), fd.get('last_name')]
+      .map(s => (s||'').trim()).filter(Boolean).join(' ') || '(n/a)';
+
+    // keep variable name "checked" exactly as you have it
+    const checked = Array.from(document.querySelectorAll('input[name="violations[]"]:checked'));
+    const confiscatedText = document.querySelector('#confiscation_type_id option:checked')?.textContent?.trim() || 'None';
+    // build list items from the LABEL text (violation name), not the value (code)
+    const listItems = checked.map(chk => {
+      // label is the next sibling created in renderCategory()
+      const labelText = chk.nextElementSibling?.textContent?.trim() || chk.value;
+      // strip the " — ₱123.45" part so we keep only the violation name
+      const nameOnly = labelText.split(' — ')[0];
+      return `<li>${nameOnly}</li>`;
+    }).join('') || '<li>(none)</li>';
+
+    const preHtml = `
+      <strong>Violator:</strong> ${violatorName}<br>
+      <strong>Address.:</strong> ${fd.get('address')||''}<br>
+      <strong>License No.:</strong> ${fd.get('license_num')||''}<br>
+      <strong>Vehicle:</strong> ${fd.get('vehicle_type')||''}<br>
+      <strong>Plate:</strong> ${fd.get('plate_num')||''}<br>
+      <strong>Owner:</strong> ${fd.get('is_owner') ? 'Yes' : 'No'}<br>
+      <strong>Owner Name:</strong> ${fd.get('owner_name')||''}<br>
+      <strong>Location:</strong> ${fd.get('location')||''}<br>
+      <strong>Confiscated:</strong> ${confiscatedText}<br>
+      <strong>Violations:</strong><ul>${listItems}</ul>
+    `;
+
+      const { isConfirmed } = await Notify.modal({
+        title: 'Submit ticket?',
+        html: preHtml,
+        width: 600,
+        showCancelButton: true,
+        confirmButtonText: 'Submit',
+        cancelButtonText: 'Review'
+      });
+      if (!isConfirmed) {
+        Notify.info('Submission cancelled.');
+        return; // <- stop here on Cancel (prevents BOTH offline queue and online POST)
+      }
+    } catch (e) {
+      // If anything goes wrong building the preview, fail safe and still allow submission.
+      console.warn('pre-submit preview failed:', e);
+    }
+    /* ===== end pre-confirm ===== */
 
     if (!(await isReallyOnline())) {
       const payload = buildJsonPayloadFromFormData(fd);

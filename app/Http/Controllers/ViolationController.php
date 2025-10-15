@@ -7,7 +7,9 @@ use App\Http\Controllers\Concerns\WithActivityLogs;
 use App\Services\LogActivity;
 use App\Models\Violation;
 use Illuminate\View\View;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -173,21 +175,36 @@ class ViolationController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Request $request, Violation $violation)
+    public function destroy(Request $request, $violation)
     {
         $request->validate(['admin_password' => 'required']);
         $admin = auth('admin')->user();
-
-        if (!$admin || !Hash::check($request->admin_password, $admin->password)) {
+        if (!$admin || !\Illuminate\Support\Facades\Hash::check($request->admin_password, $admin->password)) {
             return response()->json(['message' => 'Invalid admin password'], 422);
         }
 
-        // if already archived (double click / stale row), return OK
-        if (method_exists($violation, 'trashed') && $violation->trashed()) {
+        // $violation here is actually the {violation} route param (the id)
+        $model = \App\Models\Violation::withTrashed()->find($violation);
+
+        if (!$model) {
+            // Treat as benign (stale row / double click)
+            return response()->json(['message' => 'Violation not found (maybe already removed)'], 200);
+        }
+
+        if ($model->trashed()) {
             return response()->json(['message' => 'Already archived'], 200);
         }
 
-        $violation->delete(); // requires SoftDeletes on model
+        $model->delete(); // soft delete
+
+        if (method_exists($this, 'logDeleted')) {
+            $this->logDeleted($model, 'violation', [
+                'violation_id'   => $model->id,
+                'violation_code' => $model->violation_code,
+                'violation_name' => $model->violation_name,
+            ]);
+        }
+
         return response()->json(['message' => 'Violation archived'], 200);
     }
     public function partial(Request $request)
@@ -216,8 +233,9 @@ class ViolationController extends Controller
         ]);
     }
      /** Small JSON endpoint used if you prefer fetching fresh data before edit */
-    public function json(Violation $violation)
+    public function json($violation)
     {
-        return response()->json($violation);
+        $v = \App\Models\Violation::withTrashed()->findOrFail($violation);
+        return response()->json($v);
     }
 }

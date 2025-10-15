@@ -1,5 +1,6 @@
 // public/js/adminIssueTicket.js — Admin issue flow (no offline)
 
+console.log('adminIssueTicket.js - script loaded 01');
 // ---- safe helpers ----
 const SwalOK = (t, m) => Swal.fire(t, m, 'success');
 const SwalERR = (t, m) => Swal.fire(t || 'Error', m || 'Something went wrong', 'error');
@@ -202,6 +203,47 @@ byId('ticketForm')?.addEventListener('submit', async (e) => {
   const form = e.target;
   const data = new FormData(form);
 
+  // ===== PRE-SUBMIT CONFIRMATION (names, not codes) =====
+  try {
+    const violatorName = [data.get('first_name'), data.get('middle_name'), data.get('last_name')]
+      .map(s => (s||'').trim()).filter(Boolean).join(' ') || '(n/a)';
+    const checked = Array.from(document.querySelectorAll('input[name="violations[]"]:checked'));
+    const listItems = checked.map(chk => {
+      const labelText = chk.nextElementSibling?.textContent?.trim() || chk.value;
+      const nameOnly = labelText.split(' — ')[0]; // strip " — ₱123.45"
+      return `<li>${nameOnly}</li>`;
+    }).join(',') || '<li>(none)</li>';
+
+    const preHtml = `
+      <strong>Violator:</strong> ${violatorName}<br>
+      <strong>Address.:</strong> ${data.get('address')||''}<br>
+      <strong>License No.:</strong> ${data.get('license_num')||''}<br>
+      <strong>Vehicle:</strong> ${data.get('vehicle_type')||''}<br>
+      <strong>Plate:</strong> ${data.get('plate_num')||''}<br>
+      <strong>Owner:</strong> ${data.get('is_owner') ? 'Yes' : 'No'}<br>
+      <strong>Owner Name:</strong> ${data.get('owner_name')||''}<br>
+      <strong>Location:</strong> ${data.get('location')||''}<br>
+      <strong>Violations:</strong><ul>${listItems}</ul>
+    `;
+
+    const { isConfirmed } = await Swal.fire({
+      title: 'Confirm Details',
+      html: preHtml,
+      width: 600,
+      showCancelButton: true,
+      confirmButtonText: 'Save & Print',
+      cancelButtonText: 'Review'
+    });
+    if (!isConfirmed) {
+      await Swal.fire({ icon:'info', title:'Submission cancelled', timer:1300, showConfirmButton:false });
+      return; // <- DO NOT submit on cancel
+    }
+  } catch (errPreview) {
+    console.warn('pre-submit preview failed:', errPreview);
+    // If preview fails, we’ll proceed with submit anyway (fail-safe).
+  }
+
+  // ===== ACTUAL SUBMIT TO SERVER =====
   try {
     const res = await fetch(form.action, {
       method: form.method,
@@ -220,37 +262,17 @@ byId('ticketForm')?.addEventListener('submit', async (e) => {
     }
 
     const p = await res.json();
-    // Confirmation summary
-    let html = `
-      <strong>Ticket #:</strong> ${p.ticket.ticket_number}<br>
-      <strong>Enforcer:</strong> ${p.enforcer.name} (${p.enforcer.badge_num})<br>
-      <strong>Violator:</strong> ${[p.violator.first_name,p.violator.middle_name,p.violator.last_name].filter(Boolean).join(' ')}<br>
-      <strong>License No.:</strong> ${p.violator.license_number || ''}<br>
-      <strong>Plate:</strong> ${p.vehicle.plate_number}<br>
-      <strong>Type:</strong> ${p.vehicle.vehicle_type}<br>
-      <strong>Owner:</strong> ${p.vehicle.is_owner}<br>
-      <strong>Owner Name:</strong> ${p.vehicle.owner_name || ''}<br>
-      <strong>Location:</strong> ${p.ticket.location || ''}<br>
-      <strong>Confiscated:</strong> ${p.ticket.confiscated}<br>
-      <strong>Impounded:</strong> ${p.ticket.flags?.includes('is_impounded') ? 'Yes' : 'No'}<br>
-      <strong>Resident:</strong> ${p.ticket.flags?.includes('is_resident') ? 'Yes' : 'No'}<br>
-      <strong>Last Apprehended:</strong> ${p.last_apprehended_at || 'Never'}<br>
-      <strong>Username:</strong> ${p.credentials.username}<br>
-      <strong>Password:</strong> ${p.credentials.password}<br>
-      <strong>Violations:</strong><ul>`;
-    (p.violations || []).forEach(v => { html += `<li>${v.name} — Php${v.fine}</li>`; });
-    html += `</ul>`;
 
-    const { isConfirmed } = await Swal.fire({
-      title: 'Confirm Details',
-      html,
-      width: 600,
-      showCancelButton: true,
-      confirmButtonText: 'Save & Print',
-    });
-    if (!isConfirmed) return;
+    // ===== PRINT RIGHT AFTER SUCCESS SAVE =====
+    try {
+      await printTwoCopies(p);
+    } catch (printErr) {
+      console.warn('Printing failed:', printErr);
+      await Swal.fire({ icon:'warning', title:'Saved but printing failed', text:String(printErr).slice(0,300) });
+    }
 
-    const { isConfirm } = await Swal.fire({
+    // ===== AFTER-SUBMIT FLOW (same variables kept) =====
+    const { isConfirmed: isConfirm } = await Swal.fire({
       icon: 'success',
       title: 'Ticket Submitted',
       text: 'Do you want to issue another ticket?',
@@ -265,9 +287,7 @@ byId('ticketForm')?.addEventListener('submit', async (e) => {
       form.reset();
       selected.clear?.();
       if (containerEl) containerEl.innerHTML = '';   // clear violations
-      // re-sync owner name checkbox behavior
-      if (typeof syncOwner === 'function') syncOwner();
-      // optionally scroll to top for faster next entry
+      if (typeof syncOwner === 'function') syncOwner(); // re-sync owner name checkbox behavior
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       // go back to table (resource index)

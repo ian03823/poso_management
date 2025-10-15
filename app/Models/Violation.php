@@ -9,11 +9,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Violation extends Model
 {
 
-    use HasFactory, SoftDeletes;
+    use SoftDeletes;
+    protected $table = "violations";
     protected $primaryKey = 'violation_code';
     public $incrementing = false;
     protected $keyType = 'string';
-    protected $dates = ['deleted_at'];
 
     
     protected $fillable = [
@@ -26,6 +26,10 @@ class Violation extends Model
     ];
     protected $casts = [
         'fine_amount' => 'float',
+        'deleted_at'  => 'datetime',
     ];
-
+    public function tickets()
+    {
+        return $this->belongsTo(Ticket::class);
+    }
 }

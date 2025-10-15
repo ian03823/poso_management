@@ -37,34 +37,55 @@
     if ($('#fltFrom')) $('#fltFrom').value = `${from.getFullYear()}-${String(from.getMonth()+1).padStart(2,'0')}`;
     if ($('#fltTo'))   $('#fltTo').value   = `${to.getFullYear()}-${String(to.getMonth()+1).padStart(2,'0')}`;
   }
-
+  function waitFor(condFn, fn, {tries=50, interval=60} = {}) {
+    const tick = () => {
+      if (condFn()) return fn();
+      if (--tries <= 0) return console.warn('[analytics] waitFor: giving up');
+      setTimeout(tick, interval);
+    };
+    tick();
+  }
   // ---- Charts ----
   function ensureCharts() {
     if (pie) try { pie.destroy(); } catch {}
     if (bar) try { bar.destroy(); } catch {}
-    const ctxPie = $('#chartPie')?.getContext('2d');
-    const ctxBar = $('#chartBar')?.getContext('2d');
-    if (!ctxPie || !ctxBar || typeof Chart === 'undefined') return;
 
-    pie = new Chart(ctxPie, {
-      type: 'doughnut',
-      data: { labels: ['Paid','Unpaid'], datasets: [{ data: [0,0] }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom' } }
-      }
-    });
+    const pieEl = document.getElementById('chartPie');
+    const barEl = document.getElementById('chartBar');
 
-    bar = new Chart(ctxBar, {
-      type: 'bar',
-      data: { labels: [], datasets: [{ label:'Tickets', data: [] }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } }
-      }
+    // Retry until Chart exists, canvases exist, and have height > 0
+    waitFor(() => {
+      return (typeof Chart !== 'undefined')
+          && pieEl && barEl
+          && pieEl.parentElement?.getBoundingClientRect().height > 0
+          && barEl.parentElement?.getBoundingClientRect().height > 0;
+    }, () => {
+      const ctxPie = pieEl.getContext('2d');
+      const ctxBar = barEl.getContext('2d');
+      if (!ctxPie || !ctxBar) { console.warn('[analytics] 2d context not ready'); return; }
+
+      // Make sure canvases expand to parent
+      pieEl.style.height = '100%'; pieEl.style.width = '100%';
+      barEl.style.height = '100%'; barEl.style.width  = '100%';
+
+      pie = new Chart(ctxPie, {
+        type: 'doughnut',
+        data: { labels: ['Paid','Unpaid'], datasets: [{ data: [0,0] }] },
+        options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
+      });
+
+      bar = new Chart(ctxBar, {
+        type: 'bar',
+        data: { labels: [], datasets: [{ label:'Tickets', data: [] }] },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } },
+          plugins:{ legend:{ display:false }, tooltip:{ mode:'index', intersect:false } }
+        }
+      });
+
+      // Nudge after paint
+      requestAnimationFrame(() => { pie && pie.resize(); bar && bar.resize(); });
     });
   }
 
@@ -119,6 +140,7 @@
         bar.data.labels = months;
         bar.data.datasets[0].data = totals;
         bar.update();
+        requestAnimationFrame(() => bar && bar.resize());
       }
       if ($('#barEmpty')) $('#barEmpty').style.display = totals.some(v=>v>0) ? 'none' : '';
 

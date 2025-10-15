@@ -47,6 +47,13 @@
   --z-app-overlay: 1500;    /* any custom overlay / loaders */
   --z-bs-backdrop: 1990;    /* bootstrap backdrop (dim layer) */
   --z-bs-modal: 2000;       /* the modal window itself */
+} 
+#table-container.is-loading { position: relative; }
+#table-container.is-loading::after{
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,.6);
+  backdrop-filter: blur(2px);
 }
 
 /* Put ALL custom overlays BELOW Bootstrap backdrop */

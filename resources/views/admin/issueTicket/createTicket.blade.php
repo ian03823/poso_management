@@ -13,6 +13,7 @@
     // flags via pivot (same as Enforcer)
     $allFlags = \App\Models\Flag::whereIn('key',['is_resident','is_impounded'])->get();
     $oldFlags = old('flags', []);
+    $v        = $violator;
   @endphp
   {{-- Pass groups to JS --}}
   <script> window.violationGroups = @json($violationGroups); </script>
@@ -29,38 +30,40 @@
             {{-- First/Middle/Last name (match Violator schema used by Enforcer flow) --}}
             <div class="col-12 col-md-4 form-floating">
               <input type="text" class="form-control" id="first_name" name="first_name"
-                    placeholder="First Name" value="{{ old('first_name') }}">
+                    placeholder="First Name" value="{{ $v->first_name ?? old('first_name') }}"
+                    inputmode="text" maxlength="50" pattern="^[A-Za-zÀ-ÖØ-öø-ÿ\s.\-']+$" required>
               <label for="first_name">First Name</label>
+              <div class="invalid-feedback">Letters only (spaces, dot, apostrophe, hyphen allowed).</div>
             </div>
             <div class="col-12 col-md-4 form-floating">
               <input type="text" class="form-control" id="middle_name" name="middle_name"
-                    placeholder="Middle Name" value="{{ old('middle_name') }}">
+                    placeholder="Middle Name" value="{{ $v->middle_name ?? old('middle_name') }}">
               <label for="middle_name">Middle Name</label>
             </div>
             <div class="col-12 col-md-4 form-floating">
               <input type="text" class="form-control" id="last_name" name="last_name"
-                    placeholder="Last Name" value="{{ old('last_name') }}">
+                    placeholder="Last Name" value="{{ $v->last_name ?? old('last_name') }}">
               <label for="last_name">Last Name</label>
             </div>
 
             {{-- License No. --}}
             <div class="col-12 col-md-4 form-floating">
               <input type="text" class="form-control" id="license_num" name="license_num"
-                    placeholder="License number" autocomplete="off" value="{{ old('license_num') }}">
+                    placeholder="License number" autocomplete="off" value="{{ $v->license_number ?? old('license_num') }}">
               <label for="license_num">License No.</label>
             </div>
 
             {{-- Address --}}
             <div class="col-12 col-md-8 form-floating">
               <textarea class="form-control" id="address" name="address"
-                        placeholder="Full address" style="height: 3rem">{{ old('address') }}</textarea>
+                        placeholder="Full address" style="height: 3rem">{{ $v->address ?? old('address') }}</textarea>
               <label for="address">Address</label>
             </div>
 
             {{-- Birthdate --}}
             <div class="col-6 col-md-4 form-floating">
               <input type="date" class="form-control" id="birthdate" name="birthdate"
-                    placeholder="Birthdate" value="{{ old('birthdate') }}">
+                    placeholder="Birthdate" value="{{ $v->birthdate ?? old('birthdate') }}">
               <label for="birthdate">Birthdate</label>
             </div>
 

@@ -39,7 +39,7 @@ class PosoMonthlySheet implements FromArray, ShouldAutoSize, WithEvents
         $rows[] = [''];                     // spacer
         $rows[] = [$monthTitle];            // green band
         $rows[] = [                         // tan header row
-            'DAY',
+            'NO.',
             "DATE OF\nAPPREHENSION\n(MMDDYYYY)",
             "DRIVER'S NAME",
             'ADDRESS',
@@ -60,7 +60,7 @@ class PosoMonthlySheet implements FromArray, ShouldAutoSize, WithEvents
             $dt = Carbon::parse($t['date']);
             $rows[] = [
                 $dt->day,
-                $dt->format('mdY'),
+                $dt->format('m-d-Y'),
                 (string)($t['driver'] ?? ''),
                 (string)($t['address'] ?? ''),
                 (string)($t['tct'] ?? ''),

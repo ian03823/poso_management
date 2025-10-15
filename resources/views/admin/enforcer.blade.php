@@ -51,5 +51,8 @@
   <div id="enfo-card">
     @include('admin.partials.enforcerTable')
   </div>
+  <div id="enfLoading" class="loading-overlay" style="display:none;">
+    <div class="spinner-border" role="status" aria-hidden="true"></div>
+  </div>
 </div>
 @endsection

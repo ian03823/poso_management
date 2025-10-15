@@ -88,14 +88,14 @@
 
             {{-- Address --}}
             <div class="col-12 col-md-6 form-floating">
-              <textarea class="form-control" id="address" name="address" placeholder="Full address">{{ $v->address ?? old('address') }}</textarea>
+              <textarea class="form-control" id="address" name="address" placeholder="Full address">{{ $v->address ?? old('address') }}</textarea required>
               <label for="address">Address</label>
             </div>
 
             {{-- Birthdate --}}
             <div class="col-6 col-md-3 form-floating">
               <input type="date" class="form-control" id="birthdate" name="birthdate"
-                     placeholder="Birthdate" value="{{ $v->birthdate ?? old('birthdate') }}">
+                     placeholder="Birthdate" value="{{ $v->birthdate ?? old('birthdate') }}" required>
               <label for="birthdate">Birthdate</label>
             </div>
 

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Violator;
 use App\Models\Ticket;
 use App\Models\Vehicle;
+use Illuminate\Support\Facades\DB;
 use App\Models\TicketStatus;
 use App\Models\PaidTicket;
 use Illuminate\Support\Facades\Hash;
@@ -33,33 +34,42 @@ class ViolatorTableController extends Controller
 
         // 2) build the base Ticket query
         $query = Ticket::with(['violator','vehicle'])
-            ->whereIn('id',$latestTicketIds)
-            // filter by vehicle_type if requested
-            ->when($vehicleType!=='all', fn($q) => $q
-                ->whereHas('vehicle', fn($q2) =>
-                    $q2->where('vehicle_type',$vehicleType)
-                )
-            )
-            // search name/license/plate
-            ->when($search, fn($q) => $q
-                ->whereHas('violator', fn($q2) => $q2
-                    ->where('name','like',"%{$search}%")
-                    ->orWhere('license_number','like',"%{$search}%")
-                )
-                ->orWhereHas('vehicle', fn($q2) =>
-                    $q2->where('plate_number','like',"%{$search}%")
-                )
-            );
+    ->select('tickets.*') // important when we join for sorting
+    ->whereIn('tickets.id', $latestTicketIds)
+    // SEARCH (grouped): full name, license, or plate
+    ->when($search, function ($q) use ($search) {
+        $term = '%'.$search.'%';
+        $q->where(function ($qq) use ($term) {
+            $qq->whereHas('violator', function ($v) use ($term) {
+                    $v->where(function($w) use ($term) {
+                        // match "First Middle Last" OR "Last First Middle"
+                        $w->where(DB::raw("CONCAT_WS(' ', first_name, middle_name, last_name)"), 'like', $term)
+                          ->orWhere(DB::raw("CONCAT_WS(' ', last_name, first_name, middle_name)"), 'like', $term)
+                          ->orWhere('first_name',  'like', $term)
+                          ->orWhere('middle_name', 'like', $term)
+                          ->orWhere('last_name',   'like', $term)
+                          ->orWhere('license_number', 'like', $term);
+                    });
+                })
+               ->orWhereHas('vehicle', function ($v) use ($term) {
+                    $v->where('plate_number', 'like', $term);
+                });
+        });
+    });
 
-        // 3) apply sorting
-        match($sortOption) {
-            'date_asc'   => $query->orderBy('issued_at','asc'),
-            'name_asc'   => $query->join('violators','tickets.violator_id','violators.id')
-                                  ->orderBy('violators.name','asc'),
-            'name_desc'  => $query->join('violators','tickets.violator_id','violators.id')
-                                  ->orderBy('violators.name','desc'),
-            default      => $query->orderBy('issued_at','desc'),
-        };
+// 3) sorting
+match ($sortOption) {
+    'date_asc'  => $query->orderBy('issued_at','asc'),
+    'name_asc'  => $query->leftJoin('violators','tickets.violator_id','=','violators.id')
+                         ->orderBy('violators.last_name','asc')
+                         ->orderBy('violators.first_name','asc')
+                         ->orderBy('violators.middle_name','asc'),
+    'name_desc' => $query->leftJoin('violators','tickets.violator_id','=','violators.id')
+                         ->orderBy('violators.last_name','desc')
+                         ->orderBy('violators.first_name','desc')
+                         ->orderBy('violators.middle_name','desc'),
+    default     => $query->orderBy('issued_at','desc'),
+};
 
         // 4) paginate & carry filters in links
         $tickets = $query
@@ -147,39 +157,47 @@ class ViolatorTableController extends Controller
 
         // 1) find each violator’s latest ticket id
         $latestTicketIds = Ticket::groupBy('violator_id')
-            ->selectRaw('MAX(id) as id')
-            ->pluck('id');
+    ->selectRaw('MAX(id) as id')
+    ->pluck('id');
 
-        // 2) build the base Ticket query
-        $query = Ticket::with(['violator','vehicle'])
-            ->whereIn('id',$latestTicketIds)
-            // filter by vehicle_type if requested
-            ->when($vehicleType!=='all', fn($q) => $q
-                ->whereHas('vehicle', fn($q2) =>
-                    $q2->where('vehicle_type',$vehicleType)
-                )
-            )
-            // search name/license/plate
-            ->when($search, fn($q) => $q
-                ->whereHas('violator', fn($q2) => $q2
-                    ->where('name','like',"%{$search}%")
-                    ->orWhere('license_number','like',"%{$search}%")
-                )
-                ->orWhereHas('vehicle', fn($q2) =>
-                    $q2->where('plate_number','like',"%{$search}%")
-                )
-            );
+// 2) base
+$query = Ticket::with(['violator','vehicle'])
+    ->select('tickets.*') // important when we join for sorting
+    ->whereIn('tickets.id', $latestTicketIds)
+    // SEARCH (grouped): full name, license, or plate
+    ->when($search, function ($q) use ($search) {
+        $term = '%'.$search.'%';
+        $q->where(function ($qq) use ($term) {
+            $qq->whereHas('violator', function ($v) use ($term) {
+                    $v->where(function($w) use ($term) {
+                        // match "First Middle Last" OR "Last First Middle"
+                        $w->where(DB::raw("CONCAT_WS(' ', first_name, middle_name, last_name)"), 'like', $term)
+                          ->orWhere(DB::raw("CONCAT_WS(' ', last_name, first_name, middle_name)"), 'like', $term)
+                          ->orWhere('first_name',  'like', $term)
+                          ->orWhere('middle_name', 'like', $term)
+                          ->orWhere('last_name',   'like', $term)
+                          ->orWhere('license_number', 'like', $term);
+                    });
+                })
+               ->orWhereHas('vehicle', function ($v) use ($term) {
+                    $v->where('plate_number', 'like', $term);
+                });
+        });
+    });
 
-        // 3) apply sorting
-        match($sortOption) {
-            'date_asc'   => $query->orderBy('issued_at','asc'),
-            'name_asc'   => $query->join('violators','tickets.violator_id','violators.id')
-                                  ->orderBy('violators.name','asc'),
-            'name_desc'  => $query->join('violators','tickets.violator_id','violators.id')
-                                  ->orderBy('violators.name','desc'),
-            default      => $query->orderBy('issued_at','desc'),
-        };
-
+// 3) sorting
+match ($sortOption) {
+    'date_asc'  => $query->orderBy('issued_at','asc'),
+    'name_asc'  => $query->leftJoin('violators','tickets.violator_id','=','violators.id')
+                         ->orderBy('violators.last_name','asc')
+                         ->orderBy('violators.first_name','asc')
+                         ->orderBy('violators.middle_name','asc'),
+    'name_desc' => $query->leftJoin('violators','tickets.violator_id','=','violators.id')
+                         ->orderBy('violators.last_name','desc')
+                         ->orderBy('violators.first_name','desc')
+                         ->orderBy('violators.middle_name','desc'),
+    default     => $query->orderBy('issued_at','desc'),
+};
         // 4) paginate & carry filters in links
         $tickets = $query
             ->distinct('tickets.id')

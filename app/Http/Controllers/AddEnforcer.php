@@ -6,9 +6,12 @@ use Illuminate\Http\Request;
 use App\Models\Enforcer;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Response;
+use App\Http\Controllers\Concerns\WithActivityLogs;
+use Illuminate\Validation\Rule;
 
 class AddEnforcer extends Controller
 {
+    use WithActivityLogs;
     /**
      * Display a listing of the resource.
      */
@@ -124,8 +127,16 @@ class AddEnforcer extends Controller
         $data['password']        = Hash::make($raw);
         $data['defaultPassword'] = Hash::make($raw);
 
-        Enforcer::create($data);
 
+        $e = Enforcer::create($data);
+        // activity log (match Violation style)
+        $this->logCreated($e, 'enforcer', [
+            'enforcer_id'  => $e->id,
+            'badge_num'    => $e->badge_num,
+            'name'         => trim("{$e->fname} {$e->mname} {$e->lname}"),
+            'phone'        => $e->phone,
+            'ticket_range' => "{$e->ticket_start}-{$e->ticket_end}",
+        ]);
         // Return minimal success (your front-end already reloads the table)
         return response()->json(['success'=>true, 'raw_password'=>$raw], 201);
     }
@@ -159,26 +170,20 @@ class AddEnforcer extends Controller
         $e = Enforcer::withTrashed()->findOrFail($id);
 
         $data = $request->validate([
-            'badge_num'    => 'nullable|string|max:4',
-            'fname'        => 'nullable|string|min:2|max:20',
-            'mname'        => 'nullable|string|min:1|max:20',
-            'lname'        => 'nullable|string|min:2|max:20',
+            'badge_num'    => ['nullable','string','max:5',
+                Rule::unique('enforcers','badge_num')->ignore($e->id)->whereNull('deleted_at')
+            ],
+            'fname'        => 'nullable|string|min:2|max:50',
+            'mname'        => 'nullable|string|min:1|max:50',
+            'lname'        => 'nullable|string|min:2|max:50',
             'phone'        => 'nullable|digits:11',
-            'ticket_start' => 'nullable',
-            'ticket_end'   => 'nullable',
-            'password'     => 'nullable|string|min:8|max:20',
+            'ticket_start' => 'nullable|digits:3|numeric|min:1|max:999',
+            'ticket_end'   => 'nullable|digits:3|numeric|min:1|max:999|gte:ticket_start',
+            'password'     => 'nullable|string|min:8|max:50',
         ]);
 
-        // Unique badge if provided
-        if (!empty($data['badge_num'])) {
-            $exists = Enforcer::withTrashed()
-                ->where('badge_num', $data['badge_num'])
-                ->where('id', '!=', $e->id)
-                ->exists();
-            if ($exists) {
-                return response()->json(['success'=>false,'message'=>'Badge number already exists'], 422);
-            }
-        }
+        // compute diff (don’t expose real passwords)
+        $original = $e->getOriginal();
 
         $resp = ['success'=>true,'message'=>'Enforcer updated'];
 
@@ -192,7 +197,37 @@ class AddEnforcer extends Controller
             unset($data['password'], $data['defaultPassword']);
         }
 
-        $e->update($data);
+        // Fill & detect dirty
+        $e->fill(array_filter($data, fn($v) => !is_null($v)));
+        $dirty = $e->getDirty();
+
+        // Replace password diff (if touched) with masked info
+        if (array_key_exists('password', $dirty)) {
+            $dirty['password']        = '***reset***';
+            $dirty['defaultPassword'] = '***reset***';
+        }
+
+        $e->save();
+
+        // Build explicit diff map like Violation logs
+        $diff = [];
+        foreach ($dirty as $field => $newVal) {
+            // don’t log hashed values verbatim
+            if (in_array($field, ['password','defaultPassword'])) {
+                $diff[$field] = ['from' => '***', 'to' => '***reset***'];
+            } else {
+                $diff[$field] = [
+                    'from' => $original[$field] ?? null,
+                    'to'   => $newVal,
+                ];
+            }
+        }
+
+        $this->logUpdated($e, 'enforcer', [
+            'enforcer_id' => $e->id,
+            'badge_num'   => $e->badge_num,
+            'diff'        => $diff,
+        ]);
 
         return response()->json($resp, 200);
     }
@@ -210,8 +245,14 @@ class AddEnforcer extends Controller
             return response()->json(['message' => 'Invalid admin password'], 422);
         }
 
-        $enforcer = Enforcer::findOrFail($id);
-        $enforcer->delete();
+        $e = Enforcer::findOrFail($id);
+
+        $e->delete();
+        $this->logDeleted($e, 'enforcer', [
+            'enforcer_id' => $e->id,
+            'badge_num'   => $e->badge_num,
+            'name'        => trim("{$e->fname} {$e->mname} {$e->lname}"),
+        ]);
 
         return response()->json(['message' => 'Enforcer inactivated'], 200);
     }
@@ -225,7 +266,18 @@ class AddEnforcer extends Controller
         }
 
         $e = Enforcer::withTrashed()->findOrFail($id);
+        if (!$e) {
+            return response()->json(['message' => 'Enforcer not found'], 404);
+        }
+
+        if (!$e->trashed()) {
+            return response()->json(['message' => 'Already active'], 200);
+        }
         $e->restore();
+        $this->logRestored($e, 'enforcer', [
+            'enforcer_id' => $e->id,
+            'badge_num'   => $e->badge_num,
+        ]);
 
         return response()->json(['message' => 'Enforcer activated'], 200);
     }
@@ -235,7 +287,9 @@ class AddEnforcer extends Controller
         $sortOption   = $request->get('sort_option','date_desc');
         $search = $request->get('search','');
         $show       = $request->get('show','active');
-
+        $query = $show === 'inactive'
+        ? Enforcer::onlyTrashed()
+        : Enforcer::query();
         $query = Enforcer::query();
         if ($search !== '') {
             $query->where(function($q) use ($search) {

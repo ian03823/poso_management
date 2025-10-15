@@ -40,24 +40,32 @@ trait WithActivityLogs
     protected function logUpdated($model, string $what, array $props = []): void
     {
         [$role, $who] = $this->currentRoleAndName();
-        $changes = $model->getChanges();
-        $original = $model->getOriginal();
-        $diff = [];
-        foreach ($changes as $k => $v) {
-            if ($k === $model->getKeyName()) continue;
-            $diff[$k] = ['from' => $original[$k] ?? null, 'to' => $v];
+
+        // If caller already computed a diff, use it; else compute here
+        $diff = $props['diff'] ?? null;
+        if ($diff === null) {
+            $changes  = $model->getChanges();
+            $original = $model->getOriginal();
+            $diff = [];
+            foreach ($changes as $k => $v) {
+                if ($k === $model->getKeyName()) continue;
+                $diff[$k] = ['from' => $original[$k] ?? null, 'to' => $v];
+            }
         }
 
-        DB::afterCommit(function () use ($model,$what,$props,$role,$who,$diff) {
+        $props['diff'] = $diff;
+
+        DB::afterCommit(function () use ($model,$what,$props,$role,$who) {
             LogActivity::on($model)
                 ->byCurrentUser()
                 ->event("{$what}.updated")
-                ->withProperties($props + ['id' => $model->getKey(), 'diff' => $diff])
+                ->withProperties($props + ['id' => $model->getKey()])
                 ->fromRequest()
                 ->log("{$role} {$who} updated {$what} (ID: {$model->getKey()})");
         });
     }
 
+    // Use this for soft-deletes (archiving)
     protected function logDeleted($model, string $what, array $props = []): void
     {
         [$role, $who] = $this->currentRoleAndName();
@@ -68,6 +76,20 @@ trait WithActivityLogs
                 ->withProperties($props + ['id' => $model->getKey()])
                 ->fromRequest()
                 ->log("{$role} {$who} deleted {$what} (ID: {$model->getKey()})");
+        });
+    }
+
+    // ✅ NEW: use this after ->restore()
+    protected function logRestored($model, string $what, array $props = []): void
+    {
+        [$role, $who] = $this->currentRoleAndName();
+        DB::afterCommit(function () use ($model,$what,$props,$role,$who) {
+            LogActivity::on($model)
+                ->byCurrentUser()
+                ->event("{$what}.restored")
+                ->withProperties($props + ['id' => $model->getKey()])
+                ->fromRequest()
+                ->log("{$role} {$who} restored {$what} (ID: {$model->getKey()})");
         });
     }
 

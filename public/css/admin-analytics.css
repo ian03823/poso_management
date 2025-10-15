@@ -25,7 +25,8 @@
 /* Chart container for Chart.js canvases */
 .chart-box {
   position: relative;
-  height: 260px;     /* default (mobile/tablet) */
+  height: 260px;   
+  min-height: 240px;   /* default (mobile/tablet) */
   width: 100%;
 }
 

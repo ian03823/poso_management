@@ -1,6 +1,6 @@
 {
     "name": "POSO Digital Ticket",
-    "short_name": "POSO",
+    "short_name": "POSO Digital Ticket",
     "scope": "/",
     "start_url": "/pwa",
     "id": "/pwa",

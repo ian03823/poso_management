@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Http\Requests\AdminIssueTicketRequest;
 use App\Services\LogActivity;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Auth;
@@ -83,29 +84,10 @@ class AdminTicketController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(AdminIssueTicketRequest $request)
     {
         //
-        $d = $request->validate([
-        'apprehending_enforcer_id' => 'required|exists:enforcers,id',
-        'first_name'           => 'nullable|string|max:50',
-        'middle_name'          => 'nullable|string|max:50',
-        'last_name'            => 'nullable|string|max:50',
-        'address'              => 'nullable|string|min:2',
-        'birthdate'            => 'nullable|date',
-        'license_num'          => 'nullable|string|max:50|min:8',
-        'plate_num'            => 'required|string|max:50|min:5',
-        'vehicle_type'         => 'required|string',
-        'is_owner'             => 'sometimes|boolean',
-        'owner_name'           => 'nullable|string|max:255',
-        'violations'           => 'required|array|min:1',
-        'location'             => 'nullable|string',
-        'latitude'             => 'nullable|numeric',
-        'longitude'            => 'nullable|numeric',
-        'confiscation_type_id' => 'nullable|exists:confiscation_types,id',
-        'flags'                => 'array',
-        'flags.*'              => 'exists:flags,id',
-    ]);
+        $d = $request->validated();
 
         // Violator (same logic as Enforcer)
         $violator = \App\Models\Violator::firstOrNew(['license_number' => $d['license_num']]);
@@ -117,7 +99,7 @@ class AdminTicketController extends Controller
             $violator->birthdate   = $d['birthdate'];
         }
         $violator->save();
-
+        /** @var \App\Http\Requests\AdminIssueTicketRequest|\Illuminate\Http\Request $request */
         // Prevent plate number bound to a different violator
         $existingPlate = \App\Models\Vehicle::where('plate_number', $d['plate_num'])->first();
         if ($existingPlate && $existingPlate->violator_id !== $violator->id) {
