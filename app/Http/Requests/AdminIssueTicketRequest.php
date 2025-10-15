@@ -41,7 +41,7 @@ class AdminIssueTicketRequest extends FormRequest
             'flags'         => 'array',           // you can also validate an incoming flags[] if you switch to that
             'flags.*'       => 'exists:flags,id',
             'confiscation_type_id' => ['nullable','integer','exists:confiscation_types,id'],
-
+            'apprehending_enforcer_id' => ['nullable','integer','exists:enforcers,id'],
             'location'    => ['required','string','max:120'],
             'latitude'    => ['nullable','numeric','between:-90,90'],
             'longitude'   => ['nullable','numeric','between:-180,180'],

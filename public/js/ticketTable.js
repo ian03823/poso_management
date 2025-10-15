@@ -19,6 +19,59 @@
       categories: safeParseJSON(r?.dataset.violationCategories) || [] // array of strings
     };
   }
+  let lastVersionToken = null;
+  let pollHandle = null;
+  async function checkVersionAndMaybeReload() {
+    const C = cfg();
+    if (!C.versionUrl || !C.ticketPartialUrl) return;
+
+    // Respect current filters so the token matches the visible table:
+    const f = readFiltersFromURL();
+    try {
+      const res = await $.getJSON(C.versionUrl, {
+        status: f.status || '',
+        category: f.category || '',
+        violation_id: f.violation_id || ''
+      });
+      const token = res && res.v ? String(res.v) : null;
+      if (token && lastVersionToken && token !== lastVersionToken) {
+        // Something changed that affects the current view → refresh the table
+        loadTable({
+          sort_option: getSort(),
+          page: f.page || 1,
+          status: f.status || '',
+          category: f.category || '',
+          violation_id: f.violation_id || ''
+        }, /*push=*/false);
+      }
+      if (token) lastVersionToken = token;
+    } catch (e) {
+      // ignore transient errors; keep polling
+    }
+  }
+
+  function startPolling() {
+    // Set initial token ASAP to avoid a double refresh on first tick
+    checkVersionAndMaybeReload();
+    if (pollHandle) clearInterval(pollHandle);
+    pollHandle = setInterval(checkVersionAndMaybeReload, 2000); // every 5s; tune as you like
+  }
+
+  // Kick off the poller when the page loads and whenever filters/sort change
+  $(document).on('DOMContentLoaded page:loaded', startPolling);
+
+  // When you load a new table (sort/filter/pagination), re-baseline the token shortly after
+  const _origLoadTable = window.loadTicketTable || loadTable;
+  window.loadTicketTable = function(params, push) {
+    _origLoadTable(params, push);
+    setTimeout(checkVersionAndMaybeReload, 800);
+  };
+
+  // Also refresh baseline after status changes
+  $(document).on('change', '.status-select', function(){
+    setTimeout(checkVersionAndMaybeReload, 800);
+  });
+
   function safeParseJSON(s) { try { return s ? JSON.parse(s) : null; } catch { return null; } }
 
   /* ---------------- helpers ---------------- */

@@ -157,7 +157,17 @@ Route::get('/wasm/eng.traineddata.gz', fn () =>
 
 // Admin protected routes
 Route::middleware('admin')->group(function () {
+
     Route::get('/admin/dashboard', [AdminDashboardController::class,'adminDash'])->name('admin.dashboard');
+    Route::get('/admin/dashboard/version', [AdminDashboardController::class,'version'])
+        ->name('admin.dashboard.version');
+    Route::get('/admin/dashboard/summary', [AdminDashboardController::class,'summaryPartial'])
+        ->name('admin.dashboard.summary');
+    Route::get('/admin/dashboard/recent-violators', [AdminDashboardController::class,'recentViolatorsPartial'])
+        ->name('admin.dashboard.recentViolators');
+    Route::get('/admin/dashboard/recent-tickets', [AdminDashboardController::class,'recentTicketsPartial'])
+        ->name('admin.dashboard.recentTickets');
+    
     Route::get('/admin/profile/update', [AdminDashboardController::class,'edit'])->name('admin.profile.edit');
     Route::put('/admin/profile/update', [AdminDashboardController::class,'update'])->name('admin.profile.update');
         
@@ -187,10 +197,12 @@ Route::middleware('admin')->group(function () {
     //Issue Ticket 
     Route::get('/violations/by-category', [AdminTicketController::class, 'violationsByCategory'])
     ->name('violations.byCategory');
+    
     Route::get('/admin/tickets/create', [AdminTicketController::class, 'create'])
         ->name('admin.tickets.create');
     Route::post('/admin/tickets', [AdminTicketController::class, 'store'])
         ->name('admin.tickets.store');
+    Route::get('ticket/version', [AdminTicketController::class, 'ticketVersion'])->name('ticket.version');
     Route::get('ticket/partial', [AdminTicketController::class, 'partial'])->name('ticket.partial');
     Route::post('ticket/{ticket}/status', [AdminTicketController::class, 'updateStatus'])->name('ticket.update.status');
     Route::resource('ticket', AdminTicketController::class);

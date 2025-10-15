@@ -7,6 +7,7 @@
   data-paid-status-id="{{ \App\Models\TicketStatus::where('name','paid')->value('id') }}"
   data-status-update-url="{{ url('ticket') }}"
   data-ticket-partial-url="{{ route('ticket.partial') }}"
+  data-version-url="{{ route('ticket.version') }}"
   data-violations-by-cat-url="{{ route('violations.byCategory') }}"
   data-violation-categories='@json($violationCategories)'>
 

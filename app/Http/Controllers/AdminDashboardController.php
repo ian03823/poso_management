@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use App\Models\Ticket;
 use App\Models\Enforcer;
 use App\Models\Violator;
+use App\Models\PaidTicket;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
@@ -84,4 +85,44 @@ class AdminDashboardController extends Controller
             ->route('admin.profile.edit')
             ->with('success','Profile updated successfully.');
     }
+
+    public function version()
+{
+    $maxTicketUpdated   = optional(Ticket::max('updated_at'))?->timestamp ?? 0;
+    $maxPaidUpdated     = optional(PaidTicket::max('updated_at'))?->timestamp ?? 0;
+    $maxViolatorUpdated = optional(Violator::max('updated_at'))?->timestamp ?? 0;
+
+    $ticketCount   = Ticket::count();
+    $violatorCount = Violator::count();
+
+    $token = implode('|', [
+        $maxTicketUpdated, $maxPaidUpdated, $maxViolatorUpdated,
+        $ticketCount, $violatorCount,
+        Ticket::max('id') ?? 0,
+        Violator::max('id') ?? 0,
+    ]);
+
+    $hash = substr(hash('xxh3', 'admin-dashboard:'.$token), 0, 16);
+    return response()->json(['v' => $hash]);
+}
+
+public function summaryPartial()
+{
+    $ticketCount   = Ticket::count();
+    $violatorCount = Violator::count();
+    return view('admin.partials.dashboardSummary', compact('ticketCount','violatorCount'));
+}
+
+public function recentViolatorsPartial()
+{
+    $recentViolators = Violator::orderByDesc('created_at')->limit(5)->get();
+    return view('admin.partials.recentViolators', compact('recentViolators'));
+}
+
+public function recentTicketsPartial()
+{
+    $recentTickets = Ticket::with(['violator','enforcer'])
+        ->orderByDesc('issued_at')->limit(5)->get();
+    return view('admin.partials.recentTickets', compact('recentTickets'));
+}
 }

@@ -18,7 +18,7 @@
     </thead>
     <tbody>
       @forelse($tickets as $t)
-      <tr>
+      <tr data-id="{{ $t->id }}">
         <td class="text-center fw-semibold">{{ $t->ticket_number }}</td>
         <td>{{ $t->enforcer->fname }}</td>
         <td>{{ $t->violator->first_name }} {{ $t->violator->middle_name }} {{ $t->violator->last_name }}</td>
@@ -34,7 +34,7 @@
       @endforelse
     </tbody>
   </table>
-@else
+  @else
   <table class="table table-hover align-middle mb-0">
     <thead class="small text-uppercase">
       <tr>
@@ -73,9 +73,9 @@
       @endforelse
     </tbody>
   </table>
-@endif
+  @endif
 
-<div class="vtr-pager d-flex justify-content-between align-items-center mt-3">
+  <div class="vtr-pager d-flex justify-content-between align-items-center mt-3">
     <div class="d-none d-md-block small text-muted">
       Showing {{ $tickets->firstItem() }} to {{ $tickets->lastItem() }} of {{ $tickets->total() }} results
     </div>
@@ -83,4 +83,4 @@
       {{ $tickets->links() }}
     </div>
   </div>
-</div>
+

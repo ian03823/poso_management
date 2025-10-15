@@ -159,7 +159,7 @@
 
   {{-- Vendor + app scripts --}}
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  
+  <script src="https://unpkg.com/laravel-echo/dist/echo.iife.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js" defer></script>
   <link href="https://unpkg.com/leaflet/dist/leaflet.css" rel="stylesheet"/>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -178,7 +178,9 @@
   <script src="{{ asset('js/impoundedVehicle.js') }}"></script>
   <script src="{{ asset('js/violationTable.js') }}"></script>
   <script defer src="{{ asset('js/violatorPage.js') }}"></script>
+  <script src="{{ asset('js/realtime-tables.js') }}" defer></script>
   <script src="{{ asset('js/adminIssueTicket.js') }}" defer></script>
+  <script src="{{ asset('js/adminDashboard.js') }}" defer></script>
   @stack('modals')
   @stack('scripts')
 </body>

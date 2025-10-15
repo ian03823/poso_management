@@ -51,7 +51,12 @@
     </tbody>
   </table>
 
-  <div class="mt-3 justify-content-center d-flex">
-    {{ $violation->appends(['category'=>$categoryFilter ?? request('category'),'search'=>$search ?? request('search')])->links() }}
+  <div class="vtr-pager d-flex justify-content-between align-items-center mt-3">
+    <div class="d-none d-md-block small text-muted">
+      Showing {{ $violation->firstItem() }} to {{ $violation->lastItem() }} of {{ $violation->total() }} results
+    </div>
+    <div class="w-100 d-flex justify-content-center">
+      {{ $violation->links() }}
+    </div>
   </div>
 </div>

@@ -146,7 +146,7 @@ class AdminTicketController extends Controller
 
             if ($next > $enf->ticket_end) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'ticket_number' => "Selected enforcer’s range exhausted ({$enf->ticket_start}–{$enf->ticket_end})."
+                    'ticket_number' => "Selected enforcer's range exhausted ({$enf->ticket_start}–{$enf->ticket_end})."
                 ]);
             }
 
@@ -159,7 +159,7 @@ class AdminTicketController extends Controller
                 'location'             => $d['location'],
                 'issued_at'            => now(),
                 'offline'              => false,
-                'status_id'            => \App\Models\TicketStatus::where('name','pending')->value('id'),
+                'status_id'            => \App\Models\TicketStatus::where('name','unpaid')->value('id'),
                 'latitude'             => $d['latitude'] ?? null,
                 'longitude'            => $d['longitude'] ?? null,
                 'confiscation_type_id' => $d['confiscation_type_id'],
@@ -435,5 +435,52 @@ class AdminTicketController extends Controller
                ? 'Ticket marked as Paid.'
                : 'Status updated successfully.'
         ]);
+    }
+    public function ticketVersion(Request $request)
+    {
+        // If you want the token to respect current filters, read them (optional):
+        $status     = $request->query('status');      // paid|unpaid|pending|cancelled|null
+        $category   = $request->query('category');    // string|null
+        $violationId= $request->query('violation_id');// int|null
+
+        // Base query similar to partial() but only grabbing the latest update time + counts
+        $q = Ticket::query()
+            ->select('tickets.updated_at')
+            ->leftJoin('violators','tickets.violator_id','=','violators.id');
+
+        if ($status) {
+            $statusId = TicketStatus::where('name',$status)->value('id');
+            if ($statusId) $q->where('tickets.status_id',$statusId);
+        }
+        if ($violationId) {
+            $q->join('ticket_violation as tv','tv.ticket_id','=','tickets.id')
+            ->where('tv.violation_id',$violationId);
+        } elseif ($category) {
+            $q->join('ticket_violation as tv','tv.ticket_id','=','tickets.id')
+            ->join('violations as v','v.id','=','tv.violation_id')
+            ->where('v.category',$category);
+        }
+
+        // Compute a tiny token that changes when anything relevant changes
+        $maxTicketUpdated = optional($q->max('tickets.updated_at'))?->timestamp ?? 0;
+        $countTickets     = (clone $q)->distinct('tickets.id')->count('tickets.id');
+
+        // If “paid” is in play, include the latest PaidTicket activity too
+        $maxPaidUpdated = 0;
+        if (!$status || $status === 'paid') {
+            $maxPaidUpdated = optional(
+                PaidTicket::max('updated_at')
+            )?->timestamp ?? 0;
+        }
+
+        // You can include max(id) as well if you want a super-cheap change detector:
+        $maxId       = Ticket::max('id') ?? 0;
+
+        // Build a stable token
+        $tokenParts  = [$maxTicketUpdated, $maxPaidUpdated, $countTickets, $maxId, $status ?: '-', $category ?: '-', $violationId ?: 0];
+        $tokenString = implode('|', $tokenParts);
+        $hash        = substr(hash('xxh3','tickets:'.$tokenString), 0, 16);
+
+        return response()->json(['v' => $hash]);
     }
 }

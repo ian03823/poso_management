@@ -1,4 +1,4 @@
-<div class="table-responsive">
+<div id="table-container" class="table-responsive">
   <table class="table table-hover align-middle enforcer-table">
     <thead class="table-light">
       <tr>
@@ -64,5 +64,6 @@
 
   <div class="d-flex justify-content-center mt-3">
     {{ $enforcer->appends(['show'=>$show,'sort_option'=>$sortOption,'search'=>$search])->links() }}
+  </div>
   </div>
 </div>

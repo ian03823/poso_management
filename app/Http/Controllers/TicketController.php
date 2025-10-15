@@ -22,7 +22,6 @@ use Carbon\Carbon;
 
 class TicketController extends Controller
 {
-    
     /**
      * Display a listing of the resource.
      */
@@ -392,11 +391,11 @@ class TicketController extends Controller
 
         // public function violations() { return $this->belongsToMany(Violation::class,'ticket_violation','ticket_id','violation_code','id','violation_code'); }
         $violationIds = Violation::whereIn(
-            'violation_code',
-            (array) ($d['violations'] ?? [])
-        )->pluck('id')->all();
+        'violation_code',
+        (array) ($d['violations'] ?? [])
+    )->pluck('id')->all();
 
-        $ticket->violations()->sync($violationIds);
+    $ticket->violations()->sync($violationIds);
         // Get actor/role/name
         // actor/role/name
         [$actor, $role, $actorName] = $this->buildActor();
