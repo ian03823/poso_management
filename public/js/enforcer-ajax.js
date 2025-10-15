@@ -39,7 +39,7 @@
   $(document).on('submit','#enforcerForm', function(e){
     e.preventDefault();
     const $f = $(this);
-
+    
     $.post($f.attr('action'), $f.serialize(), tableHtml => {
       Swal.fire({
         icon: 'success',

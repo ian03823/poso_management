@@ -18,30 +18,24 @@ class AdminDashboardController extends Controller
     {
                 // Summary counts
             // today in your app’s timezone
-        $today = Carbon::today()->toDateString();
+        // Use app timezone and a half-open window [today, tomorrow)
+        $start = Carbon::today();
+        $end   = Carbon::tomorrow();
 
-        // tickets issued *today*
-        $ticketCount = Ticket::whereDate('issued_at', $today)->count();
+        // Summary (TODAY ONLY)
+        $ticketCount   = Ticket::whereBetween('issued_at', [$start, $end])->count();
+        $enforcerCount = Enforcer::whereBetween('created_at', [$start, $end])->count();
+        $violatorCount = Violator::whereBetween('created_at', [$start, $end])->count();
 
-        // enforcers created *today* (or: distinct enforcers who issued tickets today)
-        // $enforcerCount = Ticket::whereDate('issued_at', $today)
-        //                       ->distinct()
-        //                       ->count('enforcer_id');
-        $enforcerCount = Enforcer::whereDate('created_at', $today)->count();
+        // Lists (TODAY ONLY)
+        $recentViolators = Violator::whereBetween('created_at', [$start, $end])
+                                   ->orderByDesc('created_at')
+                                   ->limit(5)->get();
 
-        // violators registered *today*
-        $violatorCount = Violator::whereDate('created_at', $today)->count();
-
-        // recent lists, also scoped to today:
-        $recentViolators = Violator::whereDate('created_at', $today)
-                                   ->orderBy('created_at','desc')
-                                   ->take(5)
-                                   ->get();
-
-        $recentTickets   = Ticket::whereDate('issued_at', $today)
-                                 ->orderBy('issued_at','desc')
-                                 ->take(5)
-                                 ->get();
+        $recentTickets   = Ticket::with(['violator','enforcer'])
+                                 ->whereBetween('issued_at', [$start, $end])
+                                 ->orderByDesc('issued_at')
+                                 ->limit(5)->get();
 
         return view('admin.index', compact(
             'ticketCount',
@@ -87,42 +81,71 @@ class AdminDashboardController extends Controller
     }
 
     public function version()
-{
-    $maxTicketUpdated   = optional(Ticket::max('updated_at'))?->timestamp ?? 0;
-    $maxPaidUpdated     = optional(PaidTicket::max('updated_at'))?->timestamp ?? 0;
-    $maxViolatorUpdated = optional(Violator::max('updated_at'))?->timestamp ?? 0;
+    {
+       $start = Carbon::today();
+        $end   = Carbon::tomorrow();
 
-    $ticketCount   = Ticket::count();
-    $violatorCount = Violator::count();
+        // “What changed today?” -> any of these changing triggers a refresh
+        $maxTicketUpdated   = optional(
+            Ticket::whereBetween('updated_at', [$start, $end])->max('updated_at')
+        )?->timestamp ?? 0;
 
-    $token = implode('|', [
-        $maxTicketUpdated, $maxPaidUpdated, $maxViolatorUpdated,
-        $ticketCount, $violatorCount,
-        Ticket::max('id') ?? 0,
-        Violator::max('id') ?? 0,
-    ]);
+        $maxPaidUpdated     = optional(
+            PaidTicket::whereBetween('updated_at', [$start, $end])->max('updated_at')
+        )?->timestamp ?? 0;
 
-    $hash = substr(hash('xxh3', 'admin-dashboard:'.$token), 0, 16);
-    return response()->json(['v' => $hash]);
-}
+        $maxViolatorUpdated = optional(
+            Violator::whereBetween('updated_at', [$start, $end])->max('updated_at')
+        )?->timestamp ?? 0;
+
+        $ticketCountToday   = Ticket::whereBetween('issued_at', [$start, $end])->count();
+        $violatorCountToday = Violator::whereBetween('created_at', [$start, $end])->count();
+
+        $maxTicketIdToday   = Ticket::whereBetween('issued_at', [$start, $end])->max('id') ?? 0;
+        $maxViolatorIdToday = Violator::whereBetween('created_at', [$start, $end])->max('id') ?? 0;
+
+        $token = implode('|', [
+            $start->toDateString(),                    // makes token reset each day
+            $maxTicketUpdated, $maxPaidUpdated, $maxViolatorUpdated,
+            $ticketCountToday, $violatorCountToday,
+            $maxTicketIdToday, $maxViolatorIdToday,
+        ]);
+
+        $hash = substr(hash('xxh3', 'admin-dashboard-today:'.$token), 0, 16);
+        return response()->json(['v' => $hash]);
+    }
 
 public function summaryPartial()
 {
-    $ticketCount   = Ticket::count();
-    $violatorCount = Violator::count();
-    return view('admin.partials.dashboardSummary', compact('ticketCount','violatorCount'));
+    $start = \Carbon\Carbon::today();
+        $end   = \Carbon\Carbon::tomorrow();
+
+        $ticketCount   = Ticket::whereBetween('issued_at', [$start, $end])->count();
+        $violatorCount = Violator::whereBetween('created_at', [$start, $end])->count();
+
+        return view('admin.partials.dashboardSummary', compact('ticketCount','violatorCount'));
 }
 
 public function recentViolatorsPartial()
-{
-    $recentViolators = Violator::orderByDesc('created_at')->limit(5)->get();
-    return view('admin.partials.recentViolators', compact('recentViolators'));
-}
+    {
+        $start = \Carbon\Carbon::today();
+        $end   = \Carbon\Carbon::tomorrow();
 
-public function recentTicketsPartial()
-{
-    $recentTickets = Ticket::with(['violator','enforcer'])
-        ->orderByDesc('issued_at')->limit(5)->get();
-    return view('admin.partials.recentTickets', compact('recentTickets'));
-}
+        $recentViolators = Violator::whereBetween('created_at', [$start, $end])
+            ->orderByDesc('created_at')->limit(5)->get();
+
+        return view('admin.partials.recentViolators', compact('recentViolators'));
+    }
+
+    public function recentTicketsPartial()
+    {
+        $start = \Carbon\Carbon::today();
+        $end   = \Carbon\Carbon::tomorrow();
+
+        $recentTickets = Ticket::with(['violator','enforcer'])
+            ->whereBetween('issued_at', [$start, $end])
+            ->orderByDesc('issued_at')->limit(5)->get();
+
+        return view('admin.partials.recentTickets', compact('recentTickets'));
+    }
 }

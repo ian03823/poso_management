@@ -178,7 +178,6 @@
   <script src="{{ asset('js/impoundedVehicle.js') }}"></script>
   <script src="{{ asset('js/violationTable.js') }}"></script>
   <script defer src="{{ asset('js/violatorPage.js') }}"></script>
-  <script src="{{ asset('js/realtime-tables.js') }}" defer></script>
   <script src="{{ asset('js/adminIssueTicket.js') }}" defer></script>
   <script src="{{ asset('js/adminDashboard.js') }}" defer></script>
   @stack('modals')

@@ -1,4 +1,5 @@
 /* public/js/enforcer.js — SPA table (filters/pagination) + SweetAlert edit + activate/inactivate */
+console.log("Loaded enforcer.js");
 (function () {
   if (window.__enforcerBound) return;
   window.__enforcerBound = true;
@@ -13,17 +14,14 @@
   function partialUrl() { return root()?.dataset.partialUrl || '/enforcer/partial'; }
 
   function setLoading(on) {
-    // prefer a dedicated overlay if present
     const ov = document.getElementById('enfLoading');
     if (ov) { ov.style.display = on ? 'flex' : 'none'; return; }
-    // fallback: add a class on #table-container
     $('#table-container')?.classList.toggle('is-loading', !!on);
   }
 
   // ---- URL state
   function getParams() {
     const p = new URLSearchParams(location.search);
-    // prefer current inputs when available (keeps changes before push)
     const show   = $('#show_filter')?.value || p.get('show') || 'active';
     const sort   = $('#sort_table')?.value || p.get('sort_option') || 'date_desc';
     const search = $('#search_input')?.value ?? p.get('search') ?? '';
@@ -68,13 +66,11 @@
   // ---- init on hard load and SPA nav
   function initPage() {
     if (!root()) return;
-    // hydrate inputs from URL once
     const p = getParams();
     if ($('#show_filter')) $('#show_filter').value = p.show;
     if ($('#sort_table')) $('#sort_table').value = p.sort;
     if ($('#search_input')) $('#search_input').value = p.search;
 
-    // if table not present, fetch initial
     if (!$('#table-container table')) loadPage(p.page, /*push=*/false);
   }
   document.addEventListener('DOMContentLoaded', initPage);
@@ -182,16 +178,13 @@
       showCancelButton: true,
       confirmButtonText: 'Save',
       didOpen: () => {
+        const $ = (sel, root=document) => root.querySelector(sel);
         $('#sw_gen')?.addEventListener('click', () => {
-          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*';
-          const len = 12;
-          let out = '';
-          if (crypto?.getRandomValues) {
-            crypto.getRandomValues(new Uint32Array(len)).forEach(n => out += chars[n % chars.length]);
-          } else {
-            for (let i=0;i<len;i++) out += chars[Math.floor(Math.random()*chars.length)];
-          }
-          $('#sw_pwd').value = out;
+          const pwd = `posoenforcer_${genRotatingTail(3)}`;
+          $('#sw_pwd').value = pwd;
+          $('#sw_pwd').focus();
+          const end = pwd.length;
+          $('#sw_pwd').setSelectionRange(end, end);
         });
       },
       preConfirm: async () => {
@@ -247,7 +240,37 @@
     });
   });
 
-  // ====== CREATE (Add Enforcer) with "Add another?" ======
+  // =========================================
+  // ADD ENFORCER
+  // =========================================
+
+  // (A) Password generator for the Add Enforcer form — format: posoenforcer_XXX
+  function genRotatingTail(len = 3) {
+    // 3 digits (0-9) each time you click => keeps “rotating”
+    if (window.crypto?.getRandomValues) {
+      const buf = new Uint32Array(len);
+      crypto.getRandomValues(buf);
+      return Array.from(buf, n => (n % 10)).join('');
+    }
+    // fallback
+    let s = '';
+    for (let i=0;i<len;i++) s += Math.floor(Math.random()*10);
+    return s;
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('#btnGenPwd');
+    if (!btn) return;
+    const pwdInput = $('#password') || document.getElementById('password');
+    if (!pwdInput) return;
+    const pwd = `posoenforcer_${genRotatingTail(3)}`;
+    pwdInput.value = pwd;
+    // Optional: place cursor at end & highlight for easy copy
+    pwdInput.focus();
+    pwdInput.setSelectionRange(pwd.length, pwd.length);
+  });
+
+  // (B) Submit handler
   document.addEventListener('submit', async (e) => {
     const form = e.target.closest('#addEnforcerForm');
     if (!form) return;
@@ -286,8 +309,8 @@
       });
 
       if (ask.isConfirmed) {
+        // Reset the form and refresh server-suggested fields (badge/ticket range)
         form.reset();
-        // refresh server-suggested next badge/ticket range
         try {
           const html = await fetch('/enforcer/create', { headers:{ 'X-Requested-With':'XMLHttpRequest' } }).then(r => r.text());
           const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -295,8 +318,8 @@
           if (fresh) form.outerHTML = fresh.outerHTML;
         } catch {}
       } else {
-        history.pushState({}, '', '/enforcer');
-        loadPage('1');
+        // ✅ Ensure it actually goes to the list page (hard navigation)
+        window.location.href = '/enforcer';
       }
     } catch (err) {
       console.error(err);

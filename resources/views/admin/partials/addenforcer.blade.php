@@ -3,9 +3,9 @@
     <a href="{{url('/enforcer')}}" data-ajax
       class="btn btn-outline-secondary confirm-back">
       <i class="bi bi-arrow-left"></i> Back
-    </a>
+    </a>  
 
-  <div class="card mx-auto shadow">
+  <div class="card mx-auto shadow" style="max-width: 800px;">
 
     <form id="addEnforcerForm" action="{{ route('enforcer.store') }}" method="POST">
       @csrf
@@ -68,7 +68,7 @@
 
           <div class="col-md-3">
             <label for="ticket_end" class="form-label">Ticket End</label>
-            <input type="text" id="ticket_end" name="ticket_end" class="form-control"
+            <input type="text" id="ticket_end" name="ticket_end" class="form-c  ontrol"
                    value="{{ old('ticket_end', $nextEnd ?? '') }}"
                    pattern="\d{3}" maxlength="3" placeholder="e.g. 100" readonly>
             <div class="form-text">3-digit only, ≥ start</div>
