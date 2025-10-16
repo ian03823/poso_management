@@ -17,7 +17,7 @@ class ViolatorManagementController extends Controller
         // eager-load anything you need in the table
         $tickets = $violator
             ->tickets()
-            ->with(['vehicle','status','confiscationType','violations'])
+            ->with(['vehicle','status','confiscationType','violations' => fn($q) => $q->withTrashed(),])
             ->orderBy('issued_at','desc')
             ->get();
         $activeNames = ['pending','unpaid'];

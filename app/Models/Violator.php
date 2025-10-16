@@ -60,6 +60,6 @@ class Violator extends Authenticatable
     }
     public function violations()
     {
-        return $this->belongsToMany(Violation::class);
+        return $this->belongsToMany(Violation::class)->withTrashed();
     }
 }
