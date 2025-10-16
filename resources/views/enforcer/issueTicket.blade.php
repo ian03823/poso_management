@@ -150,6 +150,7 @@
           </div>
 
           {{-- Violations --}}
+          
           <h5 class="section-title mt-3">Select Violations</h5>
           <div class="border-0">
             <div class="form-floating mb-3">
@@ -161,6 +162,10 @@
               </select>
               <label for="categorySelect">Category</label>
             </div>
+            <div class="input-group mb-2">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" id="violationSearch" class="form-control" placeholder="Search within category…">
+              </div>
             <div id="violationsContainer" class="violations-box"></div>
           </div>
 

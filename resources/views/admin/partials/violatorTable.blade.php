@@ -39,7 +39,13 @@
           </td>
 
           <td class="col-violate">
-            <span class="truncate-2">{{ $t->violation_names }}</span>
+            <span class="truncate-2">
+              {{ $t->violations->map(function($v){
+                    $name = $v->violation_name ?? 'Unnamed';
+                    $arch = (method_exists($v,'trashed') && $v->trashed()) ? ' [Archived]' : '';
+                    return $name.$arch;
+                })->implode(', ') }}
+            </span>
           </td>
 
           {{-- Actions --}}

@@ -72,7 +72,7 @@ class Ticket extends Model
 
     public function enforcer()
     {
-        return $this->belongsTo(Enforcer::class);
+        return $this->belongsTo(Enforcer::class)->withTrashed();
     }
     public function admin()
     {
@@ -92,11 +92,14 @@ class Ticket extends Model
     }
     public function violations()
     {
-        return $this->belongsToMany(Violation::class,
-            'ticket_violation',
-            'ticket_id',
-            'violation_id'
-        );
+        return $this->belongsToMany(
+            Violation::class,   // related model
+            'ticket_violation', // pivot table
+            'ticket_id',        // FK on pivot -> tickets.id
+            'violation_id',     // FK on pivot -> violations.id
+            'id',               // local key on tickets
+            'id'                // *** related key on violations (NOT the PK/route key) ***
+        )->withTrashed();
     }
     public function paidTickets()
     {
@@ -132,4 +135,5 @@ class Ticket extends Model
                     ->pluck('violation_name')
                     ->implode(', ');
     }
+    
 }

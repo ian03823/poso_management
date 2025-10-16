@@ -53,7 +53,11 @@
         <td class="text-center fw-semibold">{{ $t->ticket_number }}</td>
         <td>{{ $t->enforcer->fname }}</td>
         <td>{{ $t->violator->first_name }} {{ $t->violator->middle_name }} {{ $t->violator->last_name }}</td>
-        <td class="text-wrap">{{ $t->violation_names }}</td>
+        <td class="text-wrap"> {{ $t->violations->map(function($v){
+      $name = $v->violation_name ?? 'Unnamed';
+      $arch = (method_exists($v,'trashed') && $v->trashed()) ? ' [Archived]' : '';
+      return $name.$arch;
+  })->implode(', ') }}</td>
         <td class="text-wrap">{{ $t->location }}</td>
         <td>{{ $t->issued_at->format('Y-m-d H:i') }}</td>
         <td>

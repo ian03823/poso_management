@@ -30,11 +30,17 @@ class AdminTicketController extends Controller
             default:          $col='issued_at'; $dir='desc'; break;
         }
 
-        $tickets = Ticket::with(['enforcer','violator','vehicle','status'])
-            ->whereHas('enforcer')
-            ->orderBy($col,$dir)
-            ->paginate(5)
-            ->appends('sort_option',$sortOption);
+         $tickets = Ticket::query()
+        ->with([
+            'violator',
+            'vehicle',
+            'status',
+            'enforcer'  => fn($q) => $q->withTrashed(),   // already added earlier
+            'violations'=> fn($q) => $q->withTrashed(),
+        ])
+        ->orderBy($col,$dir)
+        ->paginate(5)
+        ->appends('sort_option',$sortOption);
 
         // Distinct categories for the modal
         $violationCategories = Violation::query()
@@ -319,9 +325,15 @@ class AdminTicketController extends Controller
             default:          $col='issued_at'; $dir='desc'; break;
         }
 
-        $q = Ticket::with(['enforcer','violator','vehicle'])
-            ->select('tickets.*')
-            ->leftJoin('violators','tickets.violator_id','=','violators.id');
+        $q = Ticket::query()
+        ->select('tickets.*')
+        ->leftJoin('violators','tickets.violator_id','=','violators.id')
+        ->with([
+            'violator',
+            'vehicle',
+            'enforcer'  => fn($q) => $q->withTrashed(),   // already added earlier
+            'violations'=> fn($q) => $q->withTrashed(),
+        ]);
 
         // status filter
         if ($status) {

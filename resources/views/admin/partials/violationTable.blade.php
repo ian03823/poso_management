@@ -37,7 +37,7 @@
             <button type="button"
                     class="btn btn-danger btn-sm archive-btn"
                     data-name="{{ $v->violation_name }}"
-                    data-action="{{ route('violation.destroy', $v->id) }}">
+                    data-action="{{ route('violation.destroy', $v) }}">
               <i class="bi bi-archive"></i> Archive
             </button>
 

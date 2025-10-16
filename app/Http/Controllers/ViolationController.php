@@ -80,7 +80,7 @@ class ViolationController extends Controller
     {
         //
         $data = $request->validate([
-            'violation_code' => [
+            'violation_code' => [   
                 'required', 'string', 'max:20',
                 Rule::unique('violations', 'violation_code')->whereNull('deleted_at'),
             ],
@@ -184,7 +184,10 @@ class ViolationController extends Controller
         }
 
         // $violation here is actually the {violation} route param (the id)
-        $model = \App\Models\Violation::withTrashed()->find($violation);
+        $model = \App\Models\Violation::withTrashed()
+        ->where('violation_code', $violation)
+        ->orWhere('id', $violation)
+        ->first();
 
         if (!$model) {
             // Treat as benign (stale row / double click)
@@ -205,7 +208,12 @@ class ViolationController extends Controller
             ]);
         }
 
-        return response()->json(['message' => 'Violation archived'], 200);
+        return response()->json([
+        'success'     => true,
+        'message'     => 'Violation archived',
+        'id'          => $model->getKey(),
+        'deleted_at'  => optional($model->fresh())->deleted_at,
+    ], 200);
     }
     public function partial(Request $request)
     {

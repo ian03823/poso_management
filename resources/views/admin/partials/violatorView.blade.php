@@ -44,10 +44,42 @@
             <td>{{ $ticket->issued_at->format('d M Y, H:i') }}</td>
             <td>{{ $ticket->location }}</td>
             <td>
-                @foreach(json_decode($ticket->violation_codes) as $code)
-                {{ \App\Models\Violation::where('violation_code', $code)
-                    ->value('violation_name') }}<br>
-              @endforeach
+                 @php
+    // Build "Name [Archived]" for any soft-deleted violations
+    $vioList = $ticket->violations->map(function($v){
+      $name = $v->violation_name ?? 'Unnamed';
+      $arch = (method_exists($v,'trashed') && $v->trashed()) ? ' [Archived]' : '';
+      return $name.$arch;
+    })->implode(', ');
+  @endphp
+
+  {{-- Primary: relation output (includes archived) --}}
+  @if($vioList !== '')
+    {{ $vioList }}
+  @else
+    {{-- Fallback: if relation is empty but violation_codes exists, decode & resolve WITH trashed --}}
+    @php
+      $codes = is_array($ticket->violation_codes)
+        ? array_filter($ticket->violation_codes)
+        : (array) (json_decode($ticket->violation_codes, true) ?: []);
+
+      $names = [];
+      if (!empty($codes)) {
+        $byCode = \App\Models\Violation::withTrashed()
+                  ->whereIn('violation_code', $codes)
+                  ->get(['violation_code','violation_name','deleted_at'])
+                  ->keyBy('violation_code');
+
+        foreach ($codes as $c) {
+          $row = $byCode->get($c);
+          if ($row) {
+            $names[] = $row->violation_name . ($row->deleted_at ? ' [Archived]' : '');
+          }
+        }
+      }
+      echo e(implode(', ', $names));
+    @endphp
+  @endif
             </td>
             <td>{{ $ticket->vehicle?->vehicle_type ?? 'N/A' }}</td>
             <td>{{ $ticket->vehicle?->plate_number ?? 'N/A' }}</td>

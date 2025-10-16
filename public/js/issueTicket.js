@@ -433,27 +433,221 @@ if (window.__ISSUE_TICKET_WIRED__) {
     }, err=>console.warn('Geolocation failed:', err?.message), {enableHighAccuracy:true,timeout:5000,maximumAge:0});
   }
 
-  /* ---- violations category render ---- */
+  /* ---------- VIOLATIONS: Virtualized, Scrollable, Searchable ---------- */
   (function(){
-    const selectEl = byId('categorySelect');
-    const container = byId('violationsContainer');
-    const selected = new Set();
-    function renderCategory(){
-      if (!selectEl || !container) return;
-      container.innerHTML = '';
-      const list = (window.violationGroups?.[selectEl.value]) || [];
-      for (const v of list) {
-        const wrap = document.createElement('div');
-        wrap.className = 'form-check mb-2';
-        wrap.innerHTML = `
-          <input class="form-check-input" type="checkbox" name="violations[]" id="v-${v.id}" value="${v.violation_code}" ${selected.has(v.violation_code)?'checked':''}>
-          <label class="form-check-label" for="v-${v.id}">${v.violation_name} — ₱${parseFloat(v.fine_amount).toFixed(2)}</label>`;
-        const chk = wrap.querySelector('input');
-        chk.addEventListener('change', ()=> chk.checked ? selected.add(chk.value) : selected.delete(chk.value));
-        container.appendChild(wrap);
+    const catSel   = byId('categorySelect');
+    const boxEl    = byId('violationsContainer');
+    const searchEl = document.getElementById('violationSearch'); // optional
+
+    if (!catSel || !boxEl || !window.violationGroups) return;
+
+    // Build a fast lookup by violation_code for previews & submit
+    const VIOLATION_INDEX = (() => {
+      const map = new Map();
+      const groups = window.violationGroups || {};
+      Object.keys(groups).forEach(cat => {
+        (groups[cat] || []).forEach(v => {
+          const code = v.violation_code ?? String(v.id ?? '');
+          if (code) map.set(code, v);
+        });
+      });
+      return map;
+    })();
+    window.__VIOLATION_INDEX = VIOLATION_INDEX;
+
+    // Settings
+    const PAGE_SIZE = 30;
+    const SCROLL_THRESHOLD = 80;
+
+    // State
+    const selected = new Set();  // stores violation_code values
+    window.__VIO_SELECTED = selected;
+    window.getSelectedViolations = () => Array.from(selected);
+
+    let currentCat = '';
+    let currentQ   = '';
+    let activeList = []; // filtered list for current category/search
+    let rendered   = 0;
+    let loading    = false;
+
+    // Debounce helper
+    const debounce = (fn, ms = 200) => {
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn.apply(null, args), ms);
+      };
+    };
+
+    // Create a checkbox row
+    const createItem = (v) => {
+      const code = v.violation_code ?? String(v.id ?? '');
+      const name = v.violation_name ?? v.name ?? 'Unnamed violation';
+      const fine = (v.fine_amount != null && v.fine_amount !== '') ? ` — ₱${Number(v.fine_amount).toFixed(2)}` : '';
+      const idAttr = `vio_${code.replace(/[^A-Za-z0-9_-]/g,'')}`;
+
+      const wrap = document.createElement('div');
+      wrap.className = 'form-check';
+      wrap.innerHTML = `
+        <input class="form-check-input" type="checkbox" value="${code}" id="${idAttr}" name="violations[]">
+        <label class="form-check-label" for="${idAttr}">
+          ${name}${fine}
+        </label>
+      `;
+      const chk = wrap.querySelector('input');
+      // reflect prior selection
+      chk.checked = selected.has(code);
+
+      chk.addEventListener('change', () => {
+        if (chk.checked) selected.add(code);
+        else selected.delete(code);
+      });
+
+      return wrap;
+    };
+
+    const clearBox = () => {
+      boxEl.innerHTML = '';
+      rendered = 0;
+    };
+
+    const showEmpty = (msg) => {
+      const div = document.createElement('div');
+      div.className = 'text-muted py-3 text-center';
+      div.textContent = msg;
+      boxEl.appendChild(div);
+    };
+
+    const showSkeleton = (count = 6) => {
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < count; i++) {
+        const sk = document.createElement('div');
+        sk.className = 'placeholder-glow py-2 border-bottom';
+        sk.innerHTML = `
+          <span class="placeholder col-1 me-2" style="height:1.25rem;"></span>
+          <span class="placeholder col-7" style="height:1.25rem;"></span>
+        `;
+        frag.appendChild(sk);
+      }
+      boxEl.appendChild(frag);
+    };
+
+    const removeSkeletons = () => {
+      boxEl.querySelectorAll('.placeholder-glow').forEach(el => el.remove());
+    };
+
+    const renderMore = () => {
+      if (loading) return;
+      if (rendered >= activeList.length) return;
+      loading = true;
+
+      const next = activeList.slice(rendered, rendered + PAGE_SIZE);
+      const frag = document.createDocumentFragment();
+      next.forEach(v => frag.appendChild(createItem(v)));
+      boxEl.appendChild(frag);
+
+      rendered += next.length;
+      loading = false;
+    };
+
+    const refill = () => {
+      clearBox();
+
+      if (!currentCat) {
+        showEmpty('Pick a category to view violations.');
+        return;
+      }
+
+      const raw = Array.isArray(window.violationGroups[currentCat])
+        ? window.violationGroups[currentCat]
+        : [];
+
+      const q = (currentQ || '').trim().toLowerCase();
+      activeList = q
+        ? raw.filter(v => {
+            const name = (v.violation_name ?? v.name ?? '').toLowerCase();
+            const code = (v.violation_code ?? '').toLowerCase();
+            return name.includes(q) || code.includes(q);
+          })
+        : raw;
+
+      if (!activeList.length) {
+        showEmpty(q ? 'No matches in this category.' : 'No violations in this category.');
+        return;
+      }
+
+      showSkeleton();
+      requestAnimationFrame(() => {
+        removeSkeletons();
+        renderMore();
+      });
+    };
+
+    const onScroll = () => {
+      const nearBottom = boxEl.scrollHeight - boxEl.scrollTop - boxEl.clientHeight < SCROLL_THRESHOLD;
+      if (nearBottom) renderMore();
+    };
+
+    boxEl.addEventListener('scroll', onScroll);
+
+    catSel.addEventListener('change', () => {
+      currentCat = catSel.value || '';
+      currentQ = searchEl ? (searchEl.value || '') : '';
+      refill();
+    });
+
+    if (searchEl) {
+      const onSearch = debounce((ev) => {
+        currentQ = ev.target.value || '';
+        refill();
+      }, 200);
+      searchEl.addEventListener('input', onSearch);
+    }
+
+    // Ensure selected violations are included in the form on submit,
+    // even if their checkboxes aren't currently rendered/checked in DOM.
+    function ensureSelectedInForm(form) {
+      // remove previous injected hidden fields
+      form.querySelectorAll('input.vio-hidden[name="violations[]"]').forEach(n => n.remove());
+
+      // gather visible checked values (to avoid duplicates)
+      const visibleChecked = new Set(
+        Array.from(form.querySelectorAll('input[name="violations[]"]:checked')).map(i => i.value)
+      );
+
+      // inject any selected codes that are not visible/checked
+      for (const code of selected) {
+        if (!visibleChecked.has(code)) {
+          const h = document.createElement('input');
+          h.type = 'hidden';
+          h.name = 'violations[]';
+          h.value = code;
+          h.className = 'vio-hidden';
+          form.appendChild(h);
+        }
       }
     }
-    selectEl?.addEventListener('change', renderCategory);
+    window.__ensureSelectedViolationsInForm = ensureSelectedInForm;
+
+    // Initialize empty message
+    if (catSel.value) {
+      currentCat = catSel.value;
+      refill();
+    } else {
+      showEmpty('Pick a category to view violations.');
+    }
+
+    // Expose a helper for preview building
+    window.__violationDisplayFromCodes = function(codes = []) {
+      return codes.map(code => {
+        const v = VIOLATION_INDEX.get(code);
+        if (!v) return { name: code, fine: '' };
+        return {
+          name: v.violation_name ?? v.name ?? code,
+          fine: v.fine_amount != null ? Number(v.fine_amount).toFixed(2) : ''
+        };
+      });
+    };
   })();
 
   /* ---- license duplicate warning ---- */
@@ -503,6 +697,12 @@ if (window.__ISSUE_TICKET_WIRED__) {
   byId('ticketForm')?.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const form = e.target;
+
+    // ⬇️ Ensure all selected violations are included (even if not rendered)
+    if (window.__ensureSelectedViolationsInForm) {
+      window.__ensureSelectedViolationsInForm(form);
+    }
+
     const fd   = new FormData(form);
     const uuid = ensureClientUuid(form);
 
@@ -511,30 +711,34 @@ if (window.__ISSUE_TICKET_WIRED__) {
       const violatorName = [fd.get('first_name'), fd.get('middle_name'), fd.get('last_name')]
       .map(s => (s||'').trim()).filter(Boolean).join(' ') || '(n/a)';
 
-    // keep variable name "checked" exactly as you have it
-    const checked = Array.from(document.querySelectorAll('input[name="violations[]"]:checked'));
-    const confiscatedText = document.querySelector('#confiscation_type_id option:checked')?.textContent?.trim() || 'None';
-    // build list items from the LABEL text (violation name), not the value (code)
-    const listItems = checked.map(chk => {
-      // label is the next sibling created in renderCategory()
-      const labelText = chk.nextElementSibling?.textContent?.trim() || chk.value;
-      // strip the " — ₱123.45" part so we keep only the violation name
-      const nameOnly = labelText.split(' — ')[0];
-      return `<li>${nameOnly}</li>`;
-    }).join('') || '<li>(none)</li>';
+      // Use virtualized selection set if available; fallback to DOM checked
+      let selectedCodes = (typeof window.getSelectedViolations === 'function')
+        ? window.getSelectedViolations()
+        : Array.from(document.querySelectorAll('input[name="violations[]"]:checked')).map(chk => chk.value);
 
-    const preHtml = `
-      <strong>Violator:</strong> ${violatorName}<br>
-      <strong>Address.:</strong> ${fd.get('address')||''}<br>
-      <strong>License No.:</strong> ${fd.get('license_num')||''}<br>
-      <strong>Vehicle:</strong> ${fd.get('vehicle_type')||''}<br>
-      <strong>Plate:</strong> ${fd.get('plate_num')||''}<br>
-      <strong>Owner:</strong> ${fd.get('is_owner') ? 'Yes' : 'No'}<br>
-      <strong>Owner Name:</strong> ${fd.get('owner_name')||''}<br>
-      <strong>Location:</strong> ${fd.get('location')||''}<br>
-      <strong>Confiscated:</strong> ${confiscatedText}<br>
-      <strong>Violations:</strong><ul>${listItems}</ul>
-    `;
+      // Build preview list using the global index (name + strip fine)
+      const items = (typeof window.__violationDisplayFromCodes === 'function')
+        ? window.__violationDisplayFromCodes(selectedCodes)
+        : selectedCodes.map(code => ({ name: code, fine: '' }));
+
+      const confiscatedText = document.querySelector('#confiscation_type_id option:checked')?.textContent?.trim() || 'None';
+
+      const listItems = items.length
+        ? items.map(x => `<li>${x.name}</li>`).join('')
+        : '<li>(none)</li>';
+
+      const preHtml = `
+        <strong>Violator:</strong> ${violatorName}<br>
+        <strong>Address.:</strong> ${fd.get('address')||''}<br>
+        <strong>License No.:</strong> ${fd.get('license_num')||''}<br>
+        <strong>Vehicle:</strong> ${fd.get('vehicle_type')||''}<br>
+        <strong>Plate:</strong> ${fd.get('plate_num')||''}<br>
+        <strong>Owner:</strong> ${fd.get('is_owner') ? 'Yes' : 'No'}<br>
+        <strong>Owner Name:</strong> ${fd.get('owner_name')||''}<br>
+        <strong>Location:</strong> ${fd.get('location')||''}<br>
+        <strong>Confiscated:</strong> ${confiscatedText}<br>
+        <strong>Violations:</strong><ul>${listItems}</ul>
+      `;
 
       const { isConfirmed } = await Notify.modal({
         title: 'Submit ticket?',
@@ -546,10 +750,9 @@ if (window.__ISSUE_TICKET_WIRED__) {
       });
       if (!isConfirmed) {
         Notify.info('Submission cancelled.');
-        return; // <- stop here on Cancel (prevents BOTH offline queue and online POST)
+        return; // <- stop here on Cancel
       }
     } catch (e) {
-      // If anything goes wrong building the preview, fail safe and still allow submission.
       console.warn('pre-submit preview failed:', e);
     }
     /* ===== end pre-confirm ===== */

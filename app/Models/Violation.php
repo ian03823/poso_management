@@ -32,4 +32,8 @@ class Violation extends Model
     {
         return $this->belongsTo(Ticket::class);
     }
+    public function getDisplayNameAttribute()
+    {
+        return trim(($this->violation_name ?? 'Unnamed').($this->trashed() ? ' [Archived]' : ''));
+    }
 }

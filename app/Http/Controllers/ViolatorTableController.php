@@ -33,7 +33,7 @@ class ViolatorTableController extends Controller
             ->pluck('id');
 
         // 2) build the base Ticket query
-        $query = Ticket::with(['violator','vehicle'])
+        $query = Ticket::with(['violator','vehicle','violations' => fn($q) => $q->withTrashed()])
     ->select('tickets.*') // important when we join for sorting
     ->whereIn('tickets.id', $latestTicketIds)
     // SEARCH (grouped): full name, license, or plate
@@ -114,8 +114,9 @@ match ($sortOption) {
         //
         $violator = Violator::with([
             'vehicles',
-            'tickets.violations',
-            'tickets.status'
+            'tickets.status',
+            'tickets.violations' => fn($q) => $q->withTrashed(),
+            'tickets.vehicle',
         ])->findOrFail($id);
 
         // sort tickets newest → oldest
@@ -161,7 +162,7 @@ match ($sortOption) {
     ->pluck('id');
 
 // 2) base
-$query = Ticket::with(['violator','vehicle'])
+$query = Ticket::with(['violator','vehicle','violations' => fn($q) => $q->withTrashed()])
     ->select('tickets.*') // important when we join for sorting
     ->whereIn('tickets.id', $latestTicketIds)
     // SEARCH (grouped): full name, license, or plate
