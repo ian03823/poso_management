@@ -22,6 +22,7 @@
                data-bs-toggle="modal"
                data-id="{{ $e->id }}"
                data-url="{{ route('enforcer.update', $e) }}"
+               data-range-url="{{ route('enforcer.ticket-range.add', $e) }}"
                data-badge="{{ $e->badge_num }}"
                data-fname="{{ $e->fname }}"
                data-mname="{{ $e->mname }}"

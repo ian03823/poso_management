@@ -9,6 +9,7 @@ use App\Models\Enforcer;
 use Illuminate\Http\Request;
 use App\Http\Requests\StoreTicketRequest;
 use App\Models\Violation;
+use App\Models\TicketRange;
 use App\Models\TicketStatus;
 use App\Models\ConfiscationType;
 use App\Models\Flag;
@@ -27,8 +28,106 @@ class TicketController extends Controller
      */
     public function index(Request $request)
     {
-        return view('enforcer.dashboard');
+        $enforcer = auth('enforcer')->user();
+        if (! $enforcer) {
+            abort(403);
+        }
+
+        // All ticket ranges for this enforcer's badge
+        $ranges = TicketRange::where('badge_num', $enforcer->badge_num)
+            ->orderBy('ticket_start')
+            ->get();
+
+        if ($ranges->isEmpty()) {
+            // No range at all = treat as exhausted / not assigned
+            $ticketSummary = [
+                'min_start'       => null,
+                'max_end'         => null,
+                'total_allocated' => 0,
+                'used'            => 0,
+                'remaining'       => 0,
+                'last_used'       => null,
+                'ranges'          => $ranges,
+            ];
+            $ticketExhausted = true;
+        } else {
+            $minStart = $ranges->min('ticket_start');
+            $maxEnd   = $ranges->max('ticket_end');
+
+            // Total allocated tickets across all batches
+            $totalAllocated = $ranges->sum(function ($r) {
+                return (int)$r->ticket_end - (int)$r->ticket_start + 1;
+            });
+
+            // Tickets already issued by this enforcer within the allocated ranges
+            $usedCount = Ticket::where('enforcer_id', $enforcer->id)
+                ->whereBetween('ticket_number', [$minStart, $maxEnd])
+                ->count();
+
+            $lastUsed  = Ticket::where('enforcer_id', $enforcer->id)->max('ticket_number');
+            $remaining = max(0, $totalAllocated - $usedCount);
+
+            $ticketSummary = [
+                'min_start'       => $minStart,
+                'max_end'         => $maxEnd,
+                'total_allocated' => $totalAllocated,
+                'used'            => $usedCount,
+                'remaining'       => $remaining,
+                'last_used'       => $lastUsed,
+                'ranges'          => $ranges,
+            ];
+
+            // exhausted if nothing left (or total is 0 for safety)
+            $ticketExhausted = ($totalAllocated === 0) || ($remaining <= 0);
+        }
+
+        return view('enforcer.dashboard', compact('ticketSummary', 'ticketExhausted'));
     }
+    //View tickets issued by the logged-in enforcer
+    public function myTickets(Request $request)
+    {
+        $enforcer = auth('enforcer')->user();
+        if (! $enforcer) {
+            abort(403);
+        }
+
+        $sort   = $request->get('sort', 'date_desc');
+        $status = $request->get('status'); // optional filter: paid/unpaid/pending/cancelled
+
+        switch ($sort) {
+            case 'date_asc':
+                $col = 'issued_at';
+                $dir = 'asc';
+                break;
+            default:
+                $col = 'issued_at';
+                $dir = 'desc';
+                break;
+        }
+
+        $q = Ticket::with(['violator', 'vehicle', 'status'])
+            ->where('enforcer_id', $enforcer->id);
+
+        if ($status) {
+            $q->whereHas('status', function ($q2) use ($status) {
+                $q2->where('name', $status);
+            });
+        }
+
+        $tickets = $q->orderBy($col, $dir)
+            ->paginate(5)
+            ->appends([
+                'sort'   => $sort,
+                'status' => $status,
+            ]);
+
+        return view('enforcer.myTickets', [
+            'tickets' => $tickets,
+            'sort'    => $sort,
+            'status'  => $status,
+        ]);
+    }
+
     // Build the currently logged-in actor (Admin or Enforcer)
     private function buildActor(): array
     {
@@ -124,49 +223,68 @@ class TicketController extends Controller
             ]
         );
 
-        $ticket = DB::transaction(function () use ($req, $data, $violator, $vehicle, $uuid) {
-             $enf = Enforcer::lockForUpdate()->findOrFail($data['enforcer_id']);
+        $ticket = DB::transaction(function () use ($req, $data, $violator, $vehicle, $uuid, $enforcerId) {
+            // a) Lock the Enforcer row
+            $enf = Enforcer::lockForUpdate()->findOrFail($enforcerId);
 
-            // Find the last ticket number used by this enforcer
+            // b) Get overall min start & max end from all batches for this badge
+            $rangeQuery = TicketRange::where('badge_num', $enf->badge_num);
+            $minStart   = $rangeQuery->min('ticket_start');
+            $maxEnd     = $rangeQuery->max('ticket_end');
+
+            if ($minStart === null || $maxEnd === null) {
+                throw ValidationException::withMessages([
+                    'ticket_number' => "No ticket ranges are assigned to badge {$enf->badge_num}. Please contact the admin.",
+                ]);
+            }
+
+            // c) Find last ticket_number used by this enforcer
             $last = Ticket::where('enforcer_id', $enf->id)
                         ->lockForUpdate()
                         ->max('ticket_number');
-            $next = $last !== null ? ($last + 1) : $enf->ticket_start;
-            if ($next > $enf->ticket_end) {
-                // Return a 422 so the client can show a friendly message & keep the record queued
+
+            // d) Next number = last + 1, or first range start
+            $next = $last !== null ? ($last + 1) : $minStart;
+
+            // e) Enforce ALL assigned ranges
+            if ($next > $maxEnd) {
                 throw ValidationException::withMessages([
-                    'ticket_number' => "Allocated range exhausted ({$enf->ticket_start}–{$enf->ticket_end}).",
+                    'ticket_number' => "Allocated ticket ranges exhausted for badge {$enf->badge_num} ({$minStart}–{$maxEnd}).",
                 ]);
             }
+
+            // f) Create Ticket
             $t = Ticket::create([
-                'violator_id'  => $violator->id,
-                'vehicle_id'   => $vehicle->getKey(),
-                'ticket_number'=> $next,
-                'issued_at'    => now(),
-                'location'     => $data['location'] ?? null,
-                'latitude'     => $data['latitude'] ?? null,
-                'longitude'    => $data['longitude'] ?? null,
-                'enforcer_id'  => $enf->id,          // ✅ never NULL now
-                'client_uuid'  => $uuid,
-                'is_impounded' => (bool)$req->boolean('is_impounded'),
+                'violator_id'          => $violator->id,
+                'vehicle_id'           => $vehicle->getKey(),
+                'ticket_number'        => $next,
+                'issued_at'            => now(),
+                'location'             => $data['location'] ?? null,
+                'latitude'             => $data['latitude'] ?? null,
+                'longitude'            => $data['longitude'] ?? null,
+                'enforcer_id'          => $enf->id,
+                'client_uuid'          => $uuid,
+                'is_impounded'         => (bool)$req->boolean('is_impounded'),
                 'confiscation_type_id' => $data['confiscation_type_id'] ?? null,
                 'offline'              => true,
-                'status_id'   => TicketStatus::where('name','pending')->value('id'),
-                 // Keep JSON snapshot if you still use it elsewhere:
+                'status_id'            => TicketStatus::where('name','pending')->value('id'),
                 'violation_codes'      => json_encode($data['violations']),
             ]);
 
-            // Attach violations via pivot
+            // g) Attach violations via pivot
             $codes = (array)$data['violations'];
             if (!empty($codes)) {
                 $viols = Violation::whereIn('violation_code', $codes)->pluck('id')->all();
                 $t->violations()->sync($viols);
             }
+
             return $t;
         });
 
         return response()->json($this->printerPayload($ticket), 201);
     }
+
+
     private function printerPayload(\App\Models\Ticket $ticket): array
     {
         $ticket->load(['violator','vehicle','violations','enforcer']);
@@ -289,18 +407,19 @@ class TicketController extends Controller
      */
     public function store(StoreTicketRequest $request)
     {
-         $d = $request->validated();
-        // 2) Violator (firstOrNew then save)
+        $d = $request->validated();
 
+        // 2) Violator
         $violator = Violator::firstOrNew(['license_number' => $d['license_num']]);
         if (! $violator->exists) {
-            $violator->first_name      = $d['first_name'];
-            $violator->middle_name      = $d['middle_name'];
-            $violator->last_name      = $d['last_name'];
-            $violator->address   = $d['address'];
-            $violator->birthdate = $d['birthdate'];
+            $violator->first_name  = $d['first_name'];
+            $violator->middle_name = $d['middle_name'];
+            $violator->last_name   = $d['last_name'];
+            $violator->address     = $d['address'];
+            $violator->birthdate   = $d['birthdate'];
         }
         $violator->save();
+
         /** @var \App\Http\Requests\StoreTicketRequest|\Illuminate\Http\Request $request */
         $existingPlate = Vehicle::where('plate_number', $d['plate_num'])->first();
         if ($existingPlate && $existingPlate->violator_id !== $violator->id) {
@@ -312,25 +431,20 @@ class TicketController extends Controller
 
             return back()
                 ->withInput()
-                 ->with('duplicate_error', 'The plate number is already registered under another violator.');
+                ->with('duplicate_error', 'The plate number is already registered under another violator.');
         }
 
-        // possibly create credentials
+        // credentials for NEW violator
         if ($violator->wasRecentlyCreated) {
             $violator->username = 'user'.rand(1000,9999);
-        
-            // generate an 8-char password
-            $rawPwd = 'violator'.rand(1000,9999); // default
-        
-            // set the default password
+            $rawPwd             = 'violator'.rand(1000,9999);
+
             $violator->defaultPassword = Hash::make($rawPwd);
-            
             $violator->save();
-        
-            // return the plain text so you can e.g. email it
+
             $creds = [
-              'username' => $violator->username,
-              'password' => $rawPwd,
+                'username' => $violator->username,
+                'password' => $rawPwd,
             ];
         } else {
             $creds = ['username'=>'Existing','password'=>'Existing'];
@@ -347,64 +461,71 @@ class TicketController extends Controller
             ]
         );
 
-        $ticket = DB::transaction(function() use($d, $violator, $vehicle) {
-            // a) Lock the enforcer row
-            $enf = Enforcer::lockForUpdate()->find(auth()->guard('enforcer')->id());
-    
-            // b) Find the highest ticket_number they’ve already used
-            $last = Ticket::where('enforcer_id', $enf->id)
-                          ->lockForUpdate()
-                          ->max('ticket_number');
-    
-            // c) Compute the next one
-            if ($last !== null) {
-                $next = $last + 1;
-            } else {
-                $next = $enf->ticket_start;
-            }
-    
-            // d) Enforce their range
-            if ($next > $enf->ticket_end) {
+        // 4) Ticket + range enforcement via ticket_ranges
+        $ticket = DB::transaction(function() use ($d, $violator, $vehicle) {
+            // a) Lock the current enforcer
+            $enforcerId = auth()->guard('enforcer')->id();
+            $enf = Enforcer::lockForUpdate()->findOrFail($enforcerId);
+
+            // b) All ticket_ranges for this badge
+            $rangeQuery = TicketRange::where('badge_num', $enf->badge_num);
+            $minStart   = $rangeQuery->min('ticket_start');
+            $maxEnd     = $rangeQuery->max('ticket_end');
+
+            if ($minStart === null || $maxEnd === null) {
                 throw ValidationException::withMessages([
-                    'ticket_number' => "You’ve hit your allocated range ({$enf->ticket_start}–{$enf->ticket_end})."
+                    'ticket_number' => "No ticket ranges assigned to your badge ({$enf->badge_num}). Please contact the admin.",
                 ]);
             }
-            // 4) Ticket – note: no more violation_codes JSON
+
+            // c) Highest ticket_number already used
+            $last = Ticket::where('enforcer_id', $enf->id)
+                        ->lockForUpdate()
+                        ->max('ticket_number');
+
+            // d) Next = last + 1 or very first ticket_start
+            $next = $last !== null ? $last + 1 : $minStart;
+
+            // e) Block if you’ve used everything
+            if ($next > $maxEnd) {
+                throw ValidationException::withMessages([
+                    'ticket_number' => "You’ve exhausted all your allocated ticket ranges ({$minStart}–{$maxEnd}).",
+                ]);
+            }
+
+            // f) Create Ticket
             $t = Ticket::create([
-                'enforcer_id'            => $enf->id,
-                'ticket_number'          => $next,
-                'violator_id'            => $violator->id,
-                'vehicle_id'             => $vehicle->getKey(),
-                'violation_codes'        => json_encode($d['violations']),
-                'location'               => $d['location'],
-                'issued_at'              => now(),
-                'offline'                => false,
-                'status_id'              => TicketStatus::where('name','unpaid')->value('id'),
-                'latitude'               => $d['latitude'] ?? null,
-                'longitude'              => $d['longitude'] ?? null,
-                'confiscation_type_id'   => $d['confiscation_type_id'],
+                'enforcer_id'          => $enf->id,
+                'ticket_number'        => $next,
+                'violator_id'          => $violator->id,
+                'vehicle_id'           => $vehicle->getKey(),
+                'violation_codes'      => json_encode($d['violations']),
+                'location'             => $d['location'],
+                'issued_at'            => now(),
+                'offline'              => false,
+                'status_id'            => TicketStatus::where('name','unpaid')->value('id'),
+                'latitude'             => $d['latitude'] ?? null,
+                'longitude'            => $d['longitude'] ?? null,
+                'confiscation_type_id' => $d['confiscation_type_id'],
             ]);
 
-            $t->flags()->sync($d['flags'] ?? []);
+        $t->flags()->sync($d['flags'] ?? []);
             return $t;
         });
 
-        // public function violations() { return $this->belongsToMany(Violation::class,'ticket_violation','ticket_id','violation_code','id','violation_code'); }
+        // 5) Sync pivot violations
         $violationIds = Violation::whereIn(
-        'violation_code',
-        (array) ($d['violations'] ?? [])
-    )->pluck('id')->all();
+            'violation_code',
+            (array) ($d['violations'] ?? [])
+        )->pluck('id')->all();
 
-    $ticket->violations()->sync($violationIds);
-        // Get actor/role/name
-        // actor/role/name
+        $ticket->violations()->sync($violationIds);
+
+        // 6) Logging as before
         [$actor, $role, $actorName] = $this->buildActor();
-
-        // violator
-        $violator     = $ticket->violator ?? \App\Models\Violator::find($ticket->violator_id);
+        $violator     = $ticket->violator ?? Violator::find($ticket->violator_id);
         $violatorName = $this->violatorFullName($violator);
 
-        // log only after final commit
         DB::afterCommit(function () use ($ticket, $violator, $violatorName, $actor, $role, $actorName) {
             try {
                 LogActivity::on($ticket)
@@ -425,41 +546,39 @@ class TicketController extends Controller
 
         // 7) Last apprehended before this ticket
         $prev = Ticket::where('violator_id',$violator->id)
-                      ->where('id','!=',$ticket->id)
-                      ->orderBy('issued_at','desc')
-                      ->first();
-        $lastAt = $prev
-            ? $prev->issued_at->format('d M Y, H:i')
-            : null;
+                    ->where('id','!=',$ticket->id)
+                    ->orderBy('issued_at','desc')
+                    ->first();
+        $lastAt = $prev ? $prev->issued_at->format('d M Y, H:i') : null;
 
-        // 8) Build JSON payload (using relationships)
+        // 8) Build JSON payload (unchanged)
         $violations = Violation::whereIn('violation_code', json_decode($ticket->violation_codes))
-                                     ->get()
-                                     ->map(fn($v) => [
-                                         'name'   => $v->violation_name,
-                                         'fine'   => $v->fine_amount,
-                                     ]);
-        // >>> NEW: prefer what the enforcer typed for display ONLY (do not change DB)
+                            ->get()
+                            ->map(fn($v) => [
+                                'name' => $v->violation_name,
+                                'fine' => $v->fine_amount,
+                            ]);
+
         $violatorDisplay = [
             'first_name'     => $d['first_name']  ?? $violator->first_name,
             'middle_name'    => $d['middle_name'] ?? $violator->middle_name,
             'last_name'      => $d['last_name']   ?? $violator->last_name,
             'address'        => $d['address']     ?? $violator->address,
             'birthdate'      => $d['birthdate']   ?? $violator->birthdate,
-            'license_number' => $violator->license_number, // keep canonical license
-        ];                             
+            'license_number' => $violator->license_number,
+        ];
 
         return response()->json([
             'ticket' => [
-                'id'                  => $ticket->id,
-                'ticket_number'       => $ticket->ticket_number,
-                'issued_at'           => optional($ticket->issued_at)->timezone('Asia/Manila')->format('d M Y, H:i'),
-                'location'            => $ticket->location,
-                'status'              =>  optional($ticket->status)->name      ?? 'Unknown',
-                'confiscated'         =>  optional($ticket->confiscationType)->name ?? 'None',
-                'is_impounded'        => (bool) $ticket->is_impounded,
-                'is_resident'         => (bool) $ticket->is_resident,
-                'flags'               => $ticket->flags->pluck('key')->all(),
+                'id'            => $ticket->id,
+                'ticket_number' => $ticket->ticket_number,
+                'issued_at'     => optional($ticket->issued_at)->timezone('Asia/Manila')->format('d M Y, H:i'),
+                'location'      => $ticket->location,
+                'status'        => optional($ticket->status)->name ?? 'Unknown',
+                'confiscated'   => optional($ticket->confiscationType)->name ?? 'None',
+                'is_impounded'  => (bool) $ticket->is_impounded,
+                'is_resident'   => (bool) $ticket->is_resident,
+                'flags'         => $ticket->flags->pluck('key')->all(),
             ],
             'last_apprehended_at' => $lastAt,
             'enforcer' => [
@@ -477,8 +596,8 @@ class TicketController extends Controller
             'violations'  => $violations,
             'credentials' => $creds,
         ]);
-    
     }
+
     public function checkLicense(Request $request)
     {
         $license = trim((string)$request->query('license', ''));

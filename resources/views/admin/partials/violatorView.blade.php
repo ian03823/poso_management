@@ -35,6 +35,7 @@
           <th>Vehicle Type</th>
           <th>Plate Number</th>
           <th>Status</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -98,6 +99,15 @@
                   </option>
                 @endforeach
               </select>
+            </td>
+            <td class="text-center" style="min-width:130px;">
+              <button
+                type="button"
+                class="btn btn-outline-primary btn-sm reprint-ticket-btn"
+                data-url="{{ route('ticket.receipt', $ticket) }}"
+              >
+                <i class="bi bi-printer"></i> Reprint
+              </button>
             </td>
           </tr>
         @empty

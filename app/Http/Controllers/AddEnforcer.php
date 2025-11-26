@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Enforcer;
+use App\Models\TicketRange;
+use App\Models\Ticket;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Response;
 use App\Http\Controllers\Concerns\WithActivityLogs;
 use Illuminate\Validation\Rule;
@@ -65,7 +68,6 @@ class AddEnforcer extends Controller
         // }
 
         return view('admin.enforcer', compact('enforcer','sortOption','search','show'));
-
     }
 
     /**
@@ -107,7 +109,6 @@ class AddEnforcer extends Controller
      */
     public function store(Request $request)
     {
-        //
         $data = $request->validate([
             'badge_num'    => 'required|string|max:4',
             'fname'        => 'required|string|min:2|max:20',
@@ -120,26 +121,147 @@ class AddEnforcer extends Controller
         ]);
 
         if (Enforcer::where('badge_num', $data['badge_num'])->exists()) {
-            return response()->json(['success'=>false,'message'=>'Badge number already exists'], 422);
+            return response()->json(['success' => false, 'message' => 'Badge number already exists'], 422);
         }
 
-        $raw = $data['password'];
-        $data['password']        = Hash::make($raw);
-        $data['defaultPassword'] = Hash::make($raw);
+        $rawPassword = $data['password'];
 
+        // Wrap in transaction so Enforcer + TicketRange stay in sync
+        DB::beginTransaction();
 
-        $e = Enforcer::create($data);
-        // activity log (match Violation style)
-        $this->logCreated($e, 'enforcer', [
-            'enforcer_id'  => $e->id,
-            'badge_num'    => $e->badge_num,
-            'name'         => trim("{$e->fname} {$e->mname} {$e->lname}"),
-            'phone'        => $e->phone,
-            'ticket_range' => "{$e->ticket_start}-{$e->ticket_end}",
-        ]);
-        // Return minimal success (your front-end already reloads the table)
-        return response()->json(['success'=>true, 'raw_password'=>$raw], 201);
+        try {
+            // 1) Save to enforcers (OLD structure kept)
+            $e = Enforcer::create([
+                'badge_num'       => $data['badge_num'],
+                'fname'           => $data['fname'],
+                'mname'           => $data['mname'] ?? null,
+                'lname'           => $data['lname'],
+                'phone'           => $data['phone'],
+                'ticket_start'    => $data['ticket_start'],
+                'ticket_end'      => $data['ticket_end'],
+                'password'        => Hash::make($rawPassword),
+                'defaultPassword' => Hash::make($rawPassword), 
+            ]);
+
+            // 2) Save to ticket_range (NEW structure)
+            TicketRange::create([
+                'badge_num'    => $e->badge_num,
+                'ticket_start' => $data['ticket_start'],
+                'ticket_end'   => $data['ticket_end'],
+            ]);
+
+            DB::commit();
+
+            // activity log
+            $this->logCreated($e, 'enforcer', [
+                'enforcer_id'  => $e->id,
+                'badge_num'    => $e->badge_num,
+                'name'         => trim("{$e->fname} {$e->mname} {$e->lname}"),
+                'phone'        => $e->phone,
+                'ticket_range' => "{$e->ticket_start}-{$e->ticket_end}",
+            ]);
+
+            return response()->json(['success' => true, 'raw_password' => $rawPassword], 201);
+
+        } catch (\Throwable $th) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => 'Failed to create enforcer'], 500);
+        }
     }
+    public function addTicketRange(Request $request, string $id)
+    {
+        $enforcer = Enforcer::withTrashed()->findOrFail($id);
+
+        // 1) Find the last ticket range for this enforcer (highest ticket_end)
+        $lastRange = TicketRange::where('badge_num', $enforcer->badge_num)
+            ->orderByDesc('ticket_end')
+            ->first();
+
+        if (! $lastRange) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This enforcer has no existing ticket range. Please set an initial range first.',
+            ], 422);
+        }
+
+        // 2) Check the last ticket number actually used by this enforcer
+        $lastTicket = Ticket::where('enforcer_id', $enforcer->id)->max('ticket_number');
+
+        // If no tickets yet, or last ticket is still below the end of the current batch -> don’t allow new batch
+        if ($lastTicket === null || $lastTicket < $lastRange->ticket_end) {
+            $currentRangeText = str_pad($lastRange->ticket_start, 3, '0', STR_PAD_LEFT)
+                            . '–'
+                            . str_pad($lastRange->ticket_end, 3, '0', STR_PAD_LEFT);
+
+            $msg = "Current ticket batch ({$currentRangeText}) is not yet fully used.";
+            if ($lastTicket !== null) {
+                $msg .= ' Last used ticket: ' . str_pad($lastTicket, 3, '0', STR_PAD_LEFT) . '.';
+            } else {
+                $msg .= ' No tickets have been issued yet.';
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => $msg,
+            ], 422);
+        }
+
+        // 3) Ensure we haven’t hit maximum ticket number
+        if ($lastRange->ticket_end >= 999) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot add another ticket range: maximum ticket number 999 reached for this enforcer.',
+            ], 422);
+        }
+
+        // 4) Auto-generate next batch
+        // Use the same batch size style as your initial logic (001–100, then 101–200, etc.)
+        $batchSize = 100;
+
+        $newStart = $lastRange->ticket_end + 1;
+        $newEnd   = $newStart + $batchSize - 1;
+        if ($newEnd > 999) {
+            $newEnd = 999; // cap at 999 just in case
+        }
+
+        // Extra safety: make sure this new range does not overlap anything
+        $overlap = TicketRange::where('badge_num', $enforcer->badge_num)
+            ->where('ticket_start', '<=', $newEnd)
+            ->where('ticket_end',   '>=', $newStart)
+            ->exists();
+
+        if ($overlap) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Computed ticket range overlaps with an existing range. Please contact the administrator.',
+            ], 422);
+        }
+
+        // 5) Create the new range
+        $range = TicketRange::create([
+            'badge_num'    => $enforcer->badge_num,
+            'ticket_start' => $newStart,
+            'ticket_end'   => $newEnd,
+        ]);
+
+        // optional activity log
+        $this->logCreated($range, 'ticket_range', [
+            'enforcer_id'  => $enforcer->id,
+            'badge_num'    => $enforcer->badge_num,
+            'ticket_range' => sprintf('%03d-%03d', $range->ticket_start, $range->ticket_end),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Ticket range added: ' . sprintf('%03d–%03d', $newStart, $newEnd),
+            'range'   => [
+                'ticket_start' => $range->ticket_start,
+                'ticket_end'   => $range->ticket_end,
+            ],
+        ], 201);
+    }
+
+
 
     /**
      * Display the specified resource.
@@ -166,7 +288,6 @@ class AddEnforcer extends Controller
      */
     public function update(Request $request, string $id)
     {
-        //
         $e = Enforcer::withTrashed()->findOrFail($id);
 
         $data = $request->validate([
@@ -177,8 +298,7 @@ class AddEnforcer extends Controller
             'mname'        => 'nullable|string|min:1|max:50',
             'lname'        => 'nullable|string|min:2|max:50',
             'phone'        => 'nullable|digits:11',
-            'ticket_start' => 'nullable|digits:3|numeric|min:1|max:999',
-            'ticket_end'   => 'nullable|digits:3|numeric|min:1|max:999|gte:ticket_start',
+            // 🚫 removed ticket_start & ticket_end from validation (we don't edit ranges here)
             'password'     => 'nullable|string|min:8|max:50',
         ]);
 
@@ -197,7 +317,7 @@ class AddEnforcer extends Controller
             unset($data['password'], $data['defaultPassword']);
         }
 
-        // Fill & detect dirty
+        // Fill & detect dirty (only fields we allow to change)
         $e->fill(array_filter($data, fn($v) => !is_null($v)));
         $dirty = $e->getDirty();
 
@@ -209,10 +329,17 @@ class AddEnforcer extends Controller
 
         $e->save();
 
+        /**
+         * 🔁 If badge_num changed, propagate to ALL ticket_range rows for this enforcer
+         */
+        if (array_key_exists('badge_num', $dirty)) {
+            TicketRange::where('badge_num', $original['badge_num'])
+                ->update(['badge_num' => $e->badge_num]);
+        }
+
         // Build explicit diff map like Violation logs
         $diff = [];
         foreach ($dirty as $field => $newVal) {
-            // don’t log hashed values verbatim
             if (in_array($field, ['password','defaultPassword'])) {
                 $diff[$field] = ['from' => '***', 'to' => '***reset***'];
             } else {
@@ -231,6 +358,7 @@ class AddEnforcer extends Controller
 
         return response()->json($resp, 200);
     }
+
 
     /**
      * Remove the specified resource from storage.
@@ -321,4 +449,5 @@ class AddEnforcer extends Controller
         // Only the table
         return view('admin.partials.enforcerTable', compact('enforcer','sortOption','search', 'show'));
     }
+
 }

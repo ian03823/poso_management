@@ -118,6 +118,7 @@ Route::middleware('enforcer')->group(function () {
     Route::get('/pwa', [TicketController::class, 'create'])->name('pwa');
     Route::resource('enforcerCreate', EnforcerAcc::class);
     Route::resource('enforcerTicket', TicketController::class);
+    
     Route::resource('enf', EnforcerManagementController::class);
     Route::get('/violators/check-license', [TicketController::class, 'checkLicense'])
         ->name('violators.checkLicense');
@@ -125,6 +126,7 @@ Route::middleware('enforcer')->group(function () {
     Route::get('violators/{id}', [TicketController::class, 'show'])->name('enforcer.violators.show');
     Route::get('enforcer/change/password', [EnforcerAuthController::class, 'showChangePassword'])->name('enforcer.password.edit');
     Route::post('enforcer/change/password', [EnforcerAuthController::class, 'changePassword'])->name('enforcer.password.update');
+    Route::get('/enforcer/tickets', [TicketController::class, 'myTickets'])->name('enforcer.tickets.index');
 });
 
 Route::get('/wasm/tesseract-core-simd-lstm.wasm.js', fn () =>
@@ -186,13 +188,18 @@ Route::middleware('admin')->group(function () {
     Route::post('enforcer/{enforcer}/restore', [AddEnforcer::class,'restore'])->name('enforcer.restore');
     Route::get('enforcer/{enforcer}/json', [AddEnforcer::class, 'json'])
      ->name('enforcer.json');
+     Route::post('enforcer/{id}/ticket-ranges', [AddEnforcer::class, 'addTicketRange'])
+    ->name('enforcer.ticket-range.add');
 
      //Violator routes
     Route::get('/violatorTable/partial', [ViolatorTableController::class, 'partial'])->name('violatorTable.partial');
     Route::resource('violatorTable', ViolatorTableController::class);
     Route::post('paid/{ticket}/status', [ViolatorTableController::class, 'updateStatus'])
      ->name('ticket.updateStatus');
-
+    Route::get('violator/{ticket}/receipt', [ViolatorTableController::class, 'receipt'])
+    ->name('ticket.receipt');
+    Route::post('/violatorTable/{ticket}/print-json', [ViolatorTableController::class, 'printJson'])
+    ->name('violator.reprint');
     //Ticket routes
     //Issue Ticket 
     Route::get('/violations/by-category', [AdminTicketController::class, 'violationsByCategory'])
@@ -247,7 +254,11 @@ Route::middleware('violator')->group(function () {
 
     Route::get('/violator/password/change', [ViolatorAuthController::class, 'showChangePasswordForm'])
         ->name('violator.password.change');
+    Route::get('/violator/verify-identity', [ViolatorAuthController::class, 'showIdentityForm'])
+        ->name('violator.identity.show');
 
+    Route::post('/violator/verify-identity', [ViolatorAuthController::class, 'verifyIdentity'])
+        ->name('violator.identity.verify');
     Route::post('/violator/password/change', [ViolatorAuthController::class, 'changePassword'])
         ->name('violator.password.update');
 });

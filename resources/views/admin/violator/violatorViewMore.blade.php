@@ -13,6 +13,5 @@
     <div id="viewMoreTable">
         @include('admin.partials.violatorView')
     </div>
-
 </div>
 @endsection

@@ -34,6 +34,15 @@ class Enforcer extends Authenticatable
         'password',
         'defaultPassword',
     ];
+    public function ticketRange()
+    {
+        return $this->hasMany(TicketRange::class, 'badge_num', 'badge_num');
+    }
+    public function latestTicketRange()
+    {
+        // last assigned batch (for pages that only show “current”)
+        return $this->hasOne(TicketRange::class, 'badge_num', 'badge_num')->latestOfMany();
+    }
     public function tickets()
     {
         return $this->hasMany(Ticket::class);

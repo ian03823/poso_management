@@ -135,6 +135,104 @@ async function loadImage(url) {
 const rand = (n=6)=>crypto.getRandomValues(new Uint32Array(1))[0].toString(36).slice(-n);
 const last4 = s => (s||'').replace(/\D/g,'').slice(-4).padStart(4,'0');
 const tempTicketNo = ()=>`TEMP-${new Date().toISOString().slice(2,10).replace(/-/g,'')}-${rand(4)}`;
+// Generic masking helper for printed receipt only
+function maskForPrint(kind, a, b = '', c = '') {
+  switch (kind) {
+    case 'license': {
+      if (!a) return '';
+      const raw = String(a).toUpperCase();
+      const chars = raw.split('');
+      const alnumIdx = [];
+
+      for (let i = 0; i < chars.length; i++) {
+        if (/[A-Z0-9]/.test(chars[i])) alnumIdx.push(i);
+      }
+      if (!alnumIdx.length) return raw;
+
+      // keep last 4 alphanumeric chars
+      const keep = new Set(alnumIdx.slice(-4));
+
+      return chars
+        .map((ch, idx) => {
+          if (!/[A-Z0-9]/.test(ch)) return ch;    // keep dashes/spaces
+          return keep.has(idx) ? ch : '*';
+        })
+        .join('');
+    }
+
+    case 'name': {
+      const parts = [a, b, c]
+        .map(s => (s || '').trim())
+        .filter(Boolean);
+
+      if (!parts.length) return '';
+
+      const maskWord = (w) => {
+        if (!w) return '';
+        if (w.length === 1) return w + '*';
+        // J***, D***, C*** style
+        return w[0] + '*'.repeat(Math.min(w.length - 1, 3));
+      };
+
+      return parts.map(maskWord).join(' ');
+    }
+
+    case 'address': {
+      if (!a) return '';
+      const str = String(a);
+      const visible = 6; // number of alphanumeric chars to keep
+      let count = 0;
+      let out = '';
+
+      for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (/[A-Za-z0-9]/.test(ch)) {
+          if (count < visible) {
+            out += ch;
+            count++;
+          } else {
+            out += '*';
+          }
+        } else {
+          out += ch; // keep spaces/commas etc.
+        }
+      }
+
+      return out;
+    }
+    case 'birthdate': {
+      if (!a) return '';
+      const str = String(a);
+      const visibleDigits = 4; // keep year digits, mask rest
+      let seen = 0;
+      let out = '';
+
+      for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (/[0-9]/.test(ch)) {
+          if (seen < visibleDigits) {
+            out += ch;
+            seen++;
+          } else {
+            out += '*';
+          }
+        } else {
+          // keep '-', '/', spaces, etc.
+          out += ch;
+        }
+      }
+
+      // Example: 1999-01-23 -> 1999-**-**
+      return out;
+    }
+
+    default:
+      return String(a ?? '');
+  }
+}
+
+
+
 function makeOfflineCreds() {
   const u = 'user' + (Math.floor(1000 + Math.random()*9000));      // user1234
   const rawPwd = 'violator' + (Math.floor(1000 + Math.random()*9000)); // violator5678
@@ -766,6 +864,27 @@ if (window.__ISSUE_TICKET_WIRED__) {
 
     try {
       const res = await fetch(FORM_ENDPOINT, { method:'POST', headers:{'X-CSRF-TOKEN':getCSRF(),'Accept':'application/json'}, body:fd });
+      if (res.status === 422) {
+        let msg = 'Validation error.';
+        try {
+          const j = await res.json();
+          if (j.errors) {
+            // Laravel ValidationException: { errors: { field: [messages...] } }
+            msg = Object.values(j.errors).flat().join('<br>');
+          } else if (j.message) {
+            msg = j.message;
+          }
+        } catch {
+          msg = (await res.text()) || msg;
+          msg = msg.replace(/\n/g, '<br>');
+        }
+        await Notify.modal({
+          icon: 'warning',
+          title: 'Cannot issue ticket',
+          html: msg,
+        });
+        return;
+      }
       if (!res.ok) { return Notify.err(await res.text() || 'Failed to submit'); }
       const p = await res.json();
 
@@ -830,6 +949,10 @@ if (window.__ISSUE_TICKET_WIRED__) {
         const safe = (s)=>String(s??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/₱/g,'Php').replace(/[–—]/g,'-').replace(/[“”]/g,'"').replace(/[‘’]/g,"'");
         const L = async (k,v='')=>send(k + safe(v) + NL);
         const nameLine=[p.violator.first_name,p.violator.middle_name,p.violator.last_name].filter(Boolean).join(' ');
+        const maskedName    = maskForPrint('name',    p.violator.first_name, p.violator.middle_name, p.violator.last_name);
+        const maskedAddress = maskForPrint('address', p.violator.address);
+        const maskedLicense = maskForPrint('license', p.violator.license_number);
+        const maskedBirthdate = maskForPrint('birthdate', p.violator.birthdate);
         await write(Uint8Array.of(0x1B,0x40));
         await write(ALIGN(1));
         await printImageUrl('/qr.png?v=1', writeChunked, ALIGN, 384);
@@ -843,10 +966,10 @@ if (window.__ISSUE_TICKET_WIRED__) {
         await L('Ticket #: ', p.ticket.ticket_number);
         await L('Date issued: ', p.ticket.issued_at);
         await write(FEED(1));
-        await L('Violator: ', nameLine);
-        await L('Birthdate: ', p.violator.birthdate);
-        await L('Address: ', p.violator.address);
-        await L('License No.: ', p.violator.license_number);
+        await L('Violator: ', maskedName);
+        await L('Birthdate: ', maskedBirthdate);
+        await L('Address: ', maskedAddress);
+        await L('License No.: ', maskedLicense);
         await write(FEED(1));
         await L('Plate: ', p.vehicle.plate_number);
         await L('Vehicle: ', p.vehicle.vehicle_type);
@@ -872,10 +995,10 @@ if (window.__ISSUE_TICKET_WIRED__) {
         await L('Ticket #: ', p.ticket.ticket_number);
         await L('Date issued: ', p.ticket.issued_at);
         await write(FEED(1));
-        await L('Violator: ', nameLine);
-        await L('License No.: ', p.violator.license_number);
-        await L('Birthdate: ', p.violator.birthdate);
-        await L('Address: ', p.violator.address);
+        await L('Violator: ', maskedName);
+        await L('License No.: ',  maskedLicense);
+        await L('Birthdate: ', maskedBirthdate);
+        await L('Address: ', maskedAddress);
         await write(FEED(1));
         await L('Plate: ', p.vehicle.plate_number);
         await L('Vehicle: ', p.vehicle.vehicle_type);

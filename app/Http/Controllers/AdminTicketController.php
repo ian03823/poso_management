@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use App\Models\TicketStatus;
 use App\Models\Vehicle;
 use App\Models\Violation;
+use App\Models\TicketRange;
 use App\Models\Violator; 
 use App\Models\PaidTicket;
 use App\Models\Enforcer;
@@ -142,19 +143,56 @@ class AdminTicketController extends Controller
 
         // Transaction to consume the chosen Enforcer’s ticket range (exactly like Enforcer flow)
         $ticket = \Illuminate\Support\Facades\DB::transaction(function() use ($d, $violator, $vehicle) {
-            $enf = \App\Models\Enforcer::lockForUpdate()->find($d['apprehending_enforcer_id']);
+            // 1) Lock the chosen enforcer row
+        $enf = \App\Models\Enforcer::lockForUpdate()
+            ->findOrFail($d['apprehending_enforcer_id']);
 
-            $last = \App\Models\Ticket::where('enforcer_id', $enf->id)
-                        ->lockForUpdate()
-                        ->max('ticket_number');
+        // 2) Lock all ticket ranges for this enforcer (by badge_num)
+        $ranges = \App\Models\TicketRange::where('badge_num', $enf->badge_num)
+            ->orderBy('ticket_start')
+            ->lockForUpdate()
+            ->get();
 
-            $next = $last !== null ? $last + 1 : $enf->ticket_start;
+        if ($ranges->isEmpty()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'ticket_number' => "Selected enforcer has no assigned ticket ranges."
+            ]);
+        }
 
-            if ($next > $enf->ticket_end) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'ticket_number' => "Selected enforcer's range exhausted ({$enf->ticket_start}–{$enf->ticket_end})."
-                ]);
+        // 3) Get the last ticket number ever used by this enforcer
+        $last = \App\Models\Ticket::where('enforcer_id', $enf->id)
+            ->lockForUpdate()
+            ->max('ticket_number');
+
+        // 4) Decide the next ticket number based on ranges
+        if ($last === null) {
+            // First ticket ever: start at the first batch's start
+            $next = $ranges->first()->ticket_start;
+        } else {
+            // Find the range that currently contains $last
+            $currentRange = $ranges->first(function($r) use ($last) {
+                return $last >= $r->ticket_start && $last <= $r->ticket_end;
+            });
+
+            if ($currentRange && $last < $currentRange->ticket_end) {
+                // Still space in the current batch → just increment
+                $next = $last + 1;
+            } else {
+                // Current batch is finished; jump to the next batch that starts after $last
+                $nextRange = $ranges->first(function($r) use ($last) {
+                    return $r->ticket_start > $last;
+                });
+
+                if ($nextRange) {
+                    $next = $nextRange->ticket_start;
+                } else {
+                    // No further ranges → everything is exhausted
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'ticket_number' => "All assigned ticket ranges for this enforcer are exhausted."
+                    ]);
+                }
             }
+        }
 
             $t = \App\Models\Ticket::create([
                 'enforcer_id'          => $enf->id,

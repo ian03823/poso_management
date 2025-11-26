@@ -118,6 +118,8 @@ console.log("Loaded enforcer.js");
 
     const init = {
       url:          abs(btn.getAttribute('data-url')),
+      rangeUrl:     abs(btn.getAttribute('data-range-url') || ''), // NEW: endpoint for adding ranges
+      id:           btn.getAttribute('data-id') || '',  
       badge_num:    btn.getAttribute('data-badge') || '',
       fname:        btn.getAttribute('data-fname') || '',
       mname:        btn.getAttribute('data-mname') || '',
@@ -161,6 +163,14 @@ console.log("Loaded enforcer.js");
             <input id="sw_tend" class="form-control" value="${init.ticket_end}" disabled>
           </div>
         </div>
+        <div class="mb-3">
+          <button type="button" class="btn btn-outline-primary btn-sm" id="sw_add_range">
+            <i class="bi bi-plus-circle"></i> Add Ticket Range
+          </button>
+          <div class="form-text">
+            The system will automatically assign the next ticket batch. New batches are only allowed when the current tickets are fully used.
+          </div>
+        </div>
         <div class="mb-1">
           <label class="form-label">Reset Password (optional)</label>
           <div class="input-group">
@@ -179,6 +189,8 @@ console.log("Loaded enforcer.js");
       confirmButtonText: 'Save',
       didOpen: () => {
         const $ = (sel, root=document) => root.querySelector(sel);
+
+        // existing password generator
         $('#sw_gen')?.addEventListener('click', () => {
           const pwd = `posoenforcer_${genRotatingTail(3)}`;
           $('#sw_pwd').value = pwd;
@@ -186,7 +198,77 @@ console.log("Loaded enforcer.js");
           const end = pwd.length;
           $('#sw_pwd').setSelectionRange(end, end);
         });
+
+        // NEW: Add Ticket Range button
+        const addBtn = $('#sw_add_range');
+        if (addBtn) {
+          if (!init.rangeUrl) {
+            // If range URL is not set, disable button to be safe
+            addBtn.disabled = true;
+            addBtn.title = 'Ticket range endpoint not configured.';
+            return;
+          }
+
+          addBtn.addEventListener('click', async () => {
+            const { isConfirmed } = await Swal.fire({
+              title: 'Add Ticket Range',
+              text: 'The system will automatically assign the next ticket batch. This is only allowed when the current batch is fully used.',
+              icon: 'question',
+              showCancelButton: true,
+              confirmButtonText: 'Proceed',
+              cancelButtonText: 'Cancel'
+            });
+
+            if (!isConfirmed) return;
+
+            const fd = new FormData(); // empty – backend computes everything
+
+            try {
+              const res = await fetch(init.rangeUrl, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrf },
+                body: fd
+              });
+
+              if (res.status === 422) {
+                let msg = 'Action not allowed.';
+                try {
+                  const j = await res.json();
+                  msg = j.message || msg;
+                } catch {}
+                await Swal.fire({ icon:'warning', title:'Cannot add range', text: msg });
+                return;
+              }
+
+              if (!res.ok) {
+                let msg = 'Request failed.';
+                try { msg = await res.text() || msg; } catch {}
+                throw new Error(msg);
+              }
+
+              const payload = await res.json().catch(()=> ({}));
+
+              await Swal.fire({
+                icon: 'success',
+                title: 'Ticket range added',
+                text: payload.message || 'New ticket batch assigned.',
+              });
+
+              // Reload current page so the list/table stays fresh
+              const { page } = getParams();
+              loadPage(page);
+            } catch (err) {
+              console.error(err);
+              await Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: err.message || String(err),
+              });
+            }
+          });
+        }
       },
+
       preConfirm: async () => {
         const badge = $('#sw_badge').value.trim();
         const fname = $('#sw_fname').value.trim();

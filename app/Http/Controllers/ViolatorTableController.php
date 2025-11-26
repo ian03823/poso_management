@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\TicketStatus;
 use App\Models\PaidTicket;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 
@@ -126,6 +127,127 @@ match ($sortOption) {
 
         return view('admin.partials.violatorView', compact('violator'));
     }
+    /**
+     * Generate a new default password for the ticket's violator,
+     * invalidate the old password, and return the RAW temp password.
+     */
+    protected function resetViolatorPassword(Ticket $ticket): ?string
+    {
+        $violator = $ticket->violator;
+        if (! $violator) {
+            return null;
+        }
+
+        // Example format: violator1234
+        $tempPassword = 'violator' . rand(1000, 9999);
+
+        // New default password for first-login flow
+        $violator->defaultPassword = Hash::make($tempPassword);
+
+        // Invalidate old password completely
+        $violator->password = Hash::make(Str::random(40));
+
+        $violator->save();
+
+        return $tempPassword;
+    }
+
+    public function printJson(Ticket $ticket)
+    {
+        // Load relations we need
+        $ticket->load([
+            'violator',
+            'vehicle',
+            'violations' => fn ($q) => $q->withTrashed(),
+            'enforcer',
+            'status',
+        ]);
+
+        // Reset portal password & get RAW temp password
+        $tempPassword = $this->resetViolatorPassword($ticket);
+
+        $violator  = $ticket->violator;
+        $vehicle   = $ticket->vehicle;
+        $enforcer  = $ticket->enforcer;
+        $violations = $ticket->violations;
+        // 2) Total fine (adjust if you store it elsewhere)
+        $totalFine = $ticket->violations->sum(function ($v) {
+            return $v->pivot->fine_amount ?? $v->fine_amount ?? 0;
+        });
+        $portalUrl = route('violator.showLogin');
+        return response()->json([
+                'ticket' => [
+                'id'        => $ticket->id,
+                'number'    => $ticket->ticket_number,
+                'issued_at' => optional($ticket->issued_at)->toIso8601String(),
+                'location'  => $ticket->location,
+                'status'    => optional($ticket->status)->name,
+            ],
+            'violator' => $violator ? [
+                'first_name'     => $violator->first_name,
+                'middle_name'    => $violator->middle_name,
+                'last_name'      => $violator->last_name,
+                'license_number' => $violator->license_number,
+                'address'        => $violator->address,
+                'birthdate'      => optional($violator->birthdate)->toDateString(),
+            ] : null,
+            'vehicle' => $vehicle ? [
+                'type'  => $vehicle->vehicle_type,
+                'plate' => $vehicle->plate_number,
+                'owner' => $vehicle->owner_name,
+                'is_owner' => $vehicle->is_owner,
+            ] : null,
+            'violations' => $ticket->violations->map(function ($v) {
+                return [
+                    'code' => $v->violation_code,
+                    'name' => $v->violation_name,
+                    'fine' => (float) ($v->pivot->fine_amount ?? $v->fine_amount ?? 0),
+                ];
+            })->values(),
+            'total_fine' => (float) $totalFine,
+            'enforcer' => $enforcer ? [
+                'name'      => trim(($enforcer->fname ?? '') . ' ' . ($enforcer->lname ?? '')),
+                'badge_num' => $enforcer->badge_num,
+            ] : null,
+            'portal' => [
+                'url'              => $portalUrl,
+                'username'         => $violator?->username,
+                'default_password' => $tempPassword,
+            ],
+            'qr_url'  => $portalUrl,
+            'reprint' => true,
+        ]);
+    }
+
+    public function receipt(Ticket $ticket)
+    {
+        // Load relationships used in the receipt
+        $ticket->load(['violator', 'vehicle', 'violations', 'enforcer', 'status']);
+
+        $violator = $ticket->violator;
+        $tempPassword = null;
+
+        if ($violator) {
+            // Generate a NEW default password for the violator
+            // (you can tweak this format if you want)
+            $tempPassword = 'violator' . rand(1000, 9999);
+
+            // 1) Set as new defaultPassword (used for first-login flow)
+            $violator->defaultPassword = Hash::make($tempPassword);
+
+            // 2) "Remove" old password by overwriting it with a random hash
+            //    so the old password can no longer be used.
+            $violator->password = Hash::make(Str::random(40));
+
+            $violator->save();
+        }
+
+        return view('admin.ticketReceipt', [
+            'ticket'       => $ticket,
+            'tempPassword' => $tempPassword, // raw temp password for printing
+        ]);
+    }
+
 
     /**
      * Show the form for editing the specified resource.

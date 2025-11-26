@@ -21,8 +21,39 @@
         <div class="col-12 d-flex align-items-center">
           {{-- Enforcer's Address--}}
           <i class="bi bi-geo-alt-fill fs-4 me-2"></i>
-          <span class="fw-semibold">Address:</span>
+          <span class="fw-semibold">Phone.: {{ auth()->guard('enforcer')->user()->phone }}</span>
         </div>
+        <div class="col-12 d-flex align-items-center">
+          <i class="bi bi-ticket-perforated fs-4 me-2"></i>
+          @if(!empty($ticketSummary) && !is_null($ticketSummary['min_start']))
+            @php
+              $min = str_pad($ticketSummary['min_start'], 3, '0', STR_PAD_LEFT);
+              $max = str_pad($ticketSummary['max_end'],   3, '0', STR_PAD_LEFT);
+            @endphp
+            <div class="fw-semibold">
+              Ticket Range: {{ $min }}–{{ $max }}
+              <span class="d-block small fw-normal text-muted">
+                Used: {{ $ticketSummary['used'] }} / {{ $ticketSummary['total_allocated'] }}
+                @if(!is_null($ticketSummary['last_used']))
+                  · Last issued: {{ str_pad($ticketSummary['last_used'], 3, '0', STR_PAD_LEFT) }}
+                @endif
+                · Remaining: {{ $ticketSummary['remaining'] }}
+              </span>
+            </div>
+          @else
+            <span class="fw-semibold text-danger">
+              Ticket range not assigned. Please contact the admin.
+            </span>
+          @endif
+           <a
+              href="{{ route('enforcer.tickets.index') }}"
+              class="btn btn-outline-primary btn-sm shadow-sm rounded-pill"
+            >
+              <i class="bi bi-card-checklist me-2"></i>
+              View My Tickets
+          </a>
+        </div>
+        
       </div>
     </div>
   </div>
@@ -61,15 +92,20 @@
       ></div>
     </div>
   </div>
+  @php
+    $isExhausted = $ticketExhausted ?? false;
+  @endphp
 
   <!-- Issue Ticket Button -->
   <div class="text-center mb-5">
     <a
-      href="{{ url('/enforcerTicket/create') }}"
-      class="btn btn-success btn-lg shadow-sm rounded-pill"
+      href="{{ $isExhausted ? '#' : url('/enforcerTicket/create') }}"
+      id="issueTicketBtn"
+      class="btn btn-lg shadow-sm rounded-pill {{ $isExhausted ? 'btn-secondary disabled' : 'btn-success' }}"
+      @if($isExhausted) aria-disabled="true" @endif
     >
       <i class="bi bi-ticket-perforated-fill me-2"></i>
-      Issue a Ticket
+      {{ $isExhausted ? 'No Tickets Available' : 'Issue a Ticket' }}
     </a>
   </div>
 </div>
@@ -77,6 +113,30 @@
 @push('scripts')
 <script src="{{ asset('vendor/dexie/dexie.min.js') }}"></script>
 <script src="{{ asset('js/enforcer.offline.auth.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const exhausted = @json($ticketExhausted ?? false);
+  const btn = document.getElementById('issueTicketBtn');
+  if (!btn) return;
+
+  if (exhausted) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+
+      if (window.Swal) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'No ticket numbers available',
+          text: 'You have already used all of your allocated ticket numbers. Please contact the admin to request a new batch.',
+          confirmButtonText: 'OK'
+        });
+      } else {
+        alert('You have already used all of your allocated ticket numbers. Please contact the admin to request a new batch.');
+      }
+    });
+  }
+});
+</script>
 <script>
   document.addEventListener('DOMContentLoaded', async () => {
     const u = sessionStorage.getItem('pending_login_user');
