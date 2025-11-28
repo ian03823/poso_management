@@ -17,7 +17,7 @@
       <tbody class="text-sm">
         @foreach($active as $t)
           <tr>
-            <td>{{ $t->id }}</td>
+            <td>{{ $t->ticket_number }}</td>
             <td>{{ $t->issued_at->format('d M Y') }}</td>
             <td>{{ optional($t->vehicle)->plate_number ?? '—' }}</td>
             <td>{{ optional($t->vehicle)->vehicle_type ?? '—' }} </td>

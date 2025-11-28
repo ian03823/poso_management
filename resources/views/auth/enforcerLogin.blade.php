@@ -7,11 +7,6 @@
 
 @section('body')
 
-{{-- Include the stylesheet --}}
-{{-- @vite('resources/css/enforcer-login.css') --}}
-{{-- Or, if you placed it in /public/css --}}
-{{-- <link rel="stylesheet" href="{{ asset('css/enforcer-login.css') }}"> --}}
-
 @php
   $isError   = session('error') || $errors->any();
   $remaining = session('lockout_remaining'); // seconds
@@ -75,7 +70,7 @@
         </div>
 
         {{-- Password --}}
-        <div class="mb-4">
+        <div class="mb-3">
           <label for="password" class="form-label">Password</label>
           <div class="input-group">
             <span class="input-group-text"><i class="bi bi-lock text-success"></i></span>
@@ -99,21 +94,17 @@
           </div>
         </div>
 
+        {{-- NEW: Online/Offline status indicator --}}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <small id="offlineHint" class="text-muted">
+            Status: <span id="netStatus">Checking…</span>
+          </small>
+        </div>
+
         {{-- Submit --}}
         <button id="loginBtn" type="submit" class="btn btn-login w-100 py-2 fw-semibold">
           <i class="bi bi-box-arrow-in-right me-2"></i>Log in
         </button>
-
-        {{-- Full error list (optional) --}}
-        {{-- @if($errors->any())
-          <div class="mt-3 px-3 py-2 rounded border border-danger bg-light text-danger">
-            <ul class="list-unstyled mb-0">
-              @foreach($errors->all() as $error)
-                <li>• {{ $error }}</li>
-              @endforeach
-            </ul>
-          </div>
-        @endif --}}
 
       </form>
     </div>
@@ -128,11 +119,19 @@
   const btn = document.getElementById('loginBtn');
   const timerEl = document.getElementById('lockout-timer');
   if (btn) btn.disabled = true;
-  function fmt(sec){ const m=String(Math.floor(sec/60)).padStart(2,'0'); const s=String(sec%60).padStart(2,'0'); return `${m}:${s}`; }
+  function fmt(sec){
+    const m = String(Math.floor(sec/60)).padStart(2,'0');
+    const s = String(sec%60).padStart(2,'0');
+    return `${m}:${s}`;
+  }
   (function tick(){
     if (timerEl) timerEl.textContent = fmt(remaining);
-    if (remaining <= 0){ if (btn) btn.disabled = false; return; }
-    remaining--; setTimeout(tick, 1000);
+    if (remaining <= 0){
+      if (btn) btn.disabled = false;
+      return;
+    }
+    remaining--;
+    setTimeout(tick, 1000);
   })();
 })();
 </script>
@@ -140,51 +139,103 @@
 @endsection
 
 @push('scripts')
-<script src="{{ asset('vendor/dexie/dexie.min.js') }}"></script>
-<script src="{{ asset('js/enforcer.offline.auth.js') }}"></script>
-<script>
-  function togglePassword() {
-    const pwd = document.getElementById('password');
-    const icon = document.getElementById('toggleIcon');
-    if (pwd.type === 'password') { pwd.type = 'text'; icon.classList.replace('bi-eye-slash', 'bi-eye'); }
-    else { pwd.type = 'password'; icon.classList.replace('bi-eye', 'bi-eye-slash'); }
-  }
-  document.querySelectorAll('#badge_num, #password').forEach(el=>{
-    el.addEventListener('input',()=> el.classList.remove('is-invalid'));
-  });
+  {{-- Dexie + offline auth helper --}}
+  <script defer src="{{ asset('vendor/dexie/dexie.min.js') }}"></script>
+  <script defer src="{{ asset('js/enforcer.offline.auth.js') }}"></script>
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const f = document.getElementById('enforcerLoginForm');
-    if (!f) return;
+  <script>
+    function togglePassword() {
+      const pwd = document.getElementById('password');
+      const icon = document.getElementById('toggleIcon');
+      if (!pwd || !icon) return;
+      if (pwd.type === 'password') {
+        pwd.type = 'text';
+        icon.classList.replace('bi-eye-slash', 'bi-eye');
+      } else {
+        pwd.type = 'password';
+        icon.classList.replace('bi-eye', 'bi-eye-slash');
+      }
+    }
 
-    f.addEventListener('submit', async (e) => {
-      const u = f.badge_num.value.trim();
-      const p = f.password.value;
+    document.addEventListener('DOMContentLoaded', () => {
+      const form     = document.getElementById('enforcerLoginForm');
+      const badgeEl  = document.getElementById('badge_num');
+      const passEl   = document.getElementById('password');
+      const statusEl = document.getElementById('netStatus');
 
-      // If we can reach the server → proceed online & stash creds for post-redirect caching
-      try {
-        const pong = await fetch('/ping', { cache: 'no-store' });
-        if (pong.ok) {
-          sessionStorage.setItem('pending_login_user', u);
-          sessionStorage.setItem('pending_login_pass', p);
-          return; // allow normal submit
-        }
-      } catch (_) {}
+      // Clear invalid class when typing
+      document.querySelectorAll('#badge_num, #password').forEach(el => {
+        el.addEventListener('input', () => el.classList.remove('is-invalid'));
+      });
 
-      // Offline → try cached login
-      e.preventDefault();
-      if (window.EnforcerOfflineAuth) {
-        const profile = await EnforcerOfflineAuth.tryOfflineLogin(u, p);
-        if (profile) {
-          // mark an offline session if you need it
-          localStorage.setItem('enforcer_offline_active', '1');
-          window.location.href = "{{ url('/enforcer/dashboard') }}";
-          return;
+      // Net status label
+      function updateNetStatus() {
+        if (!statusEl) return;
+        if (navigator.onLine) {
+          statusEl.textContent = 'Online';
+          statusEl.className = 'text-success';
+        } else {
+          statusEl.textContent = 'Offline';
+          statusEl.className = 'text-danger';
         }
       }
-      alert('Offline login unavailable. Connect once to cache your login.');
-    });
-  });
+      updateNetStatus();
+      window.addEventListener('online', updateNetStatus);
+      window.addEventListener('offline', updateNetStatus);
 
-</script>
+      if (!form || !badgeEl || !passEl) return;
+
+      form.addEventListener('submit', async (e) => {
+        const badge = (badgeEl.value || '').trim();
+        const pwd   = passEl.value || '';
+
+        // OFFLINE FLOW
+        if (!navigator.onLine) {
+          e.preventDefault();
+
+          if (!window.EnforcerOfflineAuth) {
+            alert('Offline login is not available yet. Please login once while online to cache your credentials.');
+            return;
+          }
+
+          try {
+            const profile = await window.EnforcerOfflineAuth.tryOfflineLogin(badge, pwd);
+            if (profile) {
+              try {
+                localStorage.setItem('enforcer_offline_session', JSON.stringify(profile));
+              } catch (_) {}
+
+              alert('Offline login successful. Redirecting to ticket issuance.');
+              // PWA start URL (must be cached by SW)
+              window.location.href = '/pwa';
+              return;
+            } else {
+              alert('Offline login failed. Make sure you have logged in at least once while online using this badge & password.');
+              return;
+            }
+          } catch (err) {
+            console.error('Offline login error', err);
+            alert('Offline login error: ' + (err.message || String(err)));
+            return;
+          }
+        }
+
+        // ONLINE FLOW – opportunistically cache credentials before sending to Laravel
+        if (window.EnforcerOfflineAuth) {
+          try {
+            await window.EnforcerOfflineAuth.cacheLogin(
+              badge,
+              pwd,
+              { badge_num: badge } // you can extend this profile object later
+            );
+          } catch (err) {
+            console.warn('Failed to cache offline login', err);
+          }
+        }
+
+        // Let the form submit normally to EnforcerAuthController::login()
+        // (your lockout + default password logic stays the same)
+      });
+    });
+  </script>
 @endpush

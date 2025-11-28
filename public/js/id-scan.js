@@ -1,6 +1,6 @@
-// public/js/id-scan.js — mobile-first OCR scanner (2025-10-04)
+// public/js/id-scan.js — mobile-first OCR scanner (fixed 2025-10-xx)
 (() => {
-  console.log('%cID-SCAN mobile v2025-10-04','color:#0a0');
+  console.log('%cID-SCAN mobile v2025-11-27-B','color:#0a0');
 
   // ---------- Utils ----------
   const q = (sel, r=document) => r.querySelector(sel);
@@ -28,68 +28,68 @@
       })();
     });
   }
+
   // ---------- Status ----------
   const statusEl = q('#ocr-status');
-  const ocrStatus = (msg, kind='muted') => {
-    if (statusEl) statusEl.innerHTML = `<span class="text-${kind}">${msg||''}</span>`;
+  const ocrStatus = (msg, kind = 'muted') => {
+    if (!statusEl) return;
+    statusEl.innerHTML = msg
+      ? `<span class="text-${kind}">${msg}</span>`
+      : '';
   };
 
   // ---------- Tesseract config ----------
   const TESS = {
-    // Load worker from vendor (it references tesseract.min.js already included)
-    workerPath: "/vendor/tesseract/worker.min.js",
-    // Use the SIMD-LSTM loader for speed; fallback to non-SIMD if needed
-    corePathSIMD: "/wasm/tesseract-core-simd-lstm.wasm.js",
-    langPath: "/wasm",
-    gzip: true
+    workerPath: '/vendor/tesseract/worker.min.js',             // public/vendor/tesseract/worker.min.js
+    corePath:  '/wasm/tesseract-core-simd-lstm.wasm.js',       // routed in web.php
+    langPath:  '/wasm',                                        // /wasm/eng.traineddata.gz
+    gzip:      true,
+    workerBlobURL: false                                       // important for self-hosted builds
   };
 
-  let worker = null, workerReady = null;
+  let worker = null;
+  let workerReady = null;
+
   async function getWorker() {
     if (worker) return worker;
     if (workerReady) return workerReady;
-    if (!window.Tesseract) {
+
+    if (!window.Tesseract || !Tesseract.createWorker) {
       ocrStatus('Tesseract not loaded', 'danger');
       throw new Error('Tesseract global missing');
     }
 
     ocrStatus('Loading OCR…');
-    if (Tesseract.setLogging) Tesseract.setLogging(true);
 
+    // v4/v5 API: createWorker(lang, oem, options)
     workerReady = (async () => {
-      // prefer SIMD core; if it fails (older iOS), try fallback
-      const tryCreate = async (corePath) => {
-        const w = await Tesseract.createWorker({
-          workerPath: TESS.workerPath,
-          corePath: TESS.corePathSIMD,
-          langPath: TESS.langPath,
-          gzip: TESS.gzip,
-          logger: m => (m?.status ? ocrStatus(`OCR: ${m.status} ${Math.round((m.progress||0)*100)}%`) : null)
-        });
-        await w.loadLanguage('eng');
-        await w.initialize('eng');
-        await w.setParameters({
-          tessedit_pageseg_mode: '6',          // uniform block of text
-          preserve_interword_spaces: '1',
-          user_defined_dpi: '300'
-        });
-        return w;
-      };
-
       try {
-        worker = await tryCreate(TESS.corePathSIMD);
-      } catch (e) {
-        console.warn('SIMD core failed, retrying non-SIMD…', e);
-        try {
-          worker = await tryCreate(TESS.corePathFallback);
-        } catch (e2) {
-          ocrStatus('Failed to init OCR (core)', 'danger');
-          throw e2;
-        }
-      }
+        const w = await Tesseract.createWorker(
+          'eng',                // language
+          1,                    // OEM (LSTM default)
+          {
+            workerPath: TESS.workerPath,
+            corePath:   TESS.corePath,
+            langPath:   TESS.langPath,
+            gzip:       TESS.gzip,
+            logger: m => {
+              if (m && m.status != null && typeof m.progress === 'number') {
+                ocrStatus(
+                  `OCR: ${m.status} ${Math.round(m.progress * 100)}%`
+                );
+              }
+            }
+          }
+        );
 
-      ocrStatus('OCR ready', 'success');
-      return worker;
+        worker = w;
+        ocrStatus('OCR ready', 'success');
+        return worker;
+      } catch (e) {
+        console.error('Failed to init Tesseract worker', e);
+        ocrStatus('OCR init failed', 'danger');
+        throw e;
+      }
     })();
 
     return workerReady;
@@ -110,7 +110,6 @@
       width:  { ideal: 1920 },
       height: { ideal: 1080 },
       facingMode: { ideal: 'environment' },
-      // NB: focusMode isn't standard everywhere; some browsers/phones still honor it
       advanced: [{ focusMode: 'continuous' }]
     };
     const c = deviceId ? { audio:false, video:{ ...video, deviceId:{ exact: deviceId } } }
@@ -135,16 +134,19 @@
     try {
       stream = await navigator.mediaDevices.getUserMedia(constraintsFor(deviceId));
     } catch (e) {
-      console.warn('GUM error, retry generic video', e);
+      console.warn('getUserMedia error, retry generic video', e);
       try { stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:true }); }
-      catch (e2) { notify('Camera error','Check HTTPS & permissions.','warning'); return; }
+      catch (e2) {
+        console.warn('Camera still failed', e2);
+        notify('Camera error','Check HTTPS, permissions, or browser settings.','warning');
+        return;
+      }
     }
 
     v.srcObject = stream;
     await new Promise(res => (v.onloadedmetadata = () => res()));
     await v.play();
 
-    // track refs for torch/zoom
     videoTrack = stream.getVideoTracks()[0] || null;
     hasTorch = false;
     try {
@@ -169,12 +171,11 @@
     catch (e) { console.warn('Torch toggle failed', e); }
   }
 
-  // ---------- Preprocess (light but effective) ----------
+  // ---------- Preprocess ----------
   function preprocess(canvas) {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const { width, height } = canvas;
 
-    // downscale to denoise/speed
     const maxW = 1600;
     if (width > maxW) {
       const scale = maxW / width;
@@ -212,7 +213,7 @@
     ctx.putImageData(img,0,0);
   }
 
-  // ---------- PH ID parsing (kept from your version) ----------
+  // ---------- PH ID parsing ----------
   function parseOCRText(raw) {
     const text=(raw||'').replace(/\u00A0/g,' ').replace(/[|]/g,' ');
     const lines=text.split('\n').map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);
@@ -302,6 +303,7 @@
     preprocess(c);
 
     ocrStatus('Reading…');
+
     let text = '';
     try {
       const w = await getWorker();
@@ -334,20 +336,38 @@
   if (modalEl) {
     modalEl.addEventListener('shown.bs.modal', async () => {
       try {
-        await whenTesseractReady();
-        startCamera();
-        getWorker().catch(()=>{});
+        // Start camera + OCR worker in parallel
+        await Promise.all([
+          startCamera(),
+          getWorker()
+        ]);
       } catch (e) {
         console.error(e);
-        ocrStatus('OCR library missing', 'danger');
-        notify('OCR error', 'Tesseract library did not load. Check script order.', 'warning');
+        ocrStatus('OCR init failed', 'danger');
+        notify(
+          'OCR error',
+          'Tesseract failed to initialize. Please check the console for details.',
+          'warning'
+        );
       }
     });
-    modalEl.addEventListener('hidden.bs.modal', async () => { await stopCamera(); });
+
+    modalEl.addEventListener('hidden.bs.modal', async () => {
+      await stopCamera();
+    });
   } else {
-    // Fallback if BS isn't present for some reason
-    q('#openScanId')?.addEventListener('click', () => { startCamera(); getWorker().catch(()=>{}); });
-    q('#scan-close')?.addEventListener('click', async () => { await stopCamera(); closeScanModal(); });
+    // Fallback if Bootstrap modal isn’t managing it
+    q('#openScanId')?.addEventListener('click', () => {
+      startCamera();
+      getWorker().catch(err => {
+        console.error(err);
+        ocrStatus('OCR init failed', 'danger');
+      });
+    });
+    q('#scan-close')?.addEventListener('click', async () => {
+      await stopCamera();
+      await closeScanModal();
+    });
   }
   q('#ocr-capture')?.addEventListener('click', captureAndOCR);
   q('#ocr-switch')?.addEventListener('click', async () => { await startCamera(true); });

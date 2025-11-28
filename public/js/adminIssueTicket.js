@@ -1,8 +1,9 @@
 // public/js/adminIssueTicket.js — Admin issue flow (no offline)
 
-console.log('adminIssueTicket.js - script loaded 01');
+console.log('adminIssueTicket.js - script loaded 03');
+
 // ---- safe helpers ----
-const SwalOK = (t, m) => Swal.fire(t, m, 'success');
+const SwalOK  = (t, m) => Swal.fire(t, m, 'success');
 const SwalERR = (t, m) => Swal.fire(t || 'Error', m || 'Something went wrong', 'error');
 
 const byId  = (id) => document.getElementById(id);
@@ -20,6 +21,7 @@ if ('geolocation' in navigator) {
 const selectEl    = byId('categorySelect');
 const containerEl = byId('violationsContainer');
 const selected    = new Set();
+
 function renderCategory() {
   if (!selectEl || !containerEl) return;
 
@@ -36,7 +38,6 @@ function renderCategory() {
   containerEl.innerHTML = '';
 
   if (!list || !Array.isArray(list)) {
-    // quick one-time debug to help diagnose in console
     console.warn('[violations]', { selected: raw, keys: Object.keys(window.violationGroups || {}) });
     return;
   }
@@ -67,26 +68,132 @@ selectEl?.addEventListener('change', renderCategory);
 // Auto-fill owner name
 const ownerChk = byId('is_owner');
 const ownerIn  = byId('owner_name');
-const f = byId('first_name'), m = byId('middle_name'), l = byId('last_name');
+const f = byId('first_name'),
+      m = byId('middle_name'),
+      l = byId('last_name');
+
 function syncOwner(){
   if (!ownerChk || !ownerIn) return;
   if (ownerChk.checked){
     let full = (f?.value || '').trim();
     if (m?.value?.trim()) full += ' ' + m.value.trim();
     if (l?.value?.trim()) full += ' ' + l.value.trim();
-    ownerIn.value = full; ownerIn.readOnly = true;
-  } else { ownerIn.value = ''; ownerIn.readOnly = false; }
+    ownerIn.value   = full;
+    ownerIn.readOnly = true;
+  } else {
+    ownerIn.value   = '';
+    ownerIn.readOnly = false;
+  }
 }
 ownerChk?.addEventListener('change', syncOwner);
 [f,m,l].forEach(el => el?.addEventListener('input', () => ownerChk.checked && syncOwner()));
 syncOwner();
 
-// ---- BLE printer helpers (robust, mirrors Enforcer) ----
+/* ---------- Generic masking helper (copied from Enforcer) ---------- */
+
+function maskForPrint(kind, a, b = '', c = '') {
+  switch (kind) {
+    case 'license': {
+      if (!a) return '';
+      const raw = String(a).toUpperCase();
+      const chars = raw.split('');
+      const alnumIdx = [];
+
+      for (let i = 0; i < chars.length; i++) {
+        if (/[A-Z0-9]/.test(chars[i])) alnumIdx.push(i);
+      }
+      if (!alnumIdx.length) return raw;
+
+      // keep last 4 alphanumeric chars
+      const keep = new Set(alnumIdx.slice(-4));
+
+      return chars
+        .map((ch, idx) => {
+          if (!/[A-Z0-9]/.test(ch)) return ch;    // keep dashes/spaces
+          return keep.has(idx) ? ch : '*';
+        })
+        .join('');
+    }
+
+    case 'name': {
+      const parts = [a, b, c]
+        .map(s => (s || '').trim())
+        .filter(Boolean);
+
+      if (!parts.length) return '';
+
+      const maskWord = (w) => {
+        if (!w) return '';
+        if (w.length === 1) return w + '*';
+        // J***, D***, C*** style
+        return w[0] + '*'.repeat(Math.min(w.length - 1, 3));
+      };
+
+      return parts.map(maskWord).join(' ');
+    }
+
+    case 'address': {
+      if (!a) return '';
+      const str = String(a);
+      const visible = 6; // number of alphanumeric chars to keep
+      let count = 0;
+      let out = '';
+
+      for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (/[A-Za-z0-9]/.test(ch)) {
+          if (count < visible) {
+            out += ch;
+            count++;
+          } else {
+            out += '*';
+          }
+        } else {
+          out += ch; // keep spaces/commas etc.
+        }
+      }
+
+      return out;
+    }
+
+    case 'birthdate': {
+      if (!a) return '';
+      const str = String(a);
+      const visibleDigits = 4; // keep year digits, mask rest
+      let seen = 0;
+      let out = '';
+
+      for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (/[0-9]/.test(ch)) {
+          if (seen < visibleDigits) {
+            out += ch;
+            seen++;
+          } else {
+            out += '*';
+          }
+        } else {
+          // keep '-', '/', spaces, etc.
+          out += ch;
+        }
+      }
+
+      // Example: 1999-01-23 -> 1999-**-**
+      return out;
+    }
+
+    default:
+      return String(a ?? '');
+  }
+}
+
+/* ---------- BLE printer helpers (mirrors Enforcer masking) ---------- */
+
 async function printTwoCopies(p) {
   const S_MAIN='49535343-fe7d-4ae5-8fa9-9fafd205e455', C_MAIN='49535343-8841-43f4-a8d4-ecbe34729bb3';
   const S_FFE0='0000ffe0-0000-1000-8000-00805f9b34fb', C_FFE1='0000ffe1-0000-1000-8000-00805f9b34fb';
 
-  const dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [S_MAIN, S_FFE0] });
+  const dev    = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [S_MAIN, S_FFE0] });
   const server = await dev.gatt.connect();
 
   // pick any supported service/characteristic
@@ -94,7 +201,8 @@ async function printTwoCopies(p) {
   try { ch = await (await server.getPrimaryService(S_MAIN)).getCharacteristic(C_MAIN); }
   catch { ch = await (await server.getPrimaryService(S_FFE0)).getCharacteristic(C_FFE1); }
 
-  const enc = new TextEncoder(), NL = '\x0A';
+  const enc   = new TextEncoder(),
+        NL    = '\x0A';
   const ALIGN = (n)=>Uint8Array.of(0x1B,0x61,n);
   const FEED  = (n)=>Uint8Array.of(0x1B,0x64,n);
 
@@ -112,7 +220,11 @@ async function printTwoCopies(p) {
           if (ch.writeValueWithoutResponse) await ch.writeValueWithoutResponse(slice);
           else await ch.writeValue(slice);
           ok=true;
-        } catch(e){ attempt++; if (attempt>=tries) throw e; await sleep(30*attempt); }
+        } catch(e){
+          attempt++;
+          if (attempt>=tries) throw e;
+          await sleep(30*attempt);
+        }
       }
       await sleep(10);
     }
@@ -129,8 +241,19 @@ async function printTwoCopies(p) {
     .replace(/[‘’]/g,"'");
   const L = async (k,v='') => send(k + safe(v) + NL);
 
-  const nameLine = [p.violator.first_name, p.violator.middle_name, p.violator.last_name]
-                    .filter(Boolean).join(' ');
+  // 🔒 MASKED VALUES (same rules as Enforcer)
+  const maskedName      = maskForPrint('name',     p.violator.first_name, p.violator.middle_name, p.violator.last_name);
+  const maskedBirthdate = maskForPrint('birthdate', p.violator.birthdate);
+  const maskedAddress   = maskForPrint('address',  p.violator.address);
+  const maskedLicense   = maskForPrint('license',  p.violator.license_number);
+
+  console.log('[ADMIN BLE] masked values:', {
+    fullName : [p.violator.first_name, p.violator.middle_name, p.violator.last_name].join(' '),
+    maskedName,
+    maskedBirthdate,
+    maskedAddress,
+    maskedLicense
+  });
 
   // Header
   await write(Uint8Array.of(0x1B,0x40)); // init
@@ -141,14 +264,14 @@ async function printTwoCopies(p) {
   await send('Traffic Citation Ticket'+NL);
   await write(ALIGN(0));
 
-  // --- COPY 1 (Violator) ---
+  // --- COPY 1 (Violator copy) — MASKED ---
   await L('Ticket #: ', p.ticket.ticket_number);
   await L('Date issued: ', p.ticket.issued_at);
   await write(FEED(1));
-  await L('Violator: ', nameLine);
-  await L('Birthdate: ', p.violator.birthdate);
-  await L('Address: ', p.violator.address);
-  await L('License No.: ', p.violator.license_number);
+  await L('Violator: ', maskedName);
+  await L('Birthdate: ', maskedBirthdate);
+  await L('Address: ', maskedAddress);
+  await L('License No.: ', maskedLicense);
   await write(FEED(1));
   await L('Plate: ', p.vehicle.plate_number);
   await L('Vehicle: ', p.vehicle.vehicle_type);
@@ -156,17 +279,22 @@ async function printTwoCopies(p) {
   await L('Owner Name: ', p.vehicle.owner_name);
   await write(FEED(1));
   await send('Violations:'+NL);
-  for (const v of (p.violations||[])) await send('- '+safe(v.name)+' (Php'+safe(v.fine)+')'+NL);
+  for (const v of (p.violations||[])) {
+    await send('- '+safe(v.name)+' (Php'+safe(v.fine)+')'+NL);
+  }
   await write(FEED(1));
   await L('Username: ', p.credentials.username);
   await L('Password: ', p.credentials.password);
   await write(FEED(1));
-  if (p.ticket.flags?.includes?.('is_impounded')) { await send('*** VEHICLE IMPOUNDED ***'+NL); await write(FEED(1)); }
+  if (p.ticket.flags?.includes?.('is_impounded')) {
+    await send('*** VEHICLE IMPOUNDED ***'+NL);
+    await write(FEED(1));
+  }
   await L('Badge No: ', p.enforcer.badge_num);
   await send('*UNOFFICIAL RECEIPT*. Please present this to cashier\'s office at City Hall'+NL);
   await write(FEED(3));
 
-  // --- COPY 2 (Enforcer) ---
+  // --- COPY 2 (Admin/Enforcer file copy) — ALSO MASKED ---
   await write(ALIGN(1));
   await send('Issued by POSO Admin'+ NL + NL);
   await send('City of San Carlos'+NL);
@@ -174,13 +302,14 @@ async function printTwoCopies(p) {
   await send('(POSO)'+NL+NL);
   await send('Traffic Citation Ticket'+NL);
   await write(ALIGN(0));
+
   await L('Ticket #: ', p.ticket.ticket_number);
   await L('Date issued: ', p.ticket.issued_at);
   await write(FEED(1));
-  await L('Violator: ', nameLine);
-  await L('License No.: ', p.violator.license_number);
-  await L('Birthdate: ', p.violator.birthdate);
-  await L('Address: ', p.violator.address);
+  await L('Violator: ', maskedName);
+  await L('License No.: ', maskedLicense);
+  await L('Birthdate: ', maskedBirthdate);
+  await L('Address: ', maskedAddress);
   await write(FEED(1));
   await L('Plate: ', p.vehicle.plate_number);
   await L('Vehicle: ', p.vehicle.vehicle_type);
@@ -188,16 +317,22 @@ async function printTwoCopies(p) {
   await L('Owner Name: ', p.vehicle.owner_name);
   await write(FEED(1));
   await send('Violations:'+NL);
-  for (const v of (p.violations||[])) await send('- '+safe(v.name)+' (Php'+safe(v.fine)+')'+NL);
+  for (const v of (p.violations||[])) {
+    await send('- '+safe(v.name)+' (Php'+safe(v.fine)+')'+NL);
+  }
   await write(FEED(1));
-  if (p.ticket.flags?.includes?.('is_impounded')) { await send('*** VEHICLE IMPOUNDED ***'+NL); await write(FEED(1)); }
+  if (p.ticket.flags?.includes?.('is_impounded')) {
+    await send('*** VEHICLE IMPOUNDED ***'+NL);
+    await write(FEED(1));
+  }
   await L('Badge No: ', p.enforcer.badge_num);
   await write(FEED(5));
 
   try { server.device.gatt.disconnect(); } catch {}
 }
 
-// ---- Submit + confirm + print ----
+/* ---------- Submit + confirm + print ---------- */
+
 byId('ticketForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.target;
@@ -240,7 +375,6 @@ byId('ticketForm')?.addEventListener('submit', async (e) => {
     }
   } catch (errPreview) {
     console.warn('pre-submit preview failed:', errPreview);
-    // If preview fails, we’ll proceed with submit anyway (fail-safe).
   }
 
   // ===== ACTUAL SUBMIT TO SERVER =====
@@ -255,7 +389,6 @@ byId('ticketForm')?.addEventListener('submit', async (e) => {
     });
 
     if (!res.ok) {
-      // show server message when available
       let msg = '';
       try { msg = (await res.json()).message || ''; } catch { msg = await res.text(); }
       return SwalERR('Validation error', msg || 'Please check the inputs.');
@@ -263,7 +396,7 @@ byId('ticketForm')?.addEventListener('submit', async (e) => {
 
     const p = await res.json();
 
-    // ===== PRINT RIGHT AFTER SUCCESS SAVE =====
+    // ===== PRINT RIGHT AFTER SUCCESS SAVE (masked) =====
     try {
       await printTwoCopies(p);
     } catch (printErr) {
@@ -271,7 +404,7 @@ byId('ticketForm')?.addEventListener('submit', async (e) => {
       await Swal.fire({ icon:'warning', title:'Saved but printing failed', text:String(printErr).slice(0,300) });
     }
 
-    // ===== AFTER-SUBMIT FLOW (same variables kept) =====
+    // ===== AFTER-SUBMIT FLOW =====
     const { isConfirmed: isConfirm } = await Swal.fire({
       icon: 'success',
       title: 'Ticket Submitted',
@@ -283,14 +416,12 @@ byId('ticketForm')?.addEventListener('submit', async (e) => {
     });
 
     if (isConfirm) {
-      // stay on page and reset for next entry
       form.reset();
       selected.clear?.();
-      if (containerEl) containerEl.innerHTML = '';   // clear violations
-      if (typeof syncOwner === 'function') syncOwner(); // re-sync owner name checkbox behavior
+      if (containerEl) containerEl.innerHTML = '';
+      if (typeof syncOwner === 'function') syncOwner();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      // go back to table (resource index)
       const indexUrl = form.dataset.indexUrl || '/ticket';
       window.location.assign(indexUrl);
     }

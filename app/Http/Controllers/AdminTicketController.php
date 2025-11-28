@@ -526,11 +526,31 @@ class AdminTicketController extends Controller
         // You can include max(id) as well if you want a super-cheap change detector:
         $maxId       = Ticket::max('id') ?? 0;
 
+        // Also get the latest ticket (for toast details)
+        $latest = (clone $q)
+            ->orderByDesc('tickets.issued_at')
+            ->orderByDesc('tickets.id')
+            ->first();
+        $latestTicketId     = $latest?->id ?? 0;
+        $latestTicketNumber = $latest?->ticket_number ?? null;    
         // Build a stable token
-        $tokenParts  = [$maxTicketUpdated, $maxPaidUpdated, $countTickets, $maxId, $status ?: '-', $category ?: '-', $violationId ?: 0];
+        $tokenParts  = [
+            $maxTicketUpdated, 
+            $maxPaidUpdated, 
+            $countTickets, 
+            $maxId, 
+            $status ?: '-', 
+            $category ?: '-', 
+            $violationId ?: 0
+        ];
         $tokenString = implode('|', $tokenParts);
         $hash        = substr(hash('xxh3','tickets:'.$tokenString), 0, 16);
 
-        return response()->json(['v' => $hash]);
+        return response()->json([
+            'v' => $hash,
+            'latestTicketId'     => $latestTicketId,
+            'latestTicketNumber' => $latestTicketNumber,
+            'countTickets'       => $countTickets,
+        ]);
     }
 }

@@ -208,7 +208,7 @@
   </div>
 </div>
 
-{{-- Scan ID Modal (OCR-only) --}}
+{{-- Scan ID Modal (OCR-only) --}}w
 <div class="modal fade" id="scanIdModal" tabindex="-1" aria-labelledby="scanIdModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
     <div class="modal-content">
@@ -325,4 +325,23 @@
   {{-- Your app scripts (also deferred so Tesseract is guaranteed loaded) --}}
   <script defer src="{{ asset('js/issueTicket.js') }}"></script>
   <script defer src="{{ asset('js/id-scan.js')}}?v={{ filemtime(public_path('js/id-scan.js')) }}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+        const raw = localStorage.getItem('enforcer_offline_session');
+        if (!raw) return;
+        const profile = JSON.parse(raw);
+        const topbar = document.querySelector('.page-topbar');
+
+        if (topbar) {
+          const badge = document.createElement('span');
+          badge.className = 'badge bg-warning text-dark ms-2';
+          badge.textContent = 'Offline mode';
+          topbar.appendChild(badge);
+        }
+      } catch (e) {
+        console.warn('Offline session parse failed', e);
+      }
+    });
+</script>
 @endpush

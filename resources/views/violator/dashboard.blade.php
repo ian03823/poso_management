@@ -82,7 +82,7 @@
           <tbody>
             @foreach($completed as $t)
               <tr>
-                <td data-label="#" class="text-center">{{ $t->id }}</td>
+                <td data-label="#" class="text-center">{{ $t->ticket_number }}</td>
                 <td data-label="Issued">{{ $t->issued_at->format('d M Y') }}</td>
                 <td data-label="Plate">{{ optional($t->vehicle)->plate_number ?? '—' }}</td>
                 <td data-label="Vehicle">{{ optional($t->vehicle)->vehicle_type ?? '—' }}</td>

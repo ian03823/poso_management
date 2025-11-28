@@ -173,23 +173,15 @@
 
   <script src="{{ asset('js/analytics.js') }}"></script>
   <script src="{{ asset('js/enforcer.js') }}"></script>
-  <script src="{{ asset('js/ticketTable.js') }}" defer></script>
+  <script src="{{ asset('js/ticketTable.js') }}"></script>
   {{-- Page js (delegated handlers; pagination; resolve flow) --}}
   <script src="{{ asset('js/impoundedVehicle.js') }}"></script>
   <script src="{{ asset('js/violationTable.js') }}"></script>
   <script defer src="{{ asset('js/violatorPage.js') }}"></script>
   <script defer src="{{ asset('js/violatorView.js') }}"></script>
-  <script src="{{ asset('js/adminIssueTicket.js') }}" defer></script>
-  <script src="{{ asset('js/adminDashboard.js') }}" defer></script>
-  <script>
-    window.printReprintTicketViaBluetooth = async function(payload) {
-      // Mark as reprint so issueTicket.js can include a note
-      payload.isReprint = true;
-
-      // You can also pass payload.portal.default_password so it prints on the slip
-      return window.printTicketViaBluetooth(payload);
-    };
-</script>
+  <script src="{{ asset('js/adminIssueTicket.js') }}"></script>
+  <script src="{{ asset('js/adminDashboard.js') }}"></script>
+  <audio id="ticketNotifySound" src="{{ asset('sounds/ticket-notify.mp3') }}" preload="auto"></audio>
   @stack('modals')
   @stack('scripts')
 </body>

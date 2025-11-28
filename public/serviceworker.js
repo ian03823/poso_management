@@ -1,6 +1,6 @@
 /* serviceworker.js — PWA runtime + OCR + background sync (unified) */
 
-const SW_VERSION   = 'v2025-10-15A'; // bump each deploy
+const SW_VERSION   = 'v2025-11-28A'; // bump each deploy
 const ORIGIN       = self.location.origin;
 
 const STATIC_CACHE  = `pwa-static-${SW_VERSION}`;
@@ -73,7 +73,13 @@ async function drainQueueOnce() {
 
 // pre-cache
 const filesToCache = [
-  '/', '/css/app.css', '/js/app.js', '/js/issueTicket.js', '/js/id-scan.js',
+  '/',
+  '/plogin',
+  '/pwa',
+  '/css/app.css', 
+  '/js/app.js', 
+  '/js/issueTicket.js', 
+  '/js/id-scan.js',
   '/js/enforcer.offline.auth.js',
   '/vendor/dexie/dexie.min.js',
   '/vendor/sweetalert2/sweetalert2.all.min.js',
@@ -127,11 +133,14 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   const path = url.pathname;
-  const bypassPrefixes = [
+  const bypassPostPrefixes = [
     '/violator/phone','/violator/otp/verify','/violator/otp/resend',
     '/vlogin','/vlogout','/alogin','/plogin','/pwa/sync'
   ];
-  if (bypassPrefixes.some(p => path.startsWith(p))) return;
+  // Only bypass SW for POSTs (form submissions, login, etc.)
+  if (req.method === 'POST' && bypassPostPrefixes.some(p => path.startsWith(p))) {
+    return;
+  }
 
   const isNavigate = req.mode === 'navigate' || req.destination === 'document';
   const isOCR = path.startsWith('/vendor/tesseract/') || path.startsWith('/wasm/');
