@@ -1,6 +1,6 @@
-// public/js/id-scan.js — mobile-first OCR scanner (fixed 2025-10-xx)
+// public/js/id-scan.js — mobile-first OCR scanner (improved 2025-11-30-B)
 (() => {
-  console.log('%cID-SCAN mobile v2025-11-27-B','color:#0a0');
+  console.log('%cID-SCAN mobile v2025-11-30-B','color:#0a0');
 
   // ---------- Utils ----------
   const q = (sel, r=document) => r.querySelector(sel);
@@ -8,6 +8,21 @@
     if (window.Swal) Swal.fire({ icon, title, text });
     else alert(`${title}\n${text||''}`);
   };
+  const confirmScan = async (html) => {
+    if (window.Swal) {
+      return Swal.fire({
+        title: 'Use scanned details?',
+        html,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Apply to form',
+        cancelButtonText: 'Discard'
+      });
+    }
+    const ok = window.confirm('Use scanned details?\n' + html.replace(/<[^>]+>/g,' '));
+    return { isConfirmed: ok };
+  };
+
   async function closeScanModal() {
     const m = q('#scanIdModal');
     try { window.bootstrap?.Modal.getOrCreateInstance(m).hide(); } catch {}
@@ -81,6 +96,12 @@
             }
           }
         );
+
+        // tighten recognition: mainly uppercase letters, digits & punctuation
+        await w.setParameters({
+          tessedit_pageseg_mode: 6, // Assume a block of text
+          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-./,:\\n \''
+        });
 
         worker = w;
         ocrStatus('OCR ready', 'success');
@@ -215,17 +236,27 @@
 
   // ---------- PH ID parsing ----------
   function parseOCRText(raw) {
-    const text=(raw||'').replace(/\u00A0/g,' ').replace(/[|]/g,' ');
-    const lines=text.split('\n').map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);
+    // normalize + whitelist characters to reduce noise
+    const normalized = (raw || '')
+      .toUpperCase()
+      .replace(/\u00A0/g,' ')
+      .replace(/[|]/g,' ')
+      .replace(/[^A-Z0-9\-.,:\/\n ']/g,' ');
+    const lines = normalized
+      .split('\n')
+      .map(s => s.replace(/\s+/g,' ').trim())
+      .filter(Boolean);
 
     let firstName='', middleName='', lastName='', address='', birthdate='', licenseNumber='', anyId='';
 
     const grabAfter=(label)=>{
-      const i=lines.findIndex(l=>new RegExp(`^${label}\\b`,'i').test(l));
+      const re = new RegExp(`^${label}\\b`,'i');
+      const i=lines.findIndex(l=>re.test(l));
       if(i>=0) return lines[i].replace(new RegExp(`^${label}\\s*[:#-]*\\s*`,'i'), '').trim();
       return '';
     };
 
+    // label-based extraction where possible
     lastName   = grabAfter('(LAST NAME|SURNAME|APELYIDO)');
     firstName  = grabAfter('(FIRST NAME|GIVEN NAME|GIVEN NAMES|PANGALAN)');
     middleName = grabAfter('(MIDDLE NAME|MIDDLE INITIAL|GITNANG (APELYIDO|PANGALAN)|M\\.I\\.)');
@@ -241,20 +272,32 @@
     }
 
     const dobRaw = grabAfter('(BIRTHDATE|DATE OF BIRTH|DOB|PETSANG KAPANGANAKAN|KAARAWAN|KAPANGANAKAN)');
-    if (dobRaw){
-      const m1=dobRaw.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
-      const m2=dobRaw.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/);
-      const m3=dobRaw.match(/([A-Za-z]{3,})\s+(\d{1,2}),?\s+(\d{4})/);
-      if(m1){ const[_,y,mo,d]=m1; birthdate=`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
-      else if(m2){ let[_,d,mo,y]=m2; if(y.length===2) y=`20${y}`; birthdate=`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
-      else if(m3){ const mon={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
-                   const mo=mon[m3[1].slice(0,3).toLowerCase()]||1; birthdate=`${m3[3]}-${String(mo).padStart(2,'0')}-${String(m3[2]).padStart(2,'0')}`; }
+    const wholeText = lines.join(' ');
+    function parseDateCandidate(str){
+      if (!str) return '';
+      let m;
+      m = str.match(/(19|20)\d{2}[-\/.](0[1-9]|1[0-2])[-\/.](0[1-9]|[12]\d|3[01])/);
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+      m = str.match(/(0?[1-9]|[12]\d|3[01])[-\/.](0?[1-9]|1[0-2])[-\/.](\d{2,4})/);
+      if (m) {
+        let y=m[3]; if (y.length===2) y = (parseInt(y,10) > 50 ? '19'+y : '20'+y);
+        return `${y}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+      }
+      m = str.match(/([A-Z]{3,})\s+(\d{1,2}),?\s+((19|20)\d{2})/);
+      if (m) {
+        const mon={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+        const mo=mon[m[1].slice(0,3).toUpperCase()]||1;
+        return `${m[3]}-${String(mo).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
+      }
+      return '';
     }
+    birthdate = parseDateCandidate(dobRaw) || parseDateCandidate(wholeText);
 
     const addrIdx=lines.findIndex(l=>/^ADDRESS\b|^TIRAHAN\b/i.test(l));
-    if(addrIdx>=0) address=lines.slice(addrIdx,addrIdx+2).join(', ').replace(/^(ADDRESS|TIRAHAN)\s*[:#-]*/i,'').trim();
-    else {
-      const guess=lines.find(l=>/\d+.*[A-Za-z]/.test(l) && !/LICENSE|DL\s*NO|BIRTH|DOB|KAARAWAN/i.test(l));
+    if(addrIdx>=0) {
+      address=lines.slice(addrIdx,addrIdx+2).join(', ').replace(/^(ADDRESS|TIRAHAN)\s*[:#-]*/i,'').trim();
+    } else {
+      const guess=lines.find(l=>/\d+.*[A-Z]/.test(l) && !/LICENSE|DL\s*NO|BIRTH|DOB|KAARAWAN/i.test(l));
       if(guess) address=guess;
     }
 
@@ -296,18 +339,30 @@
     const v = q('#ocr-video');
     if (!v || !v.videoWidth) return notify('Hold up','Camera not ready yet.','info');
 
-    const c = q('#ocr-canvas');
-    c.width = v.videoWidth; c.height = v.videoHeight;
-    const ctx = c.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(v, 0, 0, c.width, c.height);
-    preprocess(c);
+    const full = q('#ocr-canvas');
+    full.width = v.videoWidth; full.height = v.videoHeight;
+    const fullCtx = full.getContext('2d', { willReadFrequently: true });
+    fullCtx.drawImage(v, 0, 0, full.width, full.height);
+
+    // Crop to central ID area (roughly matches visual overlay)
+    const crop = document.createElement('canvas');
+    const insetX = full.width * 0.06;
+    const insetY = full.height * 0.10;
+    const cropW = full.width  - insetX * 2;
+    const cropH = full.height - insetY * 2;
+    crop.width  = cropW;
+    crop.height = cropH;
+    const cropCtx = crop.getContext('2d', { willReadFrequently: true });
+    cropCtx.drawImage(full, insetX, insetY, cropW, cropH, 0, 0, cropW, cropH);
+
+    preprocess(crop);
 
     ocrStatus('Reading…');
 
     let text = '';
     try {
       const w = await getWorker();
-      const r = await w.recognize(c);
+      const r = await w.recognize(crop);
       text = r?.data?.text || '';
     } catch (e) {
       console.error('Tesseract error', e);
@@ -319,15 +374,30 @@
     }
 
     const parsed = parseOCRText(text);
-    fillForm(parsed);
-
     const anyField = parsed.firstName || parsed.lastName || parsed.licenseNumber || parsed.birthdate || parsed.address;
-    if (anyField) {
+    if (!anyField) {
+      notify('No readable text','Try again: fill the frame, steady hands, use flash.','info');
+      return;
+    }
+
+    const nameLine = [parsed.firstName, parsed.middleName, parsed.lastName].filter(Boolean).join(' ') || '(none)';
+    const previewHtml = `
+      <div class="text-start">
+        <p class="mb-1"><strong>Name:</strong> ${nameLine}</p>
+        <p class="mb-1"><strong>Birthdate:</strong> ${parsed.birthdate || '(none)'}</p>
+        <p class="mb-1"><strong>License / ID No.:</strong> ${parsed.licenseNumber || '(none)'}</p>
+        <p class="mb-0"><strong>Address:</strong> ${parsed.address || '(none)'}</p>
+      </div>
+    `;
+
+    const { isConfirmed } = await confirmScan(previewHtml);
+    if (isConfirmed) {
+      fillForm(parsed);
       notify('Captured!','Fields have been auto-filled from the ID.','success');
       await stopCamera();
       await closeScanModal();
     } else {
-      notify('No readable text','Try again: fill the frame, steady hands, use flash.','info');
+      notify('Scan discarded','You can adjust fields or try again.','info');
     }
   }
 
