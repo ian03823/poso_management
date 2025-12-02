@@ -127,6 +127,8 @@ Route::middleware('enforcer')->group(function () {
     Route::get('enforcer/change/password', [EnforcerAuthController::class, 'showChangePassword'])->name('enforcer.password.edit');
     Route::post('enforcer/change/password', [EnforcerAuthController::class, 'changePassword'])->name('enforcer.password.update');
     Route::get('/enforcer/tickets', [TicketController::class, 'myTickets'])->name('enforcer.tickets.index');
+    Route::get('/enforcer/request/ticket', [TicketController::class, 'requestTicket'])->name('enforcer.request.ticket');
+    Route::post('/enforcer/request/ticket-range', [TicketController::class, 'requestTicketRange'])->name('enforcer.request.ticket-range');
 });
 
 Route::get('/wasm/tesseract-core-simd-lstm.wasm.js', fn () =>
@@ -169,6 +171,7 @@ Route::middleware('admin')->group(function () {
         ->name('admin.dashboard.recentViolators');
     Route::get('/admin/dashboard/recent-tickets', [AdminDashboardController::class,'recentTicketsPartial'])
         ->name('admin.dashboard.recentTickets');
+    Route::get('/admin/notifications/ticket-requests',[ActivityLogController::class, 'ticketRangeRequests'])->name('admin.notifications.ticket_requests');
     
     Route::get('/admin/profile/update', [AdminDashboardController::class,'edit'])->name('admin.profile.edit');
     Route::put('/admin/profile/update', [AdminDashboardController::class,'update'])->name('admin.profile.update');

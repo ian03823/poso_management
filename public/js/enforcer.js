@@ -1,5 +1,5 @@
 /* public/js/enforcer.js — SPA table (filters/pagination) + SweetAlert edit + activate/inactivate */
-console.log("Loaded enforcer.js");
+console.log("Loaded enforcer.js - 12-02A");
 (function () {
   if (window.__enforcerBound) return;
   window.__enforcerBound = true;
@@ -45,6 +45,28 @@ console.log("Loaded enforcer.js");
     if (wrap) wrap.innerHTML = inner;
     if (pushTo) pushUrl(pushTo);
   }
+    // ---- auto-open edit dialog if ?requested={enforcer_id} is present
+  let requestedHandled = false;
+  function openRequestedIfAny() {
+    if (requestedHandled) return;
+
+    const params    = new URLSearchParams(location.search);
+    const requested = params.get('requested');
+    if (!requested) return;
+
+    const btn = document.querySelector(
+      `#table-container .editBtn[data-id="${requested}"]`
+    );
+
+    if (!btn) {
+      // If not on this page (e.g., pagination), we simply skip.
+      return;
+    }
+
+    requestedHandled = true;
+    btn.click(); // This triggers the SweetAlert with "Add Ticket Range" button
+  }
+
 
   // ---- AJAX load
   function loadPage(page = '1', push = true) {
@@ -54,7 +76,10 @@ console.log("Loaded enforcer.js");
     setLoading(true);
     fetch(`${partialUrl()}?${q.toString()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(r => r.text())
-      .then(html => inject(html, push ? { show, sort, search, page } : null))
+      .then(html => {
+        inject(html, push ? { show, sort, search, page } : null);
+        openRequestedIfAny(); // 🔔 after table is updated
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }
@@ -70,9 +95,14 @@ console.log("Loaded enforcer.js");
     if ($('#show_filter')) $('#show_filter').value = p.show;
     if ($('#sort_table')) $('#sort_table').value = p.sort;
     if ($('#search_input')) $('#search_input').value = p.search;
+     // If table already rendered server-side, try opening immediately
+    openRequestedIfAny();
 
-    if (!$('#table-container table')) loadPage(p.page, /*push=*/false);
+    if (!$('#table-container table')) {
+      loadPage(p.page, /*push=*/false);
+    }
   }
+
   document.addEventListener('DOMContentLoaded', initPage);
   document.addEventListener('page:loaded', initPage);
   window.addEventListener('popstate', () => { if (root()) loadPage(getParams().page, /*push=*/false); });

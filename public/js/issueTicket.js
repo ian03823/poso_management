@@ -974,7 +974,7 @@ if (window.__ISSUE_TICKET_WIRED__) {
         await L('Plate: ', p.vehicle.plate_number);
         await L('Vehicle: ', p.vehicle.vehicle_type);
         await L('Owner: ', p.vehicle.is_owner);
-        await L('Owner Name: ', p.vehicle.owner_name);
+        await L('Owner Name: ', maskedName);
         await write(FEED(1));
         await send('Violations:'+NL);
         for (const v of (p.violations||[])) await send('- '+safe(v.name)+' (Php'+safe(v.fine)+')'+NL);
@@ -1003,7 +1003,7 @@ if (window.__ISSUE_TICKET_WIRED__) {
         await L('Plate: ', p.vehicle.plate_number);
         await L('Vehicle: ', p.vehicle.vehicle_type);
         await L('Owner: ', p.vehicle.is_owner);
-        await L('Owner Name: ', p.vehicle.owner_name);
+        await L('Owner Name: ', maskedName);
         await write(FEED(1));
         await send('Violations:'+NL);
         for (const v of (p.violations||[])) await send('- '+safe(v.name)+' (Php'+safe(v.fine)+')'+NL);

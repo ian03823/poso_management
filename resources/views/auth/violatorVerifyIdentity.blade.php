@@ -12,7 +12,7 @@
         <i class="bi bi-shield-lock-fill display-6 text-success mb-2"></i>
         <h4 class="fw-bold text-success mb-1">Verify Your Identity</h4>
         <p class="text-muted small mb-0">
-          For your security, please confirm your license number and full name.
+          For your security, please confirm your full name and birthdate.
         </p>
       </div>
 
@@ -34,19 +34,19 @@
       <form method="POST" action="{{ route('violator.identity.verify') }}">
         @csrf
 
-        {{-- License number --}}
+        {{-- Birth date --}}
         <div class="mb-3 form-floating">
           <input
             type="text"
-            name="license_number"
-            id="license_number"
-            class="form-control @error('license_number') is-invalid @enderror"
-            placeholder="A12-34-567890"
-            value="{{ old('license_number') }}"
+            name="birthdate"
+            id="birthdate"
+            class="form-control @error('birthdate') is-invalid @enderror"
+            placeholder="YYYY-MM-DD"
+            value="{{ old('birthdate') }}"
             required
           >
-          <label for="license_number">Driver’s License Number</label>
-          @error('license_number')
+          <label for="birthdate">Birthdate (YYYY-MM-DD)</label>
+          @error('birthdate')
             <div class="invalid-feedback">{{ $message }}</div>
           @enderror
         </div>

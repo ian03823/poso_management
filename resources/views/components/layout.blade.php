@@ -43,6 +43,38 @@
       <div class="text-muted-white fw-medium"><span id="currentDateTime">—</span></div>
 
       <div class="d-flex gap-3 align-items-center">
+        <div class="dropdown me-3">
+        <button
+          class="btn btn-link position-relative"
+          id="ticketRequestsBell"
+          type="button"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+          data-url="{{ route('admin.notifications.ticket_requests') }}"
+        >
+          <i class="bi bi-bell fs-5"></i>
+          <span
+            id="ticketRequestsBadge"
+            class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none"
+            style="font-size: 0.65rem;"
+          >
+            0
+          </span>
+        </button>
+
+        <div
+          class="dropdown-menu dropdown-menu-end p-0 shadow-sm"
+          aria-labelledby="ticketRequestsBell"
+          style="min-width: 320px;"
+        >
+          <div class="p-2 border-bottom fw-semibold small">
+            Notifications
+          </div>
+          <div id="ticketRequestsList" style="max-height: 260px; overflow-y: auto;">
+            <div class="p-2 small text-muted">No recent notification.</div>
+          </div>
+        </div>
+      </div>
         <div class="btn-group">
           <button type="button" class="btn btn-success " data-bs-toggle="dropdown" aria-expanded="false">
             Settings
@@ -168,9 +200,78 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.2/dexie.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const bell  = document.getElementById('ticketRequestsBell');
+      const badge = document.getElementById('ticketRequestsBadge');
+      const list  = document.getElementById('ticketRequestsList');
+
+      if (!bell || !badge || !list) return;
+
+      const url = bell.dataset.url;
+      if (!url) return;
+
+      async function refreshTicketRequests() {
+        try {
+          const res = await fetch(url + '?minutes=2880', {
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'Accept': 'application/json'
+            }
+          });
+
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+
+          const count = data.count || 0;
+
+          if (count > 0) {
+            badge.textContent = count > 9 ? '9+' : count;
+            badge.classList.remove('d-none');
+          } else {
+            badge.classList.add('d-none');
+          }
+
+          list.innerHTML = '';
+
+          if (!data.items || data.items.length === 0) {
+            list.innerHTML = '<div class="p-2 small text-muted">No recent ticket range requests.</div>';
+            return;
+          }
+
+          data.items.forEach(item => {
+            const enforcerId = item.enforcer_id;
+            const badgeNum   = item.badge_num || '—';
+            const name       = item.enforcer_name || 'Unknown enforcer';
+            const created    = item.created_at || '';
+
+            const a = document.createElement('a');
+            a.href = `/enforcer?search=${encodeURIComponent(badgeNum)}&requested=${encodeURIComponent(enforcerId)}`;
+            a.className = 'dropdown-item small';
+            a.innerHTML = `
+              <div class="fw-semibold">${name} (${badgeNum})</div>
+              <div class="text-muted">Requested new ticket range</div>
+              <div class="text-muted fst-italic" style="font-size: 0.75rem;">${created}</div>
+            `;
+            list.appendChild(a);
+          });
+        } catch (err) {
+          console.error('ticketRequests refresh failed', err);
+        }
+      }
+
+      // Refresh when bell is opened
+      bell.addEventListener('click', () => {
+        refreshTicketRequests();
+      });
+
+      // Initial load + periodic refresh every minute
+      refreshTicketRequests();
+      setInterval(refreshTicketRequests, 60000);
+    });
+    </script>
   {{-- AJAX navigation (after vendor scripts) --}}
   <script src="{{ asset('js/ajax.js') }}"></script>
-
   <script src="{{ asset('js/analytics.js') }}"></script>
   <script src="{{ asset('js/enforcer.js') }}"></script>
   <script src="{{ asset('js/ticketTable.js') }}"></script>
@@ -181,7 +282,19 @@
   <script defer src="{{ asset('js/violatorView.js') }}"></script>
   <script src="{{ asset('js/adminIssueTicket.js') }}"></script>
   <script src="{{ asset('js/adminDashboard.js') }}"></script>
+  
+  {{-- Global notification sound --}}
   <audio id="ticketNotifySound" src="{{ asset('sounds/ticket-notify.mp3') }}" preload="auto"></audio>
+
+  {{-- Expose dashboard version endpoint to JS --}}
+  <script>
+    window.ADMIN_VERSION_URL = "{{ route('admin.dashboard.version') }}";
+  </script>
+
+  {{-- Global live notifications (SweetAlert + sound) --}}
+  <script src="{{ asset('js/adminNotify.js') }}"></script>
+
+
   @stack('modals')
   @stack('scripts')
 </body>

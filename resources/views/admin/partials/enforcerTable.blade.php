@@ -63,8 +63,15 @@
     </tbody>
   </table>
 
-  <div class="d-flex justify-content-center mt-3">
-    {{ $enforcer->appends(['show'=>$show,'sort_option'=>$sortOption,'search'=>$search])->links() }}
+  <div class="vtr-pager d-flex justify-content-between align-items-center mt-3">
+    <div class="d-none d-md-block small text-muted">
+      Showing {{ $enforcer->firstItem() }} to {{ $enforcer->lastItem() }} of {{ $enforcer->total() }} results
+    </div>
+    <div class="w-100 d-flex justify-content-center">
+      {{ $enforcer->links() }}
+    </div>
   </div>
-  </div>
+
+
 </div>
+

@@ -39,4 +39,43 @@ class ActivityLogController extends Controller
             ],
         ]);
     }
+    public function ticketRangeRequests(Request $request)
+    {
+        // how far back to look (in minutes), default 2 days
+        $minutes = (int) $request->get('minutes', 60 * 48);
+        $since   = now()->subMinutes($minutes);
+
+        $logs = ActivityLog::with(['actor', 'subject'])
+            ->where('event', 'ticket_range.requested')
+            ->where('created_at', '>=', $since)
+            ->latest('created_at')
+            ->limit(10)
+            ->get();
+
+        $items = $logs->map(function ($log) {
+            $enforcer = $log->subject; // we logged: LogActivity::on($enforcer)…
+            $props    = (array) ($log->properties ?? []);
+
+            $badge = optional($enforcer)->badge_num ?? ($props['badge_num'] ?? null);
+            $name  = trim(implode(' ', array_filter([
+                optional($enforcer)->fname,
+                optional($enforcer)->mname,
+                optional($enforcer)->lname,
+            ])));
+
+            return [
+                'id'            => $log->id,
+                'created_at'    => $log->created_at->timezone('Asia/Manila')->format('Y-m-d H:i'),
+                'enforcer_id'   => optional($enforcer)->id ?? ($props['enforcer_id'] ?? null),
+                'badge_num'     => $badge,
+                'enforcer_name' => $name ?: 'Unknown enforcer',
+            ];
+        });
+
+        return response()->json([
+            'count' => $items->count(),
+            'items' => $items,
+        ]);
+    }
+
 }

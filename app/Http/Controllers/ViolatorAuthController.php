@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -182,13 +183,20 @@ class ViolatorAuthController extends Controller
         }
 
         $data = $request->validate([
-            'license_number' => 'required|string',
+            'birthdate' => 'required|date_format:Y-m-d',
             'full_name'      => 'required|string',
         ]);
+        
+        $storedBirthdate = null;
+        if (! empty($violator->birthdate)) {
+            try {
+                $storedBirthdate = Carbon::parse($violator->birthdate)->format('Y-m-d');
+            } catch (\Throwable $e) {
+                $storedBirthdate = null;
+            }
+        }
+        $inputBirthdate = $data['birthdate'];
 
-        // Normalize license for comparison (ignore dashes/spaces, case-insensitive)
-        $inputLicense  = strtoupper(str_replace([' ', '-'], '', $data['license_number']));
-        $storedLicense = strtoupper(str_replace([' ', '-'], '', (string) $violator->license_number));
 
         // Build stored full name: "First Middle Last"
         $parts = array_filter([
@@ -200,15 +208,18 @@ class ViolatorAuthController extends Controller
         $storedFullName = strtolower(preg_replace('/\s+/', ' ', implode(' ', $parts)));
         $inputFullName  = strtolower(preg_replace('/\s+/', ' ', $data['full_name']));
 
-        $licenseMatches = $inputLicense !== '' && $storedLicense !== '' && hash_equals($storedLicense, $inputLicense);
-        $nameMatches    = $storedFullName !== '' && hash_equals($storedFullName, $inputFullName);
+        $birthMatches = $storedBirthdate !== null
+            && $inputBirthdate !== ''
+            && hash_equals($storedBirthdate, $inputBirthdate);
 
-        if (! $licenseMatches || ! $nameMatches) {
+        $nameMatches = $storedFullName !== ''
+            && hash_equals($storedFullName, $inputFullName);
+
+        if (! $birthMatches || ! $nameMatches) {
             throw ValidationException::withMessages([
-                'identity' => 'License number or full name does not match our records.',
+                'identity' => 'Birthdate or full name does not match our records.',
             ]);
         }
-
         // ✅ Identity is correct
         $request->session()->forget('violator_identity_pending');
         $request->session()->put('identity_verified', true);

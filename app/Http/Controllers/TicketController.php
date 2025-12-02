@@ -83,6 +83,76 @@ class TicketController extends Controller
 
         return view('enforcer.dashboard', compact('ticketSummary', 'ticketExhausted'));
     }
+        /**
+     * Enforcer requests a new ticket range (when exhausted).
+     * Returns JSON and logs the request in Activity Logs.
+     */
+    public function requestTicketRange(Request $request)
+    {
+        $enforcer = auth('enforcer')->user();
+        if (! $enforcer) {
+            abort(403);
+        }
+
+        // Reuse the same logic as index() to compute remaining tickets
+        $ranges = TicketRange::where('badge_num', $enforcer->badge_num)->get();
+
+        if ($ranges->isEmpty()) {
+            return response()->json([
+                'ok'      => false,
+                'message' => "No ticket range is currently assigned to your badge ({$enforcer->badge_num}). Please contact the admin.",
+            ], 422);
+        }
+
+        $minStart = $ranges->min('ticket_start');
+        $maxEnd   = $ranges->max('ticket_end');
+
+        $totalAllocated = $ranges->sum(function ($r) {
+            return (int) $r->ticket_end - (int) $r->ticket_start + 1;
+        });
+
+        $usedCount = Ticket::where('enforcer_id', $enforcer->id)
+            ->whereBetween('ticket_number', [$minStart, $maxEnd])
+            ->count();
+
+        $remaining = max(0, $totalAllocated - $usedCount);
+
+        // If there are still tickets left, do NOT allow a request
+        if ($remaining > 0) {
+            return response()->json([
+                'ok'      => false,
+                'message' => "You still have {$remaining} ticket(s) remaining in your current range ({$minStart}–{$maxEnd}). You can only request a new batch once all tickets are used.",
+            ], 422);
+        }
+
+        /** @var \App\Models\Enforcer $enforcer */
+        // At this point, the enforcer is truly exhausted – log activity
+        try {
+            [$actor, $role, $actorName] = $this->buildActor();
+
+            LogActivity::on($enforcer)
+                ->by($actor)
+                ->event('ticket_range.requested')
+                ->withProperties([
+                    'enforcer_id'      => $enforcer->id,
+                    'badge_num'        => $enforcer->badge_num,
+                    'min_start'        => $minStart,
+                    'max_end'          => $maxEnd,
+                    'total_allocated'  => $totalAllocated,
+                    'used'             => $usedCount,
+                    'remaining'        => $remaining,
+                ])
+                ->fromRequest()
+                ->log("Enforcer {$actorName} ({$enforcer->badge_num}) requested a new ticket range after exhausting {$minStart}–{$maxEnd}.");
+        } catch (\Throwable $e) {
+            Log::warning('[ActivityLog ticket_range.requested skipped] '.$e->getMessage());
+        }
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Your request for a new ticket range has been sent to the admin. Please wait for approval.',
+        ], 200);
+    }
     //View tickets issued by the logged-in enforcer
     public function myTickets(Request $request)
     {

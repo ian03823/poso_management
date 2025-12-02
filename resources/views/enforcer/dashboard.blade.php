@@ -97,6 +97,7 @@
   @endphp
 
   <!-- Issue Ticket Button -->
+    <!-- Issue Ticket Button + Request New Ticket Range -->
   <div class="text-center mb-5">
     <a
       href="{{ $isExhausted ? '#' : url('/enforcerTicket/create') }}"
@@ -107,34 +108,160 @@
       <i class="bi bi-ticket-perforated-fill me-2"></i>
       {{ $isExhausted ? 'No Tickets Available' : 'Issue a Ticket' }}
     </a>
+
+    <div class="mt-3">
+      <button
+        type="button"
+        id="requestTicketBtn"
+        class="btn btn-outline-primary rounded-pill btn-sm {{ $isExhausted ? '' : 'disabled' }}"
+        data-url="{{ route('enforcer.request.ticket-range') }}"
+        @if(! $isExhausted) aria-disabled="true" @endif
+      >
+        <i class="bi bi-bell me-1"></i>
+        Request New Ticket Range
+      </button>
+      <div class="small text-muted mt-1">
+        @if($isExhausted)
+          You have no tickets left. Tap to notify the admin.
+        @else
+          This will be enabled when you have used all tickets in your current range.
+        @endif
+      </div>
+    </div>
   </div>
+
 </div>
 @endsection
 @push('scripts')
 <script src="{{ asset('vendor/dexie/dexie.min.js') }}"></script>
 <script src="{{ asset('js/enforcer.offline.auth.js') }}"></script>
 <script>
+
 document.addEventListener('DOMContentLoaded', () => {
   const exhausted = @json($ticketExhausted ?? false);
   const btn = document.getElementById('issueTicketBtn');
   if (!btn) return;
 
   if (exhausted) {
-    btn.addEventListener('click', function (e) {
-      e.preventDefault();
+  btn.addEventListener('click', function (e) {
+    e.preventDefault();
 
+    if (window.Swal) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'No ticket numbers available',
+        text: 'You have already used all of your allocated ticket numbers. Please tap “Request New Ticket Range” to notify the admin.',
+        confirmButtonText: 'OK'
+      });
+    } else {
+      alert('You have already used all of your allocated ticket numbers. Please use the “Request New Ticket Range” button to notify the admin.');
+    }
+  });
+}
+
+
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const exhausted = @json($ticketExhausted ?? false);
+  const reqBtn    = document.getElementById('requestTicketBtn');
+  if (!reqBtn) return;
+
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+  // If not exhausted, just explain why button is disabled
+  if (!exhausted) {
+    reqBtn.addEventListener('click', (e) => {
+      e.preventDefault();
       if (window.Swal) {
         Swal.fire({
-          icon: 'warning',
-          title: 'No ticket numbers available',
-          text: 'You have already used all of your allocated ticket numbers. Please contact the admin to request a new batch.',
-          confirmButtonText: 'OK'
+          icon: 'info',
+          title: 'Tickets still available',
+          text: 'You can only request a new batch once you have used all ticket numbers in your current range.',
         });
       } else {
-        alert('You have already used all of your allocated ticket numbers. Please contact the admin to request a new batch.');
+        alert('You can only request a new batch once you have used all ticket numbers in your current range.');
       }
     });
+    return;
   }
+
+  // If exhausted → send request to admin
+  reqBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const url = reqBtn.dataset.url;
+    if (!url) return;
+
+    let proceed = true;
+
+    if (window.Swal) {
+      const res = await Swal.fire({
+        icon: 'question',
+        title: 'Request new ticket range?',
+        text: 'This will notify the admin that you have no tickets left and need a new batch.',
+        showCancelButton: true,
+        confirmButtonText: 'Send request',
+        cancelButtonText: 'Cancel',
+      });
+      proceed = res.isConfirmed;
+    } else {
+      proceed = confirm('Request a new ticket range from the admin?');
+    }
+
+    if (!proceed) return;
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': csrf,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.ok === false) {
+        const msg = data.message || 'Request failed. Please try again.';
+        if (window.Swal) {
+          await Swal.fire({
+            icon: 'warning',
+            title: 'Cannot send request',
+            text: msg,
+          });
+        } else {
+          alert(msg);
+        }
+        return;
+      }
+
+      if (window.Swal) {
+        await Swal.fire({
+          icon: 'success',
+          title: 'Request sent',
+          text: data.message || 'The admin has been notified.',
+        });
+      } else {
+        alert(data.message || 'Request sent to admin.');
+      }
+
+      // Disable the button after a successful request
+      reqBtn.classList.add('disabled');
+      reqBtn.setAttribute('aria-disabled', 'true');
+    } catch (err) {
+      if (window.Swal) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: err.message || String(err),
+        });
+      } else {
+        alert('Error sending request: ' + (err.message || err));
+      }
+    }
+  });
 });
 </script>
 <script>
